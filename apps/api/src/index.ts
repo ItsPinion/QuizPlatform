@@ -4,23 +4,29 @@ import { getDatabaseConfig } from '@quiz/db';
 import { app } from './app';
 import { env } from './lib/env';
 
-let config: ReturnType<typeof getDatabaseConfig>;
+/**
+ * The API always talks to Turso Cloud. If the credentials are not present yet
+ * the server still boots (so `/api/health` and the web app stay reachable) but
+ * every database-backed route answers 503 until they are configured.
+ */
+let databaseSummary = 'not configured';
 
 try {
-  config = getDatabaseConfig();
+  const config = getDatabaseConfig();
+  databaseSummary = `${config.urlHint} [${config.target}]`;
 } catch (error) {
-  console.error('');
-  console.error('  ✖ Database is not configured.');
-  console.error(error instanceof Error ? error.message : error);
-  console.error('');
-  process.exit(1);
+  databaseSummary = 'not configured — set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN';
+  console.warn('');
+  console.warn('  ⚠ Turso Cloud credentials are missing.');
+  console.warn(error instanceof Error ? error.message.split('\n')[0] : error);
+  console.warn('  Copy .env.example to .env and fill in your Turso URL and token.');
 }
 
 serve({ fetch: app.fetch, port: env.API_PORT, hostname: '0.0.0.0' }, (info) => {
   console.log('');
   console.log(`  ▸ Quiz API      http://localhost:${info.port}`);
   console.log(`  ▸ Health        http://localhost:${info.port}/api/health`);
-  console.log(`  ▸ Database      ${config.urlHint} [${config.target}]`);
+  console.log(`  ▸ Database      ${databaseSummary}`);
   console.log('');
 });
 

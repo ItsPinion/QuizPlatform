@@ -17,9 +17,7 @@
     "db:seed": "tsx src/seed.ts",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "db:status": "tsx src/status.ts",
-    "test": "vitest run",
-    "db:pull": "drizzle-kit pull"
+    "test": "vitest run"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

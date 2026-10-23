@@ -20,10 +20,8 @@
     "db:generate": "pnpm --filter @quiz/db db:generate",
     "db:migrate": "pnpm --filter @quiz/db db:migrate",
     "db:push": "pnpm --filter @quiz/db db:push",
-    "db:seed": "pnpm --filter @quiz/db db:seed",
-    "db:status": "pnpm --filter @quiz/db db:status",
     "db:studio": "pnpm --filter @quiz/db db:studio",
-    "setup": "pnpm install && pnpm db:migrate && pnpm db:seed"
+    "db:seed": "pnpm --filter @quiz/db db:seed"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

@@ -41,9 +41,22 @@ export const healthRoutes = new Hono()
 
     return c.json(body, 200);
   })
-  /** Readiness probe: verifies the libSQL/Turso connection and reads live row counts. */
+  /** Readiness probe: verifies the Turso Cloud connection and reads live row counts. */
   .get('/db', async (c) => {
-    const config = getDatabaseConfig();
+    let config: ReturnType<typeof getDatabaseConfig>;
+
+    try {
+      config = getDatabaseConfig();
+    } catch (error) {
+      return c.json(
+        errorBody('DATABASE_NOT_CONFIGURED', 'Turso Cloud credentials are not configured.', {
+          hint: 'Copy .env.example to .env and set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN.',
+          reason: describeError(error),
+        }),
+        503,
+      );
+    }
+
     const started = performance.now();
 
     try {
@@ -65,8 +78,6 @@ export const healthRoutes = new Hono()
 
       return c.json(body, 200);
     } catch (error) {
-      const message = describeError(error);
-
       return c.json(
         {
           ...errorBody(
@@ -74,7 +85,7 @@ export const healthRoutes = new Hono()
             'The API is running but cannot reach the database.',
             {
               hint: 'Check TURSO_DATABASE_URL and TURSO_AUTH_TOKEN, then run `pnpm db:migrate`.',
-              reason: message,
+              reason: describeError(error),
             },
           ),
           ...(process.env.NODE_ENV === 'production' ? {} : { target: config.target }),

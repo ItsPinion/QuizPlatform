@@ -114,22 +114,17 @@ TURSO_AUTH_TOKEN="eyJhbGciOi..."
 files; `.env.example` is the tracked template. `TURSO_AUTH_TOKEN` is mandatory for a `libsql://` URL
 and the config validates that before connecting.
 
-Check what the tooling will connect to at any time:
+### 3. Apply the schema (you run this)
 
-```bash
-pnpm db:status
-```
-
-### 3. Create the schema and seed data
-
-Drizzle Kit owns the schema workflow — there is no hand-written migration runner:
+Credentials and migrations are **not** included in the repository — `.env` is gitignored and never
+committed. Once you have added your Turso URL and token:
 
 ```bash
 pnpm db:migrate     # drizzle-kit migrate → apply packages/db/migrations to Turso Cloud
-pnpm db:seed        # load demo users, categories, quizzes, questions, attempts
+pnpm db:seed        # optional: load demo users, categories, quizzes, questions, attempts
 ```
 
-Both commands run against the Turso Cloud database configured in `.env`.
+Drizzle Kit owns the schema workflow — there is no hand-written migration runner.
 
 ### 4. Run everything
 
@@ -163,14 +158,13 @@ directly.
 
 Schema changes live in `packages/db/src/schema.ts`; migrations are generated, never hand-written:
 
-| Command            | Underlying             | Purpose                                                  |
-| ------------------ | ---------------------- | -------------------------------------------------------- |
-| `pnpm db:generate` | `drizzle-kit generate` | Create a SQL migration + snapshot from the schema        |
-| `pnpm db:migrate`  | `drizzle-kit migrate`  | Apply pending migrations (local or Turso)                |
-| `pnpm db:push`     | `drizzle-kit push`     | Push the schema directly — rapid prototyping only        |
-| `pnpm db:pull`     | `drizzle-kit pull`     | Introspect an existing database into a schema            |
-| `pnpm db:studio`   | `drizzle-kit studio`   | Browse data in Drizzle Studio                            |
-| `pnpm db:status`   | `tsx src/status.ts`    | Resolved target, connectivity, row counts (uses Drizzle) |
+| Command            | Underlying             | Purpose                                           |
+| ------------------ | ---------------------- | ------------------------------------------------- |
+| `pnpm db:generate` | `drizzle-kit generate` | Create a SQL migration + snapshot from the schema |
+| `pnpm db:migrate`  | `drizzle-kit migrate`  | Apply pending migrations to Turso Cloud           |
+| `pnpm db:push`     | `drizzle-kit push`     | Push the schema directly — rapid prototyping only |
+| `pnpm db:studio`   | `drizzle-kit studio`   | Browse data in Drizzle Studio                     |
+| `pnpm db:seed`     | `tsx src/seed.ts`      | Load the demo dataset (optional)                  |
 
 The client follows the documented pattern — Drizzle creates and owns the libSQL connection:
 
@@ -211,7 +205,6 @@ quizplatform/
 │  │  ├─ src/index.ts          drizzle({ connection }) client
 │  │  ├─ src/env.ts            Turso Cloud URL + token resolution
 │  │  ├─ src/seed.ts           rich demo dataset
-│  │  ├─ src/status.ts         db:status diagnostic (Drizzle queries)
 │  │  ├─ src/__tests__/        schema + seed integrity tests
 │  │  └─ migrations/           drizzle-kit generated SQL (checked in)
 │  └─ shared/                  Zod enums, contracts, scrypt helpers
@@ -262,14 +255,11 @@ Design notes:
 | `pnpm test`        | root       | Vitest across shared, db and api                |
 | `pnpm lint`        | root       | Alias of typecheck (ESLint arrives with Day 2)  |
 | `pnpm format`      | root       | Prettier write                                  |
-| `pnpm db:generate` | `@quiz/db` | Generate SQL from the Drizzle schema            |
-| `pnpm db:migrate`  | `@quiz/db` | Apply migrations with drizzle-kit               |
+| `pnpm db:generate` | `@quiz/db` | Generate SQL migrations from the Drizzle schema |
+| `pnpm db:migrate`  | `@quiz/db` | Apply pending migrations with drizzle-kit       |
 | `pnpm db:push`     | `@quiz/db` | Push schema without migration files (dev)       |
-| `pnpm db:pull`     | `@quiz/db` | Introspect an existing database                 |
-| `pnpm db:seed`     | `@quiz/db` | Seed demo data (`-- --force` to reset)          |
-| `pnpm db:status`   | `@quiz/db` | Resolved DB target, connectivity and row counts |
 | `pnpm db:studio`   | `@quiz/db` | Open Drizzle Studio                             |
-| `pnpm setup`       | root       | install + migrate + seed                        |
+| `pnpm db:seed`     | `@quiz/db` | Seed demo data (`-- --force` to reset)          |
 
 ---
 
@@ -280,16 +270,16 @@ pnpm test          # all workspaces through Turbo
 pnpm --filter @quiz/db test
 ```
 
-41 tests cover the scaffolding end to end:
+40 tests cover the scaffolding end to end:
 
 **`@quiz/shared`** (8) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, and the seed credential contract.
 
-**`@quiz/db`** (21) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
+**`@quiz/db`** (20) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
 and the uniqueness/lookup indexes; column defaults; millisecond timestamp precision; unique email,
 slug and per-attempt answer constraints; quiz → questions/options/attempts/answers cascade;
 category-with-quizzes protected by `restrict`; user deletion cascading while nulling the quiz author;
-CLI behaviour for `migrate`, `status`, `seed`, skip-if-populated and `--force`; and seeded-data
+CLI behaviour for `migrate`, `seed`, skip-if-populated and `--force`; and seeded-data
 integrity (quiz/question/option counts, one correct option each, attempt percentages consistent with
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
@@ -362,8 +352,9 @@ Day 1 (done): monorepo, API, Drizzle schema, migrations, seed, env config, tests
 
 ## Troubleshooting
 
-**`/api/health/db` returns 503** — the API is up but the database is unreachable. Run
-`pnpm db:status` for the resolved target and cause, then `pnpm db:migrate`.
+**`/api/health/db` returns 503** — the API is up but the database is unreachable. The response's
+`details.reason` carries the underlying driver error (`fetch failed → ECONNRESET`, missing
+credentials, …).
 
 **`no such table: users`** — migrations were not applied. Run `pnpm db:migrate`, then `pnpm db:seed`.
 
@@ -373,9 +364,9 @@ Day 1 (done): monorepo, API, Drizzle schema, migrations, seed, env config, tests
 **`TURSO_DATABASE_URL is not set`** — the API refuses to start without Turso credentials; copy
 `.env.example` to `.env` and fill in the URL and token from the Turso dashboard.
 
-**`pnpm db:status` says `fetch failed` / `ECONNRESET`** — the machine cannot reach Turso. Turso needs
-HTTPS to `*.turso.io` on port 443, and restricted networks (including this project's sandbox) reset
-those connections. Run `pnpm db:migrate && pnpm db:seed` from a machine with normal internet access.
+**`fetch failed` / `ECONNRESET` when running `pnpm db:migrate`** — the machine cannot reach Turso.
+Turso needs HTTPS to `*.turso.io` on port 443, and restricted networks reset those connections. Run
+the migration from a machine with normal internet access.
 
 **Preview host blocks the request** — `next.config.ts` lists `*.e2b.app` in `allowedDevOrigins`. Add
 your own preview domain there if it differs.

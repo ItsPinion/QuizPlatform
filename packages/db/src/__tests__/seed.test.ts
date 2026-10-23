@@ -101,14 +101,6 @@ describe('database CLI scripts', () => {
     expect(result.status).toBe(0);
   });
 
-  it('reports the resolved target with db:status', () => {
-    const result = runScript('src/status.ts');
-
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain('file');
-    expect(result.stdout).toContain('connected');
-  });
-
   it('seeds the demo dataset', async () => {
     const seed = runScript('src/seed.ts');
 
