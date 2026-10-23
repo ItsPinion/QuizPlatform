@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,6 +7,7 @@ import { drizzle } from 'drizzle-orm/libsql';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import * as schema from '../schema';
+import { runBin } from '@quiz/test-utils/run-bin';
 
 const DB_PACKAGE_DIR = path.resolve(__dirname, '../..');
 
@@ -23,19 +23,16 @@ interface CliResult {
   stderr: string;
 }
 
-/** Runs a workspace CLI script exactly the way `pnpm db:*` does. */
+const testEnv = () => ({
+  TURSO_DATABASE_URL: databaseUrl,
+  DATABASE_URL: '',
+  TURSO_AUTH_TOKEN: '',
+  NODE_ENV: 'test',
+});
+
+/** Runs a workspace CLI script exactly the way `bun run db:*` does. */
 function runScript(script: string, args: string[] = []): CliResult {
-  const result = spawnSync('pnpm', ['exec', 'tsx', script, ...args], {
-    cwd: DB_PACKAGE_DIR,
-    env: {
-      ...process.env,
-      TURSO_DATABASE_URL: databaseUrl,
-      DATABASE_URL: '',
-      TURSO_AUTH_TOKEN: '',
-      NODE_ENV: 'test',
-    },
-    encoding: 'utf8',
-  });
+  const result = runBin('tsx', [script, ...args], { cwd: DB_PACKAGE_DIR, env: testEnv() });
 
   return {
     status: result.status,
@@ -44,19 +41,9 @@ function runScript(script: string, args: string[] = []): CliResult {
   };
 }
 
-/** Applies migrations with Drizzle Kit itself, exactly like `pnpm db:migrate`. */
+/** Applies migrations with Drizzle Kit itself, exactly like `bun run db:migrate`. */
 function runDrizzleKit(command: string): CliResult {
-  const result = spawnSync('pnpm', ['exec', 'drizzle-kit', command], {
-    cwd: DB_PACKAGE_DIR,
-    env: {
-      ...process.env,
-      TURSO_DATABASE_URL: databaseUrl,
-      DATABASE_URL: '',
-      TURSO_AUTH_TOKEN: '',
-      NODE_ENV: 'test',
-    },
-    encoding: 'utf8',
-  });
+  const result = runBin('drizzle-kit', [command], { cwd: DB_PACKAGE_DIR, env: testEnv() });
 
   return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 }

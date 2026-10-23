@@ -12,13 +12,43 @@ loadEnvFiles();
  *   dialect: 'turso'  → Turso Cloud (the application's database)
  *   dialect: 'sqlite' → an explicit `file:` URL, used by the automated tests
  *
- * All schema changes go through Drizzle Kit:
- *   pnpm db:generate   drizzle-kit generate
- *   pnpm db:migrate    drizzle-kit migrate
- *   pnpm db:push       drizzle-kit push
- *   pnpm db:studio     drizzle-kit studio
+ * `generate` only diffs the TypeScript schema and needs no connection, so it
+ * works without credentials. Every command that talks to the database
+ * (migrate / push / studio / pull) requires real Turso credentials.
  */
-const { url, authToken, target } = resolveDatabaseConfig();
+const COMMANDS = [
+  'generate',
+  'migrate',
+  'push',
+  'pull',
+  'studio',
+  'check',
+  'up',
+  'introspect',
+  'export',
+  'drop',
+];
+const COMMANDS_WITHOUT_CONNECTION = new Set(['generate', 'check', 'up']);
+
+/** drizzle-kit is invoked as `drizzle-kit <command>`; argv[0..1] are runtime + bin. */
+const command = process.argv.slice(1).find((arg) => COMMANDS.includes(arg));
+const needsConnection = !COMMANDS_WITHOUT_CONNECTION.has(command ?? '');
+
+function credentials() {
+  if (needsConnection) {
+    return resolveDatabaseConfig();
+  }
+
+  try {
+    return resolveDatabaseConfig();
+  } catch {
+    // Schema-only command on a machine without credentials: drizzle-kit will
+    // never open this URL while generating migrations.
+    return { url: 'file:./.data/schema-only.db', target: 'file' as const, urlHint: 'schema only' };
+  }
+}
+
+const { url, authToken, target } = credentials();
 
 export default defineConfig(
   target === 'turso'

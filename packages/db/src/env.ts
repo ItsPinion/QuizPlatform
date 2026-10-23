@@ -49,7 +49,7 @@ export function resolveDatabaseConfig(
         '  turso db show quizplatform --url       # libsql://<db>-<org>.turso.io',
         '  turso db tokens create quizplatform    # TURSO_AUTH_TOKEN',
         '',
-        'Then put both values in .env and run: pnpm db:migrate && pnpm db:seed',
+        'Then put both values in .env and run: bun run db:migrate && bun run db:seed',
       ].join('\n'),
     );
   }

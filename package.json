@@ -3,10 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "description": "Quiz Management & Online Assessment Platform \u2014 Turborepo monorepo (Next.js + Hono RPC + Drizzle/Turso)",
-  "packageManager": "pnpm@12.15.0",
+  "packageManager": "bun@1.4.2",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "engines": {
-    "node": ">=20.11"
+    "node": ">=20.11",
+    "bun": ">=1.1"
   },
+  "trustedDependencies": [
+    "esbuild",
+    "sharp",
+    "@tailwindcss/oxide",
+    "unrs-resolver"
+  ],
   "scripts": {
     "dev": "turbo run dev",
     "dev:web": "turbo run dev --filter=@quiz/web",
@@ -17,11 +28,11 @@
     "typecheck": "turbo run typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "db:generate": "pnpm --filter @quiz/db db:generate",
-    "db:migrate": "pnpm --filter @quiz/db db:migrate",
-    "db:push": "pnpm --filter @quiz/db db:push",
-    "db:studio": "pnpm --filter @quiz/db db:studio",
-    "db:seed": "pnpm --filter @quiz/db db:seed"
+    "db:generate": "turbo run db:generate --filter=@quiz/db",
+    "db:migrate": "turbo run db:migrate --filter=@quiz/db",
+    "db:push": "turbo run db:push --filter=@quiz/db",
+    "db:studio": "turbo run db:studio --filter=@quiz/db",
+    "db:seed": "turbo run db:seed --filter=@quiz/db"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

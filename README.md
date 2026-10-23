@@ -12,7 +12,7 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 
 | Layer            | Choice                                 | Why                                                           |
 | ---------------- | -------------------------------------- | ------------------------------------------------------------- |
-| Monorepo         | Turborepo 2 + pnpm workspaces          | One task graph, cached `build` / `typecheck` / `test`         |
+| Monorepo         | Turborepo 2 + Bun workspaces           | One task graph, cached `build` / `typecheck` / `test`         |
 | Web              | Next.js 16 (App Router) + React 19     | Server components, file routing, fast builds                  |
 | Styling          | Tailwind CSS v4 + shadcn/ui primitives | Design tokens in CSS, accessible components, dark-first theme |
 | API              | Hono 4 on `@hono/node-server`          | Tiny, fast, and **end-to-end typed RPC** via `AppType`        |
@@ -71,14 +71,21 @@ Add a route in `apps/api/src/app.ts` and the client gains it automatically. No c
 
 ### Prerequisites
 
-- Node.js **20.11+** (developed on 22)
-- pnpm **10+** (`corepack enable pnpm`)
+- **Bun 1.1+** — package manager and workspace runtime (`curl -fsSL https://bun.sh/install | bash`)
+- Node.js **20.11+** — Next.js and tsx run on Node (developed on 22)
 
 ### 1. Install
 
 ```bash
-pnpm install
+bun install
 ```
+
+Bun workspaces are declared in `package.json` (`workspaces`) and locked by `bun.lock`, which is
+committed. `.env.example` is the only tracked env file.
+
+> Prefer pnpm or npm? Change `packageManager` in the root `package.json` and add a
+> `pnpm-workspace.yaml` with `packages: ['apps/*', 'packages/*']`. Turbo follows whichever package
+> manager the field names, so nothing else needs to change.
 
 ### 2. Configure the environment
 
@@ -120,8 +127,8 @@ Credentials and migrations are **not** included in the repository — `.env` is 
 committed. Once you have added your Turso URL and token:
 
 ```bash
-pnpm db:migrate     # drizzle-kit migrate → apply packages/db/migrations to Turso Cloud
-pnpm db:seed        # optional: load demo users, categories, quizzes, questions, attempts
+bun run db:migrate     # drizzle-kit migrate → apply packages/db/migrations to Turso Cloud
+bun run db:seed        # optional: load demo users, categories, quizzes, questions, attempts
 ```
 
 Drizzle Kit owns the schema workflow — there is no hand-written migration runner.
@@ -129,7 +136,7 @@ Drizzle Kit owns the schema workflow — there is no hand-written migration runn
 ### 4. Run everything
 
 ```bash
-pnpm dev
+bun dev
 ```
 
 | Service   | URL                                 |
@@ -158,13 +165,17 @@ directly.
 
 Schema changes live in `packages/db/src/schema.ts`; migrations are generated, never hand-written:
 
-| Command            | Underlying             | Purpose                                           |
-| ------------------ | ---------------------- | ------------------------------------------------- |
-| `pnpm db:generate` | `drizzle-kit generate` | Create a SQL migration + snapshot from the schema |
-| `pnpm db:migrate`  | `drizzle-kit migrate`  | Apply pending migrations to Turso Cloud           |
-| `pnpm db:push`     | `drizzle-kit push`     | Push the schema directly — rapid prototyping only |
-| `pnpm db:studio`   | `drizzle-kit studio`   | Browse data in Drizzle Studio                     |
-| `pnpm db:seed`     | `tsx src/seed.ts`      | Load the demo dataset (optional)                  |
+| Command               | Underlying             | Purpose                                           |
+| --------------------- | ---------------------- | ------------------------------------------------- |
+| `bun run db:generate` | `drizzle-kit generate` | Create a SQL migration + snapshot from the schema |
+| `bun run db:migrate`  | `drizzle-kit migrate`  | Apply pending migrations to Turso Cloud           |
+| `bun run db:push`     | `drizzle-kit push`     | Push the schema directly — rapid prototyping only |
+| `bun run db:studio`   | `drizzle-kit studio`   | Browse data in Drizzle Studio                     |
+| `bun run db:seed`     | `tsx src/seed.ts`      | Load the demo dataset (optional)                  |
+
+`db:generate` works without credentials — it only diffs the TypeScript schema against the migration
+snapshots. Every other database command requires a valid `TURSO_DATABASE_URL` and
+`TURSO_AUTH_TOKEN` and fails with setup instructions if they are missing.
 
 The client follows the documented pattern — Drizzle creates and owns the libSQL connection:
 
@@ -207,9 +218,10 @@ quizplatform/
 │  │  ├─ src/seed.ts           rich demo dataset
 │  │  ├─ src/__tests__/        schema + seed integrity tests
 │  │  └─ migrations/           drizzle-kit generated SQL (checked in)
-│  └─ shared/                  Zod enums, contracts, scrypt helpers
+│  ├─ shared/                  Zod enums, contracts, scrypt helpers
+│  └─ test-utils/              package-manager-agnostic test runner helper
 ├─ turbo.json                  task graph + caching
-├─ pnpm-workspace.yaml         workspace globs + approved build scripts
+├─ package.json                 workspaces + trustedDependencies (Bun)
 └─ .env.example                credential template
 ```
 
@@ -245,29 +257,34 @@ Design notes:
 
 ## Scripts
 
-| Command            | Scope      | Description                                     |
-| ------------------ | ---------- | ----------------------------------------------- |
-| `pnpm dev`         | root       | Run web + API together through Turbo            |
-| `pnpm dev:web`     | root       | Web only                                        |
-| `pnpm dev:api`     | root       | API only                                        |
-| `pnpm build`       | root       | `next build` + API typecheck                    |
-| `pnpm typecheck`   | root       | TypeScript across all four packages             |
-| `pnpm test`        | root       | Vitest across shared, db and api                |
-| `pnpm lint`        | root       | Alias of typecheck (ESLint arrives with Day 2)  |
-| `pnpm format`      | root       | Prettier write                                  |
-| `pnpm db:generate` | `@quiz/db` | Generate SQL migrations from the Drizzle schema |
-| `pnpm db:migrate`  | `@quiz/db` | Apply pending migrations with drizzle-kit       |
-| `pnpm db:push`     | `@quiz/db` | Push schema without migration files (dev)       |
-| `pnpm db:studio`   | `@quiz/db` | Open Drizzle Studio                             |
-| `pnpm db:seed`     | `@quiz/db` | Seed demo data (`-- --force` to reset)          |
+Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
+
+| Command               | Scope      | Description                                     |
+| --------------------- | ---------- | ----------------------------------------------- |
+| `bun dev`             | root       | Run web + API together through Turbo            |
+| `bun run dev:web`     | root       | Web only                                        |
+| `bun run dev:api`     | root       | API only                                        |
+| `bun run build`       | root       | `next build` + API typecheck                    |
+| `bun run typecheck`   | root       | TypeScript across every package                 |
+| `bun run test`        | root       | Vitest across shared, db and api                |
+| `bun run lint`        | root       | Alias of typecheck (ESLint arrives with Day 2)  |
+| `bun run format`      | root       | Prettier write                                  |
+| `bun run db:generate` | `@quiz/db` | Generate SQL migrations from the Drizzle schema |
+| `bun run db:migrate`  | `@quiz/db` | Apply pending migrations with drizzle-kit       |
+| `bun run db:push`     | `@quiz/db` | Push schema without migration files (dev)       |
+| `bun run db:studio`   | `@quiz/db` | Open Drizzle Studio                             |
+| `bun run db:seed`     | `@quiz/db` | Seed demo data (`-- --force` to reset)          |
+
+> Use `bun run <script>` for scripts. Bare `bun test` launches Bun's own test runner instead of the
+> Vitest suites, which is not what this repo uses.
 
 ---
 
 ## Testing
 
 ```bash
-pnpm test          # all workspaces through Turbo
-pnpm --filter @quiz/db test
+bun run test                    # all workspaces through Turbo
+bun run test --filter=@quiz/db  # one package
 ```
 
 40 tests cover the scaffolding end to end:
@@ -356,15 +373,20 @@ Day 1 (done): monorepo, API, Drizzle schema, migrations, seed, env config, tests
 `details.reason` carries the underlying driver error (`fetch failed → ECONNRESET`, missing
 credentials, …).
 
-**`no such table: users`** — migrations were not applied. Run `pnpm db:migrate`, then `pnpm db:seed`.
+**`no such table: users`** — migrations were not applied. Run `bun run db:migrate`, then `bun run db:seed`.
 
 **`Please provide required params for 'turso' dialect`** — `TURSO_AUTH_TOKEN` is missing for a
 `libsql://` URL.
 
-**`TURSO_DATABASE_URL is not set`** — the API refuses to start without Turso credentials; copy
-`.env.example` to `.env` and fill in the URL and token from the Turso dashboard.
+**`Unable to find package manager binary: cannot find binary path`** — Turbo reads `packageManager`
+from the root `package.json`. This repo pins `bun@…`; install Bun (or update the field to match the
+package manager you use).
 
-**`fetch failed` / `ECONNRESET` when running `pnpm db:migrate`** — the machine cannot reach Turso.
+**`TURSO_DATABASE_URL is not set`** — every database command (and the readiness probe) needs Turso
+credentials; copy `.env.example` to `.env` and fill in the URL and token from the Turso dashboard.
+`bun run db:generate` still works, since it never connects.
+
+**`fetch failed` / `ECONNRESET` when running `bun run db:migrate`** — the machine cannot reach Turso.
 Turso needs HTTPS to `*.turso.io` on port 443, and restricted networks reset those connections. Run
 the migration from a machine with normal internet access.
 

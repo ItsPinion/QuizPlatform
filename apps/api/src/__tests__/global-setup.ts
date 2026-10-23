@@ -1,7 +1,7 @@
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { runBin } from '@quiz/test-utils/run-bin';
 import { REPO_ROOT, TEST_DB_PATH, TEST_DB_URL } from './test-db';
 
 /**
@@ -30,11 +30,7 @@ export default function setup() {
   ];
 
   for (const [bin, args] of steps) {
-    const result = spawnSync('pnpm', ['exec', bin, ...args], {
-      cwd: dbDir,
-      env,
-      encoding: 'utf8',
-    });
+    const result = runBin(bin, args, { cwd: dbDir, env });
 
     if (result.status !== 0) {
       throw new Error(

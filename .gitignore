@@ -4,12 +4,16 @@
 node_modules/
 .pnpm-store/
 
+# bun: the text lockfile is committed, the legacy binary one is not
+bun.lockb
+
 # ---------------------------------------------------------------------------
 # Build output & caches
 # ---------------------------------------------------------------------------
 .next/
 out/
 dist/
+next-env.d.ts
 build/
 .turbo/
 *.tsbuildinfo
