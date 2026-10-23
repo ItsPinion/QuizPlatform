@@ -1,30 +1,49 @@
 'use client';
 
+import type { LandingPayload } from '@quiz/shared/landing';
 import { useEffect, useState } from 'react';
 
 import { cn } from '@/lib/utils';
 
 /**
- * The only unscripted element on the page.
+ * The live pill.
  *
- * It asks the API how it is doing through the same proxy the app uses, and
- * prints the answer: the database it is connected to, the rows it can see and
- * the round trip. If the API is down it says so — a landing page that only works
- * when everything is fine is a brochure, not a demo.
+ * The first render is the server's own snapshot — the page already knows the
+ * database, the counts and the version, because the same payload built the rest
+ * of the hero. From there this polls `/api/health/db` once a minute and updates
+ * in place, which is what makes the number in the headline move when somebody
+ * sits a quiz.
+ *
+ * If the API stops answering it says `degraded` and keeps the last known
+ * snapshot, rather than blanking out or pretending nothing happened.
  */
 
 interface Snapshot {
-  connected: boolean;
   target: string;
+  counts: { quizzes: number; questions: number } | null;
   latencyMs: number;
-  counts: { users: number; quizzes: number; questions: number } | null;
 }
 
 type State =
-  { phase: 'loading' } | { phase: 'ready'; data: Snapshot } | { phase: 'down'; message: string };
+  { phase: 'ready'; data: Snapshot } | { phase: 'stale'; data: Snapshot | null; reason: string };
 
-export function LiveStatus() {
-  const [state, setState] = useState<State>({ phase: 'loading' });
+function snapshotOf(payload: LandingPayload | null): Snapshot | null {
+  if (!payload) return null;
+
+  return {
+    target: payload.database.target,
+    counts: payload.counts
+      ? { quizzes: payload.counts.publishedQuizzes, questions: payload.counts.questions }
+      : null,
+    latencyMs: payload.database.latencyMs ?? 0,
+  };
+}
+
+export function LiveStatus({ payload }: { payload: LandingPayload | null }) {
+  const initial = snapshotOf(payload);
+  const [state, setState] = useState<State>(
+    initial ? { phase: 'ready', data: initial } : { phase: 'stale', data: null, reason: 'pending' },
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -32,32 +51,42 @@ export function LiveStatus() {
     const load = async () => {
       try {
         const res = await fetch('/api/health/db', { cache: 'no-store' });
-        const body = (await res.json()) as Partial<Snapshot> & { error?: { code?: string } };
+        const body = (await res.json()) as {
+          connected?: boolean;
+          target?: string;
+          latencyMs?: number;
+          counts?: { quizzes: number; questions: number };
+          error?: { code?: string };
+        };
 
         if (cancelled) return;
 
         if (!res.ok || body.connected !== true || !body.counts) {
-          setState({ phase: 'down', message: body.error?.code ?? `HTTP ${res.status}` });
+          setState((current) => ({
+            phase: 'stale',
+            data: current.data,
+            reason: body.error?.code ?? `HTTP ${res.status}`,
+          }));
           return;
         }
 
         setState({
           phase: 'ready',
           data: {
-            connected: true,
             target: body.target ?? 'unknown',
+            counts: { quizzes: body.counts.quizzes, questions: body.counts.questions },
             latencyMs: body.latencyMs ?? 0,
-            counts: body.counts,
           },
         });
       } catch {
-        if (!cancelled) setState({ phase: 'down', message: 'no answer from the API' });
+        if (!cancelled) {
+          setState((current) => ({ phase: 'stale', data: current.data, reason: 'no answer' }));
+        }
       }
     };
 
     void load();
 
-    // One refresh a minute: the numbers move when somebody sits a quiz.
     const timer = window.setInterval(() => void load(), 60_000);
 
     return () => {
@@ -66,34 +95,33 @@ export function LiveStatus() {
     };
   }, []);
 
-  const dot = state.phase === 'ready' ? 'bg-success' : 'bg-warning';
+  const live = state.phase === 'ready';
 
   return (
     <div className="border-border/70 bg-card/60 inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-full border px-3 py-1.5 font-mono text-[10.5px]">
       <span className="inline-flex items-center gap-1.5">
         <span
+          aria-hidden
           className={cn(
             'size-1.5 rounded-full',
-            dot,
-            state.phase === 'ready' && 'animate-pulse-dot motion-reduce:animate-none',
+            live ? 'bg-success animate-pulse-dot motion-reduce:animate-none' : 'bg-warning',
           )}
-          aria-hidden
         />
-        <span className={state.phase === 'ready' ? 'text-success' : 'text-warning'}>
-          {state.phase === 'ready' ? 'live' : state.phase === 'loading' ? 'connecting' : 'degraded'}
+        <span className={live ? 'text-success' : 'text-warning'}>
+          {live ? 'live' : state.data ? 'stale' : 'connecting'}
         </span>
       </span>
 
-      {state.phase === 'ready' ? (
+      {state.data ? (
         <span className="text-muted-foreground truncate">
-          {state.data.target} · {state.data.counts?.quizzes ?? 0} quizzes ·{' '}
+          {state.data.target} · {state.data.counts?.quizzes ?? 0} published ·{' '}
           {state.data.counts?.questions ?? 0} questions · {Math.round(state.data.latencyMs)} ms
         </span>
-      ) : null}
-
-      {state.phase === 'down' ? (
-        <span className="text-muted-foreground truncate">{state.message}</span>
-      ) : null}
+      ) : (
+        <span className="text-muted-foreground truncate">
+          {state.phase === 'stale' ? state.reason : 'asking the API'}
+        </span>
+      )}
     </div>
   );
 }

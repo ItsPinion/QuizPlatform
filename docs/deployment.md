@@ -78,6 +78,7 @@ environment — real environment variables win, which is what a hosting platform
 | `DATABASE_URL`                   | API, CLI | optional                       | —                       | Alias for `TURSO_DATABASE_URL`, for platforms that insist on this name |
 | `NEXT_PUBLIC_API_BASE_URL`       | web      | optional, usually empty        | `''` (same origin)      | Only for a split deployment where the browser calls another origin     |
 | `SKIP_DB_PREFLIGHT`              | CLI      | never                          | —                       | `1` lets `drizzle-kit generate` run without credentials                |
+| `DEMO_ACCOUNTS`                  | API      | **set to `0`**                 | `1` (published)         | `0` removes the seeded logins from `/api/landing` and the landing page |
 
 `.env.example` is the same list as a template. `bun run deploy:check` prints the effective values
 (names, lengths, redacted URLs — never the secrets) without starting anything.
@@ -118,8 +119,9 @@ exits non-zero), so the check and the process agree.
 | `bun run deploy:check --url …` | `/api/admin/system` over HTTP, plus live probes | after the deploy, from outside the network           |
 
 The rules live in exactly one place. The web screen only decides how a status looks
-(`apps/web/src/lib/deployment-params.ts`), and the landing page reuses those same helpers so the
-marketing claim cannot drift from what the code prints.
+(`apps/web/src/lib/deployment-params.ts`). The landing page makes its own claim — but from the same
+source of truth: `/api/landing` reads the database and the process at request time, so what it says
+about the deployment cannot drift from what the code prints either.
 
 ---
 
@@ -261,6 +263,7 @@ bun run deploy:check --url https://quiz.example.com --admin admin@quiz.dev:'<pas
 | Error envelope           | an unknown route → 404 `NOT_FOUND`, not an HTML page or a stack trace               |
 | Web app reachable        | the landing page → 200                                                              |
 | Content-Security-Policy  | present, `default-src 'self'`, and no `'unsafe-eval'`                               |
+| Landing data             | `/api/landing` → 200, at least one published quiz, no `unavailableReason`           |
 | Web → API proxy          | `/api/health` through the **web** origin → 200 (the rewrite is wired)               |
 | Server self-report       | optional: sign in as an admin, read `/api/admin/system`, refuse a `blocked` verdict |
 
@@ -364,6 +367,8 @@ alone is safe unless the schema changed; the readiness probe will say so.
 | Sign-in suddenly `429` in a load test                                        | the per-address limiter, by design                                                      | use `AUTH_RATE_LIMIT_MAX` for the test environment, never in production |
 | `✖ Invalid environment configuration` at boot                                | a value failed the Zod schema (`API_PORT` out of range, a bad number)                   | read the printed issue list; every variable has a default               |
 | `deploy:check` exits `2`                                                     | the script could not run (bad `--url`)                                                  | pass an absolute `http(s)` URL                                          |
+| The landing page shows dashes and "no published question"                    | `/api/landing` could not read the database, or nothing is published                     | read the page's warning bar; then `/api/health/db` and the API log      |
+| The landing page prints demo passwords                                       | `DEMO_ACCOUNTS` is unset, and unset means on                                            | set `DEMO_ACCOUNTS=0` before a public deploy                            |
 
 ---
 
@@ -383,8 +388,12 @@ alone is safe unless the schema changed; the readiness probe will say so.
 - **SQLite semantics apply.** Turso is a distributed SQLite: one writer at a time, so keep write
   transactions short. Body sizes and rate limits are the guard rails this app needs; there is no job
   queue.
-- **The seed is demo data.** Passwords are public in the README. Change or delete the accounts before
-  anyone else can reach the URL.
+- **The seed is demo data.** Passwords are public in the README, and `/api/landing` republishes the
+  ones whose accounts exist. `DEMO_ACCOUNTS=0` turns that off; changing or deleting the seeded accounts
+  is the other half of the job.
+- **`/api/landing` is public by design.** It exposes counts, one question without its key, one graded
+  paper without its student, and the demo logins. If a deployment must not publish any of that, put it
+  behind the same proxy auth as the rest of the site — the page degrades to its empty states.
 
 ---
 

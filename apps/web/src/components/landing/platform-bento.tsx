@@ -1,42 +1,23 @@
+import type { LandingPayload } from '@quiz/shared/landing';
 import {
-  ArrowUpRight,
-  Database,
-  Gauge,
-  LayoutDashboard,
-  Rocket,
-  ShieldCheck,
-  Timer,
-} from 'lucide-react';
+  durationRangeLabel,
+  passingRangeLabel,
+  percentLabel,
+  questionRangeLabel,
+  uptimeLabel,
+} from '@quiz/shared/landing';
+import { ArrowUpRight, Database, Gauge, LayoutDashboard, Server, Timer, Users } from 'lucide-react';
 
 import { BentoCard, BentoGrid } from '@/components/ui/bento';
 
 /**
- * The landing page's showcase grid (UI pass).
+ * The showcase grid.
  *
- * Six cards, one per surface the platform actually has. Every number here is a
- * fact about this repository — the seed's four accounts and ten quizzes, the 51
- * adversarial tests, the eight deployment checks — not a marketing placeholder,
- * and each card links to the section or screen that proves it.
- *
- * Layout is a 4-column bento in two rows: a wide console card, the clock, the
- * security count, then grading, a wide deployment card and the stack. Two wide
- * cells against four narrow ones is enough asymmetry to read as a bento without
- * turning the page into a puzzle.
+ * Six cells, every figure computed from `/api/landing` on this request: no
+ * "10 quizzes", no "51 tests", no invented ranges. `shape` is the API's own
+ * summary of the published catalogue, so the clock card cannot claim a duration
+ * that no quiz has.
  */
-
-const CONSOLE_STATS = [
-  { value: '4', label: 'users' },
-  { value: '10', label: 'quizzes' },
-  { value: '47', label: 'questions' },
-];
-
-const MARKS = [
-  { label: 'Right', value: '+3' },
-  { label: 'Wrong', value: '0' },
-  { label: 'Blank', value: '0' },
-];
-
-const STACK = ['Next.js 16 · React 19', 'Hono 4 · typed RPC', 'Drizzle · Turso', 'Zod contracts'];
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
@@ -53,12 +34,26 @@ function Go() {
   );
 }
 
-export function PlatformBento() {
+function Figure({ value, unit }: { value: string; unit?: string }) {
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <span className="text-3xl font-semibold tracking-tight tabular-nums">{value}</span>
+      {unit ? <span className="text-muted-foreground text-[11.5px]">{unit}</span> : null}
+    </div>
+  );
+}
+
+export function PlatformBento({ payload }: { payload: LandingPayload | null }) {
+  const counts = payload?.counts;
+  const shape = payload?.shape;
+  const service = payload?.service;
+  const database = payload?.database;
+
   return (
     <BentoGrid className="lg:auto-rows-[12.5rem] lg:grid-cols-4">
-      {/* --------------------------- admin console -------------------------- */}
+      {/* ----------------------------- catalogue ---------------------------- */}
       <BentoCard
-        href="/admin"
+        href="/student/quizzes"
         tone="primary"
         className="group flex flex-col justify-between gap-4 p-5 lg:col-span-2"
         particles={12}
@@ -68,6 +63,121 @@ export function PlatformBento() {
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             <LayoutDashboard className="text-primary size-4" />
+            <Label>Catalogue</Label>
+          </div>
+          <Go />
+        </div>
+
+        <div>
+          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-semibold tracking-tight tabular-nums">
+                {counts?.publishedQuizzes ?? '—'}
+              </span>
+              <span className="text-muted-foreground text-[11.5px]">
+                of {counts?.quizzes ?? '—'} published
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-semibold tracking-tight tabular-nums">
+                {counts?.categories ?? '—'}
+              </span>
+              <span className="text-muted-foreground text-[11.5px]">categories</span>
+            </div>
+          </div>
+          <p className="text-muted-foreground mt-2.5 max-w-sm text-[12px] leading-relaxed">
+            Categories are rows, not an enum — the filter reads the same table the console writes
+            to.
+          </p>
+        </div>
+      </BentoCard>
+
+      {/* ------------------------------- clock ------------------------------ */}
+      <BentoCard
+        href="#tour"
+        tone="sky"
+        className="group flex flex-col justify-between gap-3 p-5"
+        particles={7}
+        magnet
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Timer className="size-4 text-[oklch(0.74_0.13_215)]" />
+            <Label>Attempt clock</Label>
+          </div>
+          <Go />
+        </div>
+        <div>
+          <Figure value={shape ? durationRangeLabel(shape) : '—'} />
+          <p className="text-muted-foreground mt-2 text-[12px] leading-relaxed">
+            {shape
+              ? `${questionRangeLabel(shape)} questions per paper.`
+              : 'No paper published yet.'}{' '}
+            A refresh resumes the attempt without spending a try.
+          </p>
+        </div>
+      </BentoCard>
+
+      {/* ------------------------------ results ----------------------------- */}
+      <BentoCard
+        href="/student/results"
+        tone="success"
+        className="group flex flex-col justify-between gap-3 p-5"
+        particles={7}
+        magnet
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Gauge className="text-success size-4" />
+            <Label>Results</Label>
+          </div>
+          <Go />
+        </div>
+        <div>
+          <Figure value={counts ? percentLabel(counts.passRate) : '—'} unit="pass rate" />
+          <p className="text-muted-foreground mt-2 text-[12px] leading-relaxed">
+            {counts
+              ? `${counts.gradedAttempts} papers graded · average ${percentLabel(counts.averagePercentage)}.`
+              : 'Nothing graded yet.'}
+          </p>
+        </div>
+      </BentoCard>
+
+      {/* ------------------------------ grading ----------------------------- */}
+      <BentoCard
+        href="#tour"
+        tone="warning"
+        className="group flex flex-col justify-between gap-3 p-5"
+        particles={7}
+        magnet
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Gauge className="text-warning size-4" />
+            <Label>Grading</Label>
+          </div>
+          <Go />
+        </div>
+        <div>
+          <Figure value={shape ? passingRangeLabel(shape) : '—'} unit="to pass" />
+          <p className="text-muted-foreground mt-2 text-[11.5px] leading-relaxed">
+            One pure grader: submitted by hand or settled at the deadline, graded once.
+          </p>
+        </div>
+      </BentoCard>
+
+      {/* ---------------------------- console ------------------------------- */}
+      <BentoCard
+        href="/admin"
+        tone="primary"
+        className="group flex flex-col justify-between gap-3 p-5 lg:col-span-2"
+        particles={12}
+        magnet
+        ripple
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Users className="text-primary size-4" />
             <Label>Admin console</Label>
           </div>
           <Go />
@@ -75,12 +185,14 @@ export function PlatformBento() {
 
         <div>
           <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
-            {CONSOLE_STATS.map((stat) => (
-              <div key={stat.label} className="flex items-baseline gap-2">
-                <span className="text-3xl font-semibold tracking-tight tabular-nums">
-                  {stat.value}
-                </span>
-                <span className="text-muted-foreground text-[11.5px]">{stat.label}</span>
+            {[
+              [String(counts?.users ?? '—'), 'users'],
+              [String(counts?.attempts ?? '—'), 'attempts'],
+              [String(counts?.questions ?? '—'), 'questions'],
+            ].map(([value, label]) => (
+              <div key={label} className="flex items-baseline gap-2">
+                <span className="text-3xl font-semibold tracking-tight tabular-nums">{value}</span>
+                <span className="text-muted-foreground text-[11.5px]">{label}</span>
               </div>
             ))}
           </div>
@@ -91,149 +203,39 @@ export function PlatformBento() {
         </div>
       </BentoCard>
 
-      {/* ------------------------------- clock ------------------------------ */}
+      {/* ------------------------------ runtime ----------------------------- */}
       <BentoCard
-        href="#student"
+        href="/admin/system"
         tone="sky"
-        className="group flex flex-col justify-between gap-3 p-5"
-        particles={7}
-        magnet
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Timer className="size-4 text-[oklch(0.74_0.13_215)]" />
-            <Label>Attempts</Label>
-          </div>
-          <Go />
-        </div>
-
-        <div>
-          <div className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
-            15–30<span className="text-muted-foreground/70 ml-1 text-base">min</span>
-          </div>
-          <p className="text-muted-foreground mt-2 text-[12px] leading-relaxed">
-            Each quiz owns its clock. A refresh resumes the attempt without spending a try.
-          </p>
-        </div>
-      </BentoCard>
-
-      {/* ----------------------------- hardening ---------------------------- */}
-      <BentoCard
-        href="#security"
-        tone="warning"
-        className="group flex flex-col justify-between gap-3 p-5"
-        particles={7}
-        magnet
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="text-warning size-4" />
-            <Label>Hardening</Label>
-          </div>
-          <Go />
-        </div>
-
-        <div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-semibold tracking-tight tabular-nums">51</span>
-            <span className="text-muted-foreground text-[11.5px]">attack tests</span>
-          </div>
-          <p className="text-muted-foreground mt-2 text-[11.5px] leading-relaxed">
-            Forged tokens, role escalation, a client-set deadline, a score in the body.
-          </p>
-        </div>
-      </BentoCard>
-
-      {/* ------------------------------ grading ----------------------------- */}
-      <BentoCard
-        href="#submission"
-        tone="success"
-        className="group flex flex-col justify-between gap-3 p-5"
-        particles={7}
-        magnet
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Gauge className="text-success size-4" />
-            <Label>Grading</Label>
-          </div>
-          <Go />
-        </div>
-
-        <div className="grid grid-cols-3 gap-1.5">
-          {MARKS.map((mark) => (
-            <div
-              key={mark.label}
-              className="border-border/50 bg-background/40 rounded-lg border px-1 py-1.5 text-center"
-            >
-              <div className="font-mono text-[13px] tabular-nums">{mark.value}</div>
-              <div className="text-muted-foreground/80 text-[9px] tracking-wide uppercase">
-                {mark.label}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <p className="text-muted-foreground text-[11.5px] leading-relaxed">
-          One pure grader: submit twice, grade once.
-        </p>
-      </BentoCard>
-
-      {/* ----------------------------- deployment --------------------------- */}
-      <BentoCard
-        href="#deployment"
-        tone="primary"
         className="group flex flex-col justify-between gap-3 p-5 lg:col-span-2"
-        particles={12}
-        magnet
-        ripple
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Rocket className="text-primary size-4" />
-            <Label>Deployment</Label>
-          </div>
-          <Go />
-        </div>
-
-        <div>
-          <div className="border-border/60 bg-background/60 rounded-lg border px-3 py-1.5 font-mono text-[11px] leading-[1.7]">
-            <div>
-              <span className="text-muted-foreground">$</span> bun run deploy:check
-            </div>
-            <div className="text-success">✓ 8 checks · ready · exit 0</div>
-          </div>
-          <p className="text-muted-foreground mt-2 text-[12px] leading-relaxed">
-            One rule set, three surfaces: before the build, over the wire, and on{' '}
-            <span className="font-mono text-[11px]">/admin/system</span>.
-          </p>
-        </div>
-      </BentoCard>
-
-      {/* -------------------------------- stack ----------------------------- */}
-      <BentoCard
-        href="#stack"
-        tone="sky"
-        className="group flex flex-col justify-between gap-3 p-5"
         particles={7}
         magnet
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Database className="size-4 text-[oklch(0.74_0.13_215)]" />
-            <Label>Stack</Label>
+            <Server className="size-4 text-[oklch(0.74_0.13_215)]" />
+            <Label>This process</Label>
           </div>
           <Go />
         </div>
 
-        <ul className="space-y-1">
-          {STACK.map((item) => (
-            <li key={item} className="text-muted-foreground flex items-center gap-2 text-[11.5px]">
-              <span className="bg-border size-1 shrink-0 rounded-full" />
-              {item}
-            </li>
-          ))}
-        </ul>
+        <div>
+          <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+            <Figure value={`v${service?.version ?? '0.0.0'}`} />
+            <span className="text-muted-foreground font-mono text-[11px]">
+              {database?.target ?? '—'} ·{' '}
+              {database?.latencyMs ? `${Math.round(database.latencyMs)} ms` : '—'}
+            </span>
+            <span className="text-muted-foreground font-mono text-[11px]">
+              up {service ? uptimeLabel(service.uptimeSeconds) : '—'}
+            </span>
+          </div>
+          <p className="text-muted-foreground mt-2.5 flex max-w-sm items-center gap-1.5 text-[12px] leading-relaxed">
+            <Database className="size-3" />
+            {service?.runtime ?? 'runtime unknown'} · {service?.nodeEnv ?? 'unknown'} — live from
+            <span className="font-mono text-[11px]">/api/landing</span>
+          </p>
+        </div>
       </BentoCard>
     </BentoGrid>
   );

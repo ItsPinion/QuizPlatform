@@ -1,3 +1,4 @@
+import type { LandingPayload } from '@quiz/shared/landing';
 import { ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 
@@ -39,7 +40,19 @@ const COLUMNS: { title: string; links: { label: string; href: string; external?:
  * reproducing it. Everything external opens in a new tab so a visitor never loses
  * the demo.
  */
-export function SiteFooter() {
+export function SiteFooter({ payload }: { payload?: LandingPayload | null } = {}) {
+  const runtime = payload
+    ? [
+        `v${payload.service.version}`,
+        payload.service.runtime,
+        `${payload.database.target} database`,
+      ].join(' · ')
+    : null;
+
+  const database = payload
+    ? `${payload.database.urlHint} · ${payload.database.latencyMs === null ? 'no answer' : `${Math.round(payload.database.latencyMs)} ms`}`
+    : null;
+
   return (
     <footer className="border-border/60 border-t">
       <div className="mx-auto w-full max-w-6xl px-5 py-12 sm:px-8">
@@ -52,12 +65,12 @@ export function SiteFooter() {
               <span className="text-[13.5px] font-semibold tracking-tight">QuizPlatform</span>
             </div>
             <p className="text-muted-foreground mt-3 max-w-xs text-[11.5px] leading-relaxed">
-              Quiz management and online assessment: a Next.js front end, a Hono API and Drizzle on
-              Turso — built in the open, tested end to end.
+              Quiz management and online assessment: a Next.js front end, a Hono API and Drizzle
+              over libSQL — built in the open, tested end to end.
             </p>
-            <p className="text-muted-foreground/70 mt-4 font-mono text-[10px]">
-              Next.js 16 · React 19 · Hono 4 · Drizzle · Turso
-            </p>
+            {runtime ? (
+              <p className="text-muted-foreground/70 mt-4 font-mono text-[10px]">{runtime}</p>
+            ) : null}
           </div>
 
           {COLUMNS.map((column) => (
@@ -97,7 +110,7 @@ export function SiteFooter() {
           <span>
             Quiz Management &amp; Online Assessment Platform · demo data, not a production tenant
           </span>
-          <span className="font-mono">v0.1.0 · built with Bun, Next.js and Turso</span>
+          {database ? <span className="truncate font-mono">{database}</span> : null}
         </div>
       </div>
     </footer>

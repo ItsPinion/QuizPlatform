@@ -1,66 +1,88 @@
+import { headlineNumbers } from '@quiz/shared/landing';
+
 import { CtaBand } from '@/components/landing/cta-band';
 import { Hero } from '@/components/landing/hero';
-import { Tour } from '@/components/landing/tour';
 import { PlatformBento } from '@/components/landing/platform-bento';
 import { SectionHeading } from '@/components/landing/section-heading';
+import { Tour } from '@/components/landing/tour';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import { cn } from '@/lib/utils';
+import { fetchLanding } from '@/lib/landing';
 
 /**
  * The landing page.
  *
  * Six blocks, in the order a visitor asks the questions:
  *
- *   1. hero        — what is it, and can I see it?          (one promise, one picture)
- *   2. numbers     — is there anything behind it?           (four true counts)
- *   3. platform    — what does it actually contain?         (the bento map)
- *   4. tour        — what does using it feel like?          (three screens, in order)
- *   5. call        — can I try it?                          (demo login)
- *   6. footer      — where is the documentation?            (links, not copies)
+ *   1. hero        — what is it, and can I see it?
+ *   2. numbers     — how much is actually in here?
+ *   3. platform    — what does it contain?
+ *   4. tour        — what does using it feel like?
+ *   5. call        — can I try it?
+ *   6. footer      — where is the documentation?
  *
- * Everything that belongs in a manual — the schema, the endpoint table, the
- * thirteen-day log, the deployment matrix, the file tree — lives in the README
- * and `docs/`, and the footer points at it. A landing page that repeats the
- * README is a README with worse typography.
+ * Every figure on the page — counts, ranges, the sample question, the graded
+ * paper, the demo logins — arrives in one `GET /api/landing` response, validated
+ * against a Zod schema before it is rendered. There is no constant in this file
+ * that a database row should own; the copy is copy, the numbers are data.
+ *
+ * Nothing here is cached: a landing page that says "live" has to mean it.
  */
 
-const NUMBERS = [
-  { value: '10', label: 'categories', note: 'every one a row, not an enum' },
-  { value: '47', label: 'questions', note: 'multiple choice, one key' },
-  { value: '8', label: 'published quizzes', note: 'two still in draft' },
-  { value: '844', label: 'automated tests', note: 'plus a 75-check smoke run' },
-];
+export const dynamic = 'force-dynamic';
 
-export default function HomePage() {
+export default async function HomePage() {
+  const payload = await fetchLanding();
+  const numbers = payload ? headlineNumbers(payload) : [];
+  const notes: Record<string, string> = payload
+    ? {
+        categories: 'every one a row, not an enum',
+        questions: 'multiple choice, one key',
+        'published quizzes': `${payload.counts.quizzes} in total, drafts included`,
+        'papers graded': `${payload.counts.attempts} attempts started`,
+      }
+    : {};
+
   return (
     <div className="flex min-h-dvh flex-col">
-      <SiteHeader />
+      <SiteHeader version={payload?.service.version} />
 
       <main className="flex-1">
-        <Hero />
+        {payload?.unavailableReason ? (
+          <div className="border-destructive/30 bg-destructive/10 text-destructive border-b px-5 py-2 text-center text-[11.5px] sm:px-8">
+            Live data is unavailable right now — {payload.unavailableReason}. Showing empty states
+            rather than guessed numbers.
+          </div>
+        ) : null}
+
+        <Hero payload={payload} />
 
         {/* ------------------------------- numbers ------------------------------ */}
-        <section className="border-border/60 border-b">
-          <div className="mx-auto grid w-full max-w-6xl grid-cols-2 gap-y-8 px-5 py-10 sm:px-8 lg:grid-cols-4">
-            {NUMBERS.map((item, index) => (
-              <div
-                key={item.label}
-                className={cn(
-                  'border-border/50 border-l pl-5 lg:pl-8',
-                  index === 0 && 'border-l-0 pl-0 lg:pl-0',
-                  index === 2 && 'border-l-0 pl-0 lg:border-l lg:pl-8',
-                )}
-              >
-                <div className="text-3xl font-semibold tracking-tight tabular-nums">
-                  {item.value}
+        {numbers.length > 0 ? (
+          <section className="border-border/60 border-b">
+            <div className="mx-auto grid w-full max-w-6xl grid-cols-2 gap-y-8 px-5 py-10 sm:px-8 lg:grid-cols-4">
+              {numbers.map((item, index) => (
+                <div
+                  key={item.label}
+                  className={cn(
+                    'border-border/50 border-l pl-5 lg:pl-8',
+                    index === 0 && 'border-l-0 pl-0 lg:pl-0',
+                    index === 2 && 'border-l-0 pl-0 lg:border-l lg:pl-8',
+                  )}
+                >
+                  <div className="text-3xl font-semibold tracking-tight tabular-nums">
+                    {item.value}
+                  </div>
+                  <div className="text-[12.5px] font-medium">{item.label}</div>
+                  <div className="text-muted-foreground/80 mt-0.5 text-[10.5px]">
+                    {notes[item.label] ?? ''}
+                  </div>
                 </div>
-                <div className="text-[12.5px] font-medium">{item.label}</div>
-                <div className="text-muted-foreground/80 mt-0.5 text-[10.5px]">{item.note}</div>
-              </div>
-            ))}
-          </div>
-        </section>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         {/* ------------------------------ platform ----------------------------- */}
         <section id="platform" className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 lg:py-20">
@@ -68,7 +90,7 @@ export default function HomePage() {
             <SectionHeading
               eyebrow="The platform"
               title="Everything the exam needs, in one place"
-              description="Student, grader, console, security and deployment — one session and one typed contract behind them. Hover a card: the light follows your cursor, and every number on it is a query, not a promise."
+              description="Six surfaces, one session and one typed contract behind them. Hover a card: the light follows your cursor, and every number on it was a SQL count a moment ago."
             />
             <p className="text-muted-foreground/80 max-w-[15rem] text-[11px] leading-relaxed">
               Spotlight, lit border, drifting stars and a few degrees of tilt. Nothing moves on
@@ -77,7 +99,7 @@ export default function HomePage() {
           </div>
 
           <div className="mt-8">
-            <PlatformBento />
+            <PlatformBento payload={payload} />
           </div>
         </section>
 
@@ -91,16 +113,16 @@ export default function HomePage() {
             />
 
             <div className="mt-12">
-              <Tour />
+              <Tour payload={payload} />
             </div>
           </div>
         </section>
 
         {/* --------------------------------- cta ------------------------------- */}
-        <CtaBand />
+        <CtaBand payload={payload} />
       </main>
 
-      <SiteFooter />
+      <SiteFooter payload={payload} />
     </div>
   );
 }

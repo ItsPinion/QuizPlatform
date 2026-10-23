@@ -11,7 +11,7 @@ const SECTIONS = [
   { href: '/#tour', label: 'Tour' },
 ];
 
-export function SiteHeader() {
+export function SiteHeader({ version }: { version?: string } = {}) {
   return (
     <header className="border-border/70 bg-background/80 sticky top-0 z-50 border-b backdrop-blur-xl">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
@@ -22,9 +22,11 @@ export function SiteHeader() {
           </span>
           <span className="flex items-baseline gap-2">
             <span className="text-[15px] font-semibold tracking-tight">QuizPlatform</span>
-            <span className="text-muted-foreground hidden font-mono text-[11px] sm:inline">
-              v0.1.0
-            </span>
+            {version ? (
+              <span className="text-muted-foreground hidden font-mono text-[11px] sm:inline">
+                v{version}
+              </span>
+            ) : null}
           </span>
         </Link>
 

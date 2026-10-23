@@ -13,6 +13,7 @@ import type { AppEnv } from './lib/types';
 import { adminRoutes } from './routes/admin';
 import { authRoutes } from './routes/auth';
 import { healthRoutes } from './routes/health';
+import { landingRoutes } from './routes/landing';
 import { leaderboardRoutes } from './routes/leaderboard';
 import { metaRoutes } from './routes/meta';
 import { studentRoutes } from './routes/student';
@@ -28,6 +29,7 @@ const apiRoutes = new Hono<AppEnv>()
   .route('/meta', metaRoutes)
   .route('/auth', authRoutes)
   .route('/leaderboard', leaderboardRoutes)
+  .route('/landing', landingRoutes)
   .route('/admin', adminRoutes)
   .route('/student', studentRoutes);
 

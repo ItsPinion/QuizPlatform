@@ -59,6 +59,8 @@ export const metaRoutes = new Hono().get('/', (c) =>
         'PUT /api/student/attempts/:id/answers/:questionId': 'Save or clear one answer',
         'POST /api/student/attempts/:id/submit': 'Grade the paper (manual or at the deadline)',
         'GET /api/leaderboard': 'Overall and per-category rankings (average, best, completed)',
+        'GET /api/landing':
+          'Public landing payload: counts, catalogue shape, a sample question and result',
         'GET /api/meta': 'This document',
       },
       security: {

@@ -1,3 +1,12 @@
+import type { LandingPayload } from '@quiz/shared/landing';
+import {
+  durationLabel,
+  durationRangeLabel,
+  passingRangeLabel,
+  percentLabel,
+  questionRangeLabel,
+} from '@quiz/shared/landing';
+
 import { BrowserFrame } from '@/components/landing/browser-frame';
 import { CatalogueShot, ConsoleShot, ResultShot } from '@/components/landing/product-shots';
 import { cn } from '@/lib/utils';
@@ -5,9 +14,9 @@ import { cn } from '@/lib/utils';
 /**
  * Three screens, in the order they happen.
  *
- * A tour, not a feature list: sit the quiz → read the result → run the console.
- * Each row is one claim with one picture, alternating sides so the eye moves down
- * the page instead of scanning a grid of equal boxes.
+ * The headings are copy; every number under them is read from the payload — the
+ * catalogue length, the pass marks, the graded counts — so the tour describes the
+ * deployment it is running on rather than the one it was written for.
  */
 
 interface Stop {
@@ -21,55 +30,71 @@ interface Stop {
   tone: 'primary' | 'sky' | 'success';
 }
 
-const STOPS: Stop[] = [
-  {
-    step: '01',
-    eyebrow: 'For students',
-    title: 'Every quiz, with its state attached',
-    body: 'Only published quizzes are listed, and each one arrives with its category, level and duration plus your own attempt state — in progress, attempts left, best score. Categories come from the table, not a hardcoded list.',
-    points: [
-      'Start, resume or read a result straight from the catalogue',
-      'Attempt limits are enforced by the API, never by hiding a button',
-      'A new category created in the console appears here on the next load',
-    ],
-    shot: <CatalogueShot />,
-    path: 'quiz.example.com/student/quizzes',
-    tone: 'primary',
-  },
-  {
-    step: '02',
-    eyebrow: 'Grading',
-    title: 'One grader, one answer, no second opinion',
-    body: 'Marks, counts, percentage and pass/fail come from a single pure function on the server. Submitting twice returns the stored result instead of grading the paper again.',
-    points: [
-      'Submitted by hand or settled at the deadline — the same code path',
-      'The answer key is released only after the attempt is finished',
-      'Per-question verdicts sum exactly to the stored total',
-    ],
-    shot: <ResultShot />,
-    path: 'quiz.example.com/student/results',
-    tone: 'success',
-  },
-  {
-    step: '03',
-    eyebrow: 'For administrators',
-    title: 'A console that reads the database',
-    body: 'Statistics, the user directory, quiz and category management, analytics and the deployment report — each one a query, none of them a cached number in the browser.',
-    points: [
-      'Publish only when a quiz has questions; delete only when it has history',
-      'Categories are rows, created from the same input that filters them',
-      'Role and status changes are audited by the rules, including self-lockout',
-    ],
-    shot: <ConsoleShot />,
-    path: 'quiz.example.com/admin',
-    tone: 'sky',
-  },
-];
+function stops(payload: LandingPayload | null): Stop[] {
+  const counts = payload?.counts;
+  const shape = payload?.shape;
+  const result = payload?.sampleResult;
 
-export function Tour() {
+  return [
+    {
+      step: '01',
+      eyebrow: 'For students',
+      title: 'Every quiz, with its state attached',
+      body: 'Only published quizzes are listed, and each one arrives with its category, level, duration and question count. Categories come from the table, so a new one appears here without a deploy.',
+      points: [
+        counts
+          ? `${counts.publishedQuizzes} published quizzes across ${counts.categories} categories`
+          : 'Published quizzes only — drafts never reach a student',
+        shape
+          ? `${durationRangeLabel(shape)} per paper, ${questionRangeLabel(shape)} questions`
+          : 'Each paper carries its own duration',
+        'Attempt limits are enforced by the API, never by hiding a button',
+      ],
+      shot: <CatalogueShot payload={payload} />,
+      path: '…/student/quizzes',
+      tone: 'primary',
+    },
+    {
+      step: '02',
+      eyebrow: 'Grading',
+      title: 'One grader, one answer, no second opinion',
+      body: 'Marks, counts, percentage and pass/fail come from a single pure function on the server. Submitting twice returns the stored result instead of grading the paper again.',
+      points: [
+        result
+          ? `This paper: ${result.marks}/${result.totalMarks} marks, ${durationLabel(result.timeTakenSeconds)} on the clock`
+          : 'Marks sum from the questions, never from the client',
+        shape
+          ? `Pass marks run ${passingRangeLabel(shape)} across the catalogue`
+          : 'Pass mark per quiz',
+        'The answer key is released only after the attempt is finished',
+      ],
+      shot: <ResultShot payload={payload} />,
+      path: '…/student/results',
+      tone: 'success',
+    },
+    {
+      step: '03',
+      eyebrow: 'For administrators',
+      title: 'A console that reads the database',
+      body: 'Statistics, the user directory, quiz and category management, analytics and the deployment report — each one a query, none of them a cached number in the browser.',
+      points: [
+        counts
+          ? `${counts.users} accounts · ${counts.attempts} attempts · ${percentLabel(counts.averagePercentage)} average`
+          : 'Live aggregates, one query per section',
+        'Publish only when a quiz has questions; delete only when it has history',
+        'Role and status changes are audited by the rules, including self-lockout',
+      ],
+      shot: <ConsoleShot payload={payload} />,
+      path: '…/admin',
+      tone: 'sky',
+    },
+  ];
+}
+
+export function Tour({ payload }: { payload: LandingPayload | null }) {
   return (
     <div className="space-y-16 lg:space-y-24">
-      {STOPS.map((stop, index) => {
+      {stops(payload).map((stop, index) => {
         const flipped = index % 2 === 1;
 
         return (

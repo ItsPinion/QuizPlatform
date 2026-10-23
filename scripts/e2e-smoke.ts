@@ -2113,6 +2113,83 @@ try {
     return '403 · FORBIDDEN · 401';
   });
 
+  /* ------------------------------- landing -------------------------------- */
+
+  await check('GET /api/landing serves the page data without a session', async () => {
+    const res = await fetch(`${baseUrl}/api/landing`);
+
+    expectStatus(res, 200);
+
+    const raw = await res.text();
+    const body = JSON.parse(raw) as {
+      counts: { users: number; quizzes: number; publishedQuizzes: number; questions: number };
+      shape: { minDurationMinutes: number; maxDurationMinutes: number };
+      categories: { name: string; quizzes: number; published: number }[];
+      quizzes: { title: string; questions: number }[];
+      sampleQuestion: { text: string; options: string[]; index: number; total: number } | null;
+      sampleResult: { marks: number; totalMarks: number; passRate?: number } | null;
+      demo: { enabled: boolean; accounts: { email: string; exists: boolean }[] };
+    };
+
+    // The page's numbers are the database's numbers.
+    const health = await fetch(`${baseUrl}/api/health/db`);
+    const db = (await health.json()) as {
+      counts: { users: number; quizzes: number; questions: number };
+    };
+
+    if (body.counts.users !== db.counts.users) throw new Error('user count drifted');
+    if (body.counts.questions !== db.counts.questions) throw new Error('question count drifted');
+    if (body.counts.publishedQuizzes > body.counts.quizzes) throw new Error('published > total');
+    if (body.quizzes.length !== body.counts.publishedQuizzes) {
+      throw new Error('quiz list does not match the published count');
+    }
+    if (body.categories.length !== 10) throw new Error('expected the seeded categories');
+    if (body.shape.minDurationMinutes > body.shape.maxDurationMinutes) {
+      throw new Error('duration range is inverted');
+    }
+
+    return `200 · ${body.counts.publishedQuizzes} published · ${body.categories.length} categories · ${body.quizzes.length} listed`;
+  });
+
+  await check('the landing payload carries no answer key and no student', async () => {
+    const res = await fetch(`${baseUrl}/api/landing`);
+
+    expectStatus(res, 200);
+
+    const raw = await res.text();
+    const body = JSON.parse(raw) as {
+      sampleQuestion: { options: string[] } | null;
+      sampleResult: { marks: number; totalMarks: number } | null;
+      demo: { accounts: { email: string; exists: boolean }[] };
+    };
+
+    if (!body.sampleQuestion || body.sampleQuestion.options.length < 2) {
+      throw new Error('expected a sample question with options');
+    }
+    if (!body.sampleResult) throw new Error('expected a sample graded result');
+    if (body.sampleResult.marks > body.sampleResult.totalMarks) {
+      throw new Error('marks exceed the paper');
+    }
+
+    for (const forbidden of ['isCorrect', 'selectedOptionId', 'explanation', 'passwordHash']) {
+      if (raw.includes(forbidden)) throw new Error(`payload leaked ${forbidden}`);
+    }
+
+    // Only the demo block may contain an address, and only accounts that exist.
+    // Structures, not regexes: parse, drop the one block allowed to hold an
+    // address, then look at everything else.
+    const parsed = JSON.parse(raw) as Record<string, unknown> & { demo: { accounts: unknown[] } };
+    delete parsed.demo;
+
+    if (JSON.stringify(parsed).includes('@'))
+      throw new Error('payload leaked an email outside the demo block');
+    if (body.demo.accounts.some((account) => !account.exists)) {
+      throw new Error('demo block advertises a missing account');
+    }
+
+    return `200 · ${body.sampleQuestion.options.length} options · ${body.demo.accounts.length} demo logins · no key`;
+  });
+
   await check('unknown routes answer with the error envelope', async () => {
     const res = await fetch(`${baseUrl}/api/nope`);
     expectStatus(res, 404);

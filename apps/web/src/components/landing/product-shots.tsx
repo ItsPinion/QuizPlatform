@@ -1,75 +1,82 @@
-import { Check, Clock, Lock, X } from 'lucide-react';
+import type { LandingPayload } from '@quiz/shared/landing';
+import { durationLabel } from '@quiz/shared/landing';
+import { Check, Clock, Lock, Timer } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 /**
- * Product shots.
+ * Product shots, built from the payload.
  *
- * Small, deliberately literal reproductions of three real screens — an attempt in
- * progress, a finished result, and the admin console. They carry no explanatory
- * copy: the surrounding section says what the screen means, and the screen itself
- * only has to look like the thing it is.
+ * Each one renders rows that came out of the database a moment ago: a real
+ * question from the fullest published quiz, a real graded paper, the real
+ * catalogue. None of them has a fallback string — when there is no data the shot
+ * says so, because inventing a plausible quiz on a page that claims to be live is
+ * the one thing worse than an empty state.
  */
 
-const OPTIONS = [
-  { text: 'var', state: 'idle' },
-  { text: 'let', state: 'idle' },
-  { text: 'const', state: 'selected' },
-  { text: 'static', state: 'idle' },
-] as const;
+const DIFFICULTY_BADGE = {
+  EASY: 'success',
+  MEDIUM: 'secondary',
+  HARD: 'warning',
+} as const;
 
-export function AttemptShot() {
+function Empty({ children }: { children: string }) {
+  return (
+    <div className="border-border/60 text-muted-foreground grid h-32 place-items-center rounded-md border border-dashed text-[11px]">
+      {children}
+    </div>
+  );
+}
+
+export function AttemptShot({ payload }: { payload: LandingPayload | null }) {
+  const question = payload?.sampleQuestion;
+
+  if (!question) return <Empty>No published question to show yet.</Empty>;
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-[12.5px] font-medium">JavaScript Fundamentals</p>
-          <p className="text-muted-foreground text-[10.5px]">Question 5 of 8</p>
+          <p className="text-[12.5px] font-medium">{question.quizTitle}</p>
+          <p className="text-muted-foreground text-[10.5px]">
+            Question {question.index} of {question.total} · {question.category}
+          </p>
         </div>
         <Badge variant="outline" className="gap-1.5 font-mono text-[10px] tabular-nums">
           <Clock className="size-3" />
-          14:32
+          {question.durationMinutes}:00
         </Badge>
       </div>
 
       <div className="bg-muted h-1 overflow-hidden rounded-full">
-        <div className="bg-primary h-full w-[62%] rounded-full" />
+        <div
+          className="bg-primary h-full rounded-full transition-[width] duration-500"
+          style={{ width: `${Math.round((question.index / question.total) * 100)}%` }}
+        />
       </div>
 
-      <p className="text-[12.5px] leading-relaxed">
-        Which keyword declares a binding that cannot be reassigned?
-      </p>
+      <p className="text-[12.5px] leading-relaxed">{question.text}</p>
 
       <ul className="grid gap-1.5 sm:grid-cols-2">
-        {OPTIONS.map((option) => (
+        {question.options.map((option) => (
           <li
-            key={option.text}
-            className={cn(
-              'flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-[11.5px]',
-              option.state === 'selected'
-                ? 'border-primary/60 bg-primary/10 text-foreground'
-                : 'border-border/70 bg-background/40 text-muted-foreground',
-            )}
+            key={option}
+            className="border-border/70 bg-background/40 text-muted-foreground flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-[11.5px]"
           >
             <span
-              className={cn(
-                'grid size-3.5 shrink-0 place-items-center rounded-full border',
-                option.state === 'selected' ? 'border-primary bg-primary' : 'border-border',
-              )}
+              className="border-border grid size-3.5 shrink-0 place-items-center rounded-full border"
               aria-hidden
-            >
-              {option.state === 'selected' ? <Check className="size-2.5 text-white" /> : null}
-            </span>
-            <span className="font-mono">{option.text}</span>
+            />
+            <span className="truncate">{option}</span>
           </li>
         ))}
       </ul>
 
       <div className="text-muted-foreground flex items-center justify-between gap-2 text-[10px]">
-        <span className="text-success inline-flex items-center gap-1">
-          <span className="bg-success size-1 rounded-full" />
-          saved
+        <span className="inline-flex items-center gap-1">
+          <Timer className="size-2.5" />
+          {question.marks} mark{question.marks === 1 ? '' : 's'}
         </span>
         <span className="flex items-center gap-1.5">
           <Lock className="size-2.5" /> key not in this payload
@@ -79,83 +86,127 @@ export function AttemptShot() {
   );
 }
 
-const VERDICTS = [
-  { index: 1, ok: true },
-  { index: 2, ok: true },
-  { index: 3, ok: false },
-  { index: 4, ok: true },
-  { index: 5, ok: true },
-  { index: 6, ok: 'blank' },
-] as const;
+export function ResultShot({ payload }: { payload: LandingPayload | null }) {
+  const result = payload?.sampleResult;
 
-export function ResultShot() {
+  if (!result) return <Empty>No graded paper yet.</Empty>;
+
+  const cells = [
+    { label: 'Right', value: result.correct, tone: 'success' as const },
+    { label: 'Wrong', value: result.incorrect, tone: 'destructive' as const },
+    { label: 'Blank', value: result.unanswered, tone: 'muted' as const },
+  ];
+
   return (
     <div className="space-y-3">
       <div className="flex items-end justify-between gap-3">
         <div>
           <p className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase">
-            Result
+            {result.quizTitle}
           </p>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-semibold tracking-tight tabular-nums">86</span>
+            <span className="text-3xl font-semibold tracking-tight tabular-nums">
+              {Math.round(result.percentage)}
+            </span>
             <span className="text-muted-foreground text-sm">%</span>
           </div>
-          <p className="text-muted-foreground mt-0.5 text-[10.5px]">13 of 15 marks · 12m 04s</p>
+          <p className="text-muted-foreground mt-0.5 text-[10.5px]">
+            {result.marks} of {result.totalMarks} marks · {durationLabel(result.timeTakenSeconds)}
+          </p>
         </div>
-        <Badge variant="success" className="text-[10px]">
-          PASSED
+        <Badge variant={result.passed ? 'success' : 'destructive'} className="text-[10px]">
+          {result.passed ? 'PASSED' : 'FAILED'}
         </Badge>
       </div>
 
-      <div className="flex gap-1" aria-hidden>
-        {VERDICTS.map((verdict) => (
-          <span
-            key={verdict.index}
+      <div className="grid grid-cols-3 gap-1.5">
+        {cells.map((cell) => (
+          <div
+            key={cell.label}
             className={cn(
-              'grid h-6 flex-1 place-items-center rounded-sm border text-[9px]',
-              verdict.ok === true && 'border-success/40 bg-success/15 text-success',
-              verdict.ok === false && 'border-destructive/40 bg-destructive/15 text-destructive',
-              verdict.ok === 'blank' && 'border-border/70 bg-muted/40 text-muted-foreground',
+              'rounded-md border px-1.5 py-1.5 text-center',
+              cell.tone === 'success' && 'border-success/35 bg-success/10',
+              cell.tone === 'destructive' && 'border-destructive/35 bg-destructive/10',
+              cell.tone === 'muted' && 'border-border/60 bg-muted/30',
             )}
           >
-            {verdict.ok === true ? (
-              <Check className="size-2.5" />
-            ) : verdict.ok === false ? (
-              <X className="size-2.5" />
-            ) : (
-              '–'
-            )}
-          </span>
+            <div className="font-mono text-[13px] tabular-nums">{cell.value}</div>
+            <div className="text-muted-foreground text-[9px] tracking-wide uppercase">
+              {cell.label}
+            </div>
+          </div>
         ))}
       </div>
 
-      <div className="border-border/60 bg-background/40 space-y-1 rounded-md border p-2 text-[10.5px]">
-        <p className="text-foreground font-medium">Q3 · Which array method mutates?</p>
-        <p className="text-muted-foreground">
-          Your answer <span className="text-destructive font-mono">map</span> · correct{' '}
-          <span className="text-success font-mono">splice</span>
-        </p>
-      </div>
+      <p className="text-muted-foreground flex items-center gap-1.5 text-[10px]">
+        <Check className="text-success size-2.5" />
+        pass mark {result.passingScore}% · graded on the server
+      </p>
     </div>
   );
 }
 
-const BARS = [38, 62, 45, 80, 55, 90, 70];
+export function CatalogueShot({ payload }: { payload: LandingPayload | null }) {
+  const quizzes = payload?.quizzes ?? [];
 
-const CONSOLE_ROWS = [
-  { title: 'CSS Layout Basics', status: 'PUBLISHED', attempts: 9 },
-  { title: 'Python Data Types', status: 'DRAFT', attempts: 0 },
-  { title: 'Network Protocols', status: 'PUBLISHED', attempts: 7 },
-] as const;
+  if (quizzes.length === 0) return <Empty>Nothing published yet.</Empty>;
 
-export function ConsoleShot() {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[12px] font-medium">Catalogue</span>
+        <span className="text-muted-foreground font-mono text-[9.5px]">
+          {quizzes.length} published
+        </span>
+      </div>
+
+      <ul className="space-y-1.5">
+        {quizzes.slice(0, 3).map((quiz) => (
+          <li
+            key={quiz.title}
+            className="border-border/60 bg-background/40 rounded-md border px-2.5 py-2"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-[11.5px] font-medium">{quiz.title}</span>
+              <Badge variant={DIFFICULTY_BADGE[quiz.difficulty]} className="shrink-0 text-[8.5px]">
+                {quiz.difficulty.toLowerCase()}
+              </Badge>
+            </div>
+            <div className="text-muted-foreground mt-1 flex items-center gap-2 text-[9.5px]">
+              <span className="truncate">{quiz.category}</span>
+              <span className="bg-border size-0.5 shrink-0 rounded-full" />
+              <span className="tabular-nums">{quiz.durationMinutes} min</span>
+              <span className="bg-border size-0.5 shrink-0 rounded-full" />
+              <span className="tabular-nums">
+                {quiz.questions} Q · {quiz.maxAttempts} {quiz.maxAttempts === 1 ? 'try' : 'tries'}
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {quizzes.length > 3 ? (
+        <p className="text-muted-foreground/70 text-[9.5px]">
+          + {quizzes.length - 3} more in the catalogue
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+export function ConsoleShot({ payload }: { payload: LandingPayload | null }) {
+  if (!payload) return <Empty>Waiting for the API.</Empty>;
+
+  const { counts, categories, shape } = payload;
+  const peak = Math.max(1, ...categories.map((category) => category.published));
+
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-3 gap-1.5">
         {[
-          ['4', 'users'],
-          ['10', 'quizzes'],
-          ['16', 'attempts'],
+          [String(counts.users), 'users'],
+          [String(counts.quizzes), 'quizzes'],
+          [String(counts.questions), 'questions'],
         ].map(([value, label]) => (
           <div
             key={label}
@@ -169,108 +220,36 @@ export function ConsoleShot() {
 
       <div className="border-border/60 bg-background/40 rounded-md border p-2">
         <div className="text-muted-foreground mb-1.5 flex justify-between text-[9.5px]">
-          <span>Attempts · 14 days</span>
-          <span className="tabular-nums">16</span>
+          <span>Published per category</span>
+          <span className="tabular-nums">{shape.totalQuestions} questions</span>
         </div>
         <div className="flex h-10 items-end gap-1" aria-hidden>
-          {BARS.map((height, index) => (
+          {categories.slice(0, 10).map((category) => (
             <span
-              key={index}
-              style={{ height: `${height}%` }}
-              className="bg-primary/60 flex-1 rounded-sm"
+              key={category.name}
+              title={`${category.name}: ${category.published} published`}
+              style={{ height: `${Math.max(6, (category.published / peak) * 100)}%` }}
+              className={cn(
+                'flex-1 rounded-sm',
+                category.published > 0 ? 'bg-primary/60' : 'bg-border/60',
+              )}
             />
           ))}
         </div>
       </div>
 
       <ul className="divide-border/50 divide-y">
-        {CONSOLE_ROWS.map((row) => (
-          <li key={row.title} className="flex items-center justify-between gap-2 py-1.5">
-            <span className="truncate text-[11px]">{row.title}</span>
-            <span className="flex shrink-0 items-center gap-1.5">
-              <span className="text-muted-foreground font-mono text-[9.5px] tabular-nums">
-                {row.attempts}
+        {categories
+          .filter((category) => category.published > 0)
+          .slice(0, 3)
+          .map((category) => (
+            <li key={category.name} className="flex items-center justify-between gap-2 py-1.5">
+              <span className="truncate text-[11px]">{category.name}</span>
+              <span className="text-muted-foreground shrink-0 font-mono text-[9.5px] tabular-nums">
+                {category.published} / {category.quizzes}
               </span>
-              <Badge
-                variant={row.status === 'PUBLISHED' ? 'success' : 'secondary'}
-                className="text-[8.5px]"
-              >
-                {row.status}
-              </Badge>
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-const CATALOGUE = [
-  {
-    title: 'JavaScript Fundamentals',
-    category: 'JavaScript',
-    level: 'EASY',
-    minutes: 15,
-    best: '86%',
-    state: 'In progress',
-  },
-  {
-    title: 'CSS Layout Basics',
-    category: 'CSS',
-    level: 'MEDIUM',
-    minutes: 20,
-    best: '—',
-    state: 'Not started',
-  },
-  {
-    title: 'Network Protocols',
-    category: 'Networks',
-    level: 'HARD',
-    minutes: 25,
-    best: '71%',
-    state: '2 of 2 used',
-  },
-] as const;
-
-export function CatalogueShot() {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[12px] font-medium">Catalogue</span>
-        <span className="text-muted-foreground font-mono text-[9.5px]">8 published</span>
-      </div>
-
-      <ul className="space-y-1.5">
-        {CATALOGUE.map((quiz) => (
-          <li
-            key={quiz.title}
-            className="border-border/60 bg-background/40 rounded-md border px-2.5 py-2"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="truncate text-[11.5px] font-medium">{quiz.title}</span>
-              <span
-                className={cn(
-                  'shrink-0 font-mono text-[9px]',
-                  quiz.state === 'In progress'
-                    ? 'text-warning'
-                    : quiz.state === 'Not started'
-                      ? 'text-muted-foreground'
-                      : 'text-muted-foreground/60',
-                )}
-              >
-                {quiz.state}
-              </span>
-            </div>
-            <div className="text-muted-foreground mt-1 flex items-center gap-2 text-[9.5px]">
-              <span>{quiz.category}</span>
-              <span className="bg-border size-0.5 rounded-full" />
-              <span>{quiz.level}</span>
-              <span className="bg-border size-0.5 rounded-full" />
-              <span className="tabular-nums">{quiz.minutes} min</span>
-              <span className="ml-auto tabular-nums">best {quiz.best}</span>
-            </div>
-          </li>
-        ))}
+            </li>
+          ))}
       </ul>
     </div>
   );

@@ -16,7 +16,8 @@
     "./dashboard": "./src/dashboard.ts",
     "./analytics": "./src/analytics.ts",
     "./leaderboard": "./src/leaderboard.ts",
-    "./deployment": "./src/deployment.ts"
+    "./deployment": "./src/deployment.ts",
+    "./landing": "./src/landing.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

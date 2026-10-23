@@ -22,7 +22,7 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 > a redacted system screen an operator can read, a `bun run deploy:check` gate that runs the same
 > rules locally and eight live probes against a real URL, one Dockerfile with two targets, and the
 > runbook for migrate, verify and roll back.
-> **844 automated tests and a 75-check end-to-end smoke run.** Feature complete: all fourteen days shipped.
+> **866 automated tests and a 77-check end-to-end smoke run.** Feature complete: all fourteen days shipped.
 
 ---
 
@@ -250,6 +250,7 @@ quizplatform/
 │  │  ├─ src/lib/admin-users.ts  directory query + guarded role/status writes
 │  │  ├─ src/lib/admin-quizzes.ts  quiz CRUD, derived slugs, lifecycle rules
 │  │  ├─ src/lib/system-status.ts  redacted self-report for /api/admin/system
+│  │  ├─ src/lib/landing.ts     the landing payload: counts, samples, demo block
 │  │  ├─ src/lib/auth.ts       JWT signing, session cookie, claim mapping
 │  │  ├─ src/__tests__/        Vitest suite + test-database setup
 │  │  └─ src/lib/              env parsing, error envelope
@@ -266,6 +267,7 @@ quizplatform/
 │     ├─ src/lib/leaderboard-params.ts  metric/period filters, ranks, gaps, hrefs
 │     ├─ src/lib/security-headers.ts    CSP + hardening headers, tested without Next
 │     ├─ src/lib/deployment-params.ts   verdict/status/runtime labels for /admin/system
+│     ├─ src/lib/landing.ts   server-side /api/landing fetch, Zod-validated
 │     ├─ src/components/score-trend-chart.tsx  server-rendered SVG trend line
 │     ├─ src/components/activity-chart.tsx     fourteen-day CSS bar chart
 │     ├─ src/components/category-breakdown.tsx per-category averages
@@ -277,7 +279,7 @@ quizplatform/
 │     ├─ src/components/leaderboard-podium.tsx      the top three
 │     ├─ src/lib/quiz-params.ts   quiz filters, badge tones, lifecycle hints
 │     ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
-│     ├─ src/components/landing/  hero · live status · product shots · tour · CTA
+│     ├─ src/components/landing/  hero · live status · bento · product shots · tour · CTA
 │     ├─ src/components/       header, footer, session nav, auth forms
 │     ├─ src/components/ui/    shadcn/ui primitives (button, card, badge, input, label, bento)
 │     ├─ src/lib/api.ts        hc<AppType> RPC client
@@ -379,15 +381,15 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 844 tests, all workspaces through Turbo
+bun run test                    # 866 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
-bun run test:e2e                # 75 checks against a live server + throwaway DB
+bun run test:e2e                # 77 checks against a live server + throwaway DB
 bun run deploy:check            # the deployment gate (see docs/deployment.md)
 ```
 
-**844 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
+**866 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
 
-**`@quiz/shared`** (262) — scrypt record format, unique salts, correct/wrong passwords, unicode
+**`@quiz/shared`** (276) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
 auth contracts (trimming, lowercased emails, stripped unknown keys, the exact password policy,
 session constants), plus the Day 4 admin contracts: query coercion and defaults, the
@@ -395,7 +397,9 @@ session constants), plus the Day 4 admin contracts: query coercion and defaults,
 never write, the credential-free user row shape, and the stats/list response schemas. Day 14 adds the
 deployment gate (`deployment.test.ts`, 22): each of the eight environment rules in both production and
 development, every verdict path (a warning never outranks a failure), the fixed check order, and the
-summary arithmetic behind `5 of 6 checks pass · 1 warning`.
+summary arithmetic behind `5 of 6 checks pass · 1 warning`. `landing.test.ts` (14) covers the landing
+payload schema, the range and duration labels (`15–25 min`, `60–70%`, `57.1%`) and the headline-number
+derivation the page renders.
 
 **`@quiz/db`** (62) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
 and the uniqueness/lookup indexes; column defaults; millisecond timestamp precision; unique email,
@@ -407,12 +411,14 @@ integrity (quiz/question/option counts, one correct option each, attempt percent
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
 
-**`@quiz/api`** (320) — service banner, health payload shape, request IDs, security headers, CORS
+**`@quiz/api`** (328) — service banner, health payload shape, request IDs, security headers, CORS
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
 the database is unreachable, `/api/meta` roadmap, and the 404 error envelope. Day 14 adds the system
 report: the schema-validated document, counts that match the tables, checks that are honest about a
 `file:` database, no secret anywhere in the payload, the limits matching what is enforced, and
-`401`/`403` on the guard.
+`401`/`403` on the guard. `landing.test.ts` (8) covers the public payload: counts that match the
+tables, a sample question with no answer key, a graded result with no student, demo accounts filtered
+against the users table, and an empty-but-valid document when the database cannot be read.
 
 Authentication adds: registration (hash stored, distinct salt per user, cookie issued, email
 normalised, role escalation ignored, duplicate → 409 even when only the casing differs, weak or
@@ -541,7 +547,7 @@ filter and host shortening.
 
 Beyond Vitest, `bun run test:e2e` boots the real API process against a throwaway database and walks
 the whole auth flow, the admin console, content authoring, quiz taking, grading and review over HTTP
-(75 checks, including cookie flags, a tampered-cookie replay, both role denials, dashboard aggregates,
+(77 checks, including cookie flags, a tampered-cookie replay, both role denials, dashboard aggregates,
 filtered user listing, a promote/demote round trip, `SELF_LOCKOUT`, a deactivation lockout, quiz
 creation, slug stability across a rename, the publish rules, the delete rules, category
 create/rename/delete, question authoring, reordering, `PUT` with retained option ids, the
@@ -570,51 +576,52 @@ The Turso-only rule applies to the running application, not to tests.
 
 ## API surface (Day 14)
 
-| Method | Path                                            | Description                                         |
-| ------ | ----------------------------------------------- | --------------------------------------------------- |
-| GET    | `/api`                                          | Service banner                                      |
-| GET    | `/api/health`                                   | Liveness: version, runtime, uptime                  |
-| GET    | `/api/health/db`                                | Readiness: target, latency, live row counts         |
-| GET    | `/api/meta`                                     | API index + the spec's remaining endpoint roadmap   |
-| POST   | `/api/auth/register`                            | Create a STUDENT account, sign in, set the cookie   |
-| POST   | `/api/auth/login`                               | Exchange email + password for a session cookie      |
-| POST   | `/api/auth/logout`                              | Clear the session cookie (idempotent)               |
-| GET    | `/api/auth/me`                                  | Current user + session expiry (requires a session)  |
-| GET    | `/api/admin/stats`                              | Dashboard aggregates + newest accounts and attempts |
-| GET    | `/api/admin/analytics`                          | Platform charts over a 7/14/30/90-day window        |
-| GET    | `/api/admin/system`                             | Deployment self-report: checks, database, limits    |
-| GET    | `/api/admin/users`                              | Paged, filtered, sorted user directory              |
-| GET    | `/api/admin/users/:id`                          | One user with attempt statistics                    |
-| PATCH  | `/api/admin/users/:id`                          | Change a role and/or status                         |
-| GET    | `/api/admin/categories`                         | Category list + quiz counts (feeds the typeahead)   |
-| POST   | `/api/admin/categories`                         | Find-or-create a category by name (201 / 200)       |
-| GET    | `/api/admin/categories/:id`                     | One category + the quizzes filed under it           |
-| PATCH  | `/api/admin/categories/:id`                     | Rename / re-describe; the slug stays stable         |
-| DELETE | `/api/admin/categories/:id`                     | Delete — only while no quizzes are filed under it   |
-| GET    | `/api/admin/quizzes`                            | Paged, filtered, sorted quiz directory              |
-| POST   | `/api/admin/quizzes`                            | Create a quiz — always starts as `DRAFT`            |
-| GET    | `/api/admin/quizzes/:id`                        | One quiz with question and attempt counts           |
-| PATCH  | `/api/admin/quizzes/:id`                        | Edit a quiz; the slug stays stable                  |
-| DELETE | `/api/admin/quizzes/:id`                        | Delete a quiz that has no attempts                  |
-| GET    | `/api/admin/quizzes/:id/questions`              | A quiz's questions, ordered, each with its options  |
-| POST   | `/api/admin/quizzes/:id/questions`              | Author a question (2–6 options, exactly one right)  |
-| PATCH  | `/api/admin/quizzes/:id/questions/order`        | Reorder a quiz's questions as a whole list          |
-| GET    | `/api/admin/questions/:id`                      | One question with its options and answer count      |
-| PUT    | `/api/admin/questions/:id`                      | Replace a question; options reconcile by id         |
-| DELETE | `/api/admin/questions/:id`                      | Delete an unanswered question                       |
-| POST   | `/api/admin/quizzes/:id/publish`                | Publish — needs at least one question               |
-| POST   | `/api/admin/quizzes/:id/unpublish`              | Take a published quiz offline                       |
-| GET    | `/api/student/categories`                       | Categories that hold at least one published quiz    |
-| GET    | `/api/student/quizzes`                          | Published catalogue + the caller's attempt state    |
-| GET    | `/api/student/quizzes/:id`                      | One quiz + whether this student can start it        |
-| POST   | `/api/student/quizzes/:id/start`                | Start an attempt, or resume the one in flight       |
-| GET    | `/api/student/attempts/:id`                     | Questions, saved answers, remaining time            |
-| PUT    | `/api/student/attempts/:id/answers/:questionId` | Save or clear one answer                            |
-| GET    | `/api/student/dashboard`                        | Statistics, trend, categories, activity, recent     |
-| GET    | `/api/leaderboard`                              | Ranked students by metric, period and category      |
-| GET    | `/api/student/attempts`                         | Paged attempt history with scores and counts        |
-| GET    | `/api/student/attempts/:id/review`              | The answer key, only once the attempt is finished   |
-| POST   | `/api/student/attempts/:id/submit`              | Grade the paper — manual or at the deadline         |
+| Method | Path                                            | Description                                            |
+| ------ | ----------------------------------------------- | ------------------------------------------------------ |
+| GET    | `/api`                                          | Service banner                                         |
+| GET    | `/api/health`                                   | Liveness: version, runtime, uptime                     |
+| GET    | `/api/health/db`                                | Readiness: target, latency, live row counts            |
+| GET    | `/api/meta`                                     | API index + the spec's remaining endpoint roadmap      |
+| GET    | `/api/landing`                                  | Public landing-page data: counts, samples, demo logins |
+| POST   | `/api/auth/register`                            | Create a STUDENT account, sign in, set the cookie      |
+| POST   | `/api/auth/login`                               | Exchange email + password for a session cookie         |
+| POST   | `/api/auth/logout`                              | Clear the session cookie (idempotent)                  |
+| GET    | `/api/auth/me`                                  | Current user + session expiry (requires a session)     |
+| GET    | `/api/admin/stats`                              | Dashboard aggregates + newest accounts and attempts    |
+| GET    | `/api/admin/analytics`                          | Platform charts over a 7/14/30/90-day window           |
+| GET    | `/api/admin/system`                             | Deployment self-report: checks, database, limits       |
+| GET    | `/api/admin/users`                              | Paged, filtered, sorted user directory                 |
+| GET    | `/api/admin/users/:id`                          | One user with attempt statistics                       |
+| PATCH  | `/api/admin/users/:id`                          | Change a role and/or status                            |
+| GET    | `/api/admin/categories`                         | Category list + quiz counts (feeds the typeahead)      |
+| POST   | `/api/admin/categories`                         | Find-or-create a category by name (201 / 200)          |
+| GET    | `/api/admin/categories/:id`                     | One category + the quizzes filed under it              |
+| PATCH  | `/api/admin/categories/:id`                     | Rename / re-describe; the slug stays stable            |
+| DELETE | `/api/admin/categories/:id`                     | Delete — only while no quizzes are filed under it      |
+| GET    | `/api/admin/quizzes`                            | Paged, filtered, sorted quiz directory                 |
+| POST   | `/api/admin/quizzes`                            | Create a quiz — always starts as `DRAFT`               |
+| GET    | `/api/admin/quizzes/:id`                        | One quiz with question and attempt counts              |
+| PATCH  | `/api/admin/quizzes/:id`                        | Edit a quiz; the slug stays stable                     |
+| DELETE | `/api/admin/quizzes/:id`                        | Delete a quiz that has no attempts                     |
+| GET    | `/api/admin/quizzes/:id/questions`              | A quiz's questions, ordered, each with its options     |
+| POST   | `/api/admin/quizzes/:id/questions`              | Author a question (2–6 options, exactly one right)     |
+| PATCH  | `/api/admin/quizzes/:id/questions/order`        | Reorder a quiz's questions as a whole list             |
+| GET    | `/api/admin/questions/:id`                      | One question with its options and answer count         |
+| PUT    | `/api/admin/questions/:id`                      | Replace a question; options reconcile by id            |
+| DELETE | `/api/admin/questions/:id`                      | Delete an unanswered question                          |
+| POST   | `/api/admin/quizzes/:id/publish`                | Publish — needs at least one question                  |
+| POST   | `/api/admin/quizzes/:id/unpublish`              | Take a published quiz offline                          |
+| GET    | `/api/student/categories`                       | Categories that hold at least one published quiz       |
+| GET    | `/api/student/quizzes`                          | Published catalogue + the caller's attempt state       |
+| GET    | `/api/student/quizzes/:id`                      | One quiz + whether this student can start it           |
+| POST   | `/api/student/quizzes/:id/start`                | Start an attempt, or resume the one in flight          |
+| GET    | `/api/student/attempts/:id`                     | Questions, saved answers, remaining time               |
+| PUT    | `/api/student/attempts/:id/answers/:questionId` | Save or clear one answer                               |
+| GET    | `/api/student/dashboard`                        | Statistics, trend, categories, activity, recent        |
+| GET    | `/api/leaderboard`                              | Ranked students by metric, period and category         |
+| GET    | `/api/student/attempts`                         | Paged attempt history with scores and counts           |
+| GET    | `/api/student/attempts/:id/review`              | The answer key, only once the attempt is finished      |
+| POST   | `/api/student/attempts/:id/submit`              | Grade the paper — manual or at the deadline            |
 
 Responses use a consistent error envelope:
 
@@ -624,6 +631,52 @@ Responses use a consistent error envelope:
 
 Security defaults already applied: `secureHeaders`, request IDs, CORS restricted to the web origin,
 pretty-printed JSON outside production, and a Zod-backed env schema that fails fast on bad config.
+
+---
+
+## The landing page (live data)
+
+`apps/web/src/app/page.tsx` is a `force-dynamic` server component that calls
+`GET /api/landing` once per request, validates the response against
+`landingPayloadSchema`, and hands slices of it to six presentation blocks — hero, numbers, bento,
+tour, call to action, footer.
+
+**Nothing on the page is typed by hand.** The version badge, the four headline counts, the duration
+range, the pass-mark range, the sample question, the graded paper behind the hero, the console chart,
+the demo logins: all of it comes from the payload. The components contain copy and layout, no facts.
+
+`GET /api/landing` is public and `no-store`. It answers with:
+
+| Field               | Contents                                                                                                 |
+| ------------------- | -------------------------------------------------------------------------------------------------------- |
+| `service`           | name, version, runtime, `NODE_ENV`, uptime — the same values `/api/health` reports                       |
+| `database`          | `target`, redacted `urlHint`, `connected`, `latencyMs`                                                   |
+| `counts`            | users, categories, quizzes, published quizzes, questions, attempts, graded, passed, pass rate, average % |
+| `shape`             | the published catalogue's min/max/average duration, pass mark and question count                         |
+| `categories`        | name, total quizzes, published quizzes — drives the console shot                                         |
+| `quizzes`           | **published only**: title, category, difficulty, duration, pass mark, attempt limit, questions           |
+| `sampleQuestion`    | the first question of the fullest published quiz — text, marks, options. **No key, no explanation**      |
+| `sampleResult`      | one graded attempt: marks, counts, percentage, pass flag, time taken. **No user, no join**               |
+| `demo`              | the seeded accounts **that exist in the users table**, or `enabled: false` when `DEMO_ACCOUNTS=0`        |
+| `unavailableReason` | `null`, or why the database could not be read                                                            |
+
+Three decisions keep it safe:
+
+- **The projection decides what can leak.** `pickQuestion` selects option text and position only, so
+  `isCorrect` is not in the object to forget to strip. `pickResult` queries attempts without touching
+  `users`. A smoke check asserts the serialised body contains no `isCorrect`, `explanation`,
+  `selectedOptionId`, `passwordHash`, and no `@` outside the demo block.
+- **It answers when the database does not.** The route catches, logs, and returns 200 with zeroes,
+  `database.connected: false` and an `unavailableReason` (`emptyLandingPayload`). The page then shows
+  its empty states and a thin warning bar — an honest blank, never an invented quiz.
+- **Demo logins are verified, not asserted.** `resolveDemoAccounts` intersects the seed fixture with
+  the actual `users` rows, so a reseeded or renamed database advertises nothing that does not work;
+  `DEMO_ACCOUNTS=0` hides the block entirely for a real deployment.
+
+The hero's live pill starts from the server's snapshot and then polls `/api/health/db` once a minute,
+so the counts move while the page is open. On failure it keeps the last snapshot and labels itself
+`stale`. `bun run deploy:check --url …` probes `/api/landing` too — a deployment whose landing data
+is broken is a deployment whose front page lies.
 
 ---
 
@@ -1298,7 +1351,7 @@ Day 14 (done): deployment & docs. Eight environment rules in one pure function, 
 places — `bun run deploy:check` before a build, `GET /api/admin/system` from inside the process, and
 `deploy:check --url` over the wire after the deploy — with a verdict of `ready`, `attention` or
 `blocked`; a redacted system screen at `/admin/system`; one `Dockerfile` with `api` and `web` targets;
-and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 844 Vitest tests
+and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 866 Vitest tests
 and a 75-check end-to-end smoke run.
 
 Day 13 (done): testing & security. Rate limiting on the auth routes (a hard per-address block and a

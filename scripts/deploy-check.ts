@@ -190,6 +190,23 @@ async function liveChecks(webUrl: string, apiUrl: string, admin?: string): Promi
     return 'default-src self · no eval';
   });
 
+  await add('Landing data', async () => {
+    const res = await fetchWithTimeout(`${apiUrl}/api/landing`);
+    const body = (await res.json()) as {
+      counts?: { publishedQuizzes?: number };
+      demo?: { enabled?: boolean; accounts?: { email: string }[] };
+      unavailableReason?: string | null;
+    };
+
+    if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+    if (body.unavailableReason) throw new Error(body.unavailableReason);
+    if (!body.counts?.publishedQuizzes) throw new Error('no published quizzes to show');
+
+    const demos = body.demo?.accounts?.length ?? 0;
+
+    return `200 · ${body.counts.publishedQuizzes} published · ${demos} demo logins`;
+  });
+
   await add('Web → API proxy', async () => {
     const res = await fetchWithTimeout(`${webUrl}/api/health`);
     if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
