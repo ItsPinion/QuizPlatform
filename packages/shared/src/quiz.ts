@@ -122,6 +122,27 @@ export function findCategoryByName<T extends { name: string }>(
 export const createCategorySchema = z.object({ name: categoryNameSchema });
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 
+const categoryDescriptionField = optionalText(500, 'Description must be at most 500 characters');
+
+/**
+ * Renaming is a partial update, but an empty body is still an error — the same
+ * rule as every other PATCH in the console.
+ *
+ * The slug is derived once, when the category is created, and **stays stable**
+ * across renames for the same reason a quiz slug does: it may already be in a
+ * link or a bookmark.
+ */
+export const updateCategorySchema = z
+  .object({
+    name: categoryNameSchema.optional(),
+    description: categoryDescriptionField.optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'Provide at least one field to update',
+  });
+export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
+export type UpdateCategoryFormValues = z.input<typeof updateCategorySchema>;
+
 const durationField = z.coerce
   .number()
   .int('Use whole minutes')
@@ -251,6 +272,8 @@ export const categoryOptionSchema = z.object({
   id: z.string(),
   name: z.string(),
   slug: z.string(),
+  /** Optional so the typeahead can consume a bare option; the list fills it in. */
+  description: z.string().nullable().default(null),
   quizCount: z.number(),
 });
 export type CategoryOption = z.infer<typeof categoryOptionSchema>;
@@ -280,6 +303,46 @@ export type QuizDetailResponse = z.infer<typeof quizDetailResponseSchema>;
 
 export const categoryListResponseSchema = z.object({ categories: z.array(categoryOptionSchema) });
 export type CategoryListResponse = z.infer<typeof categoryListResponseSchema>;
+
+/** A category with the fields the console edits, plus its live quiz count. */
+export const adminCategorySchema = categoryOptionSchema.extend({
+  description: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type AdminCategory = z.infer<typeof adminCategorySchema>;
+
+/** One category and the quizzes filed under it ("view quizzes under category"). */
+export const categoryDetailResponseSchema = z.object({
+  category: adminCategorySchema,
+  quizzes: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      slug: z.string(),
+      status: quizStatusSchema,
+      questionCount: z.number(),
+      attemptCount: z.number(),
+    }),
+  ),
+});
+export type CategoryDetailResponse = z.infer<typeof categoryDetailResponseSchema>;
+
+export const deleteCategoryResponseSchema = z.object({
+  success: z.literal(true),
+  id: z.string(),
+});
+export type DeleteCategoryResponse = z.infer<typeof deleteCategoryResponseSchema>;
+
+/**
+ * A category can only be removed when nothing is filed under it. Deleting the
+ * quizzes first (or moving them) is an explicit decision, never a cascade the
+ * admin did not ask for — hence `onDelete: 'restrict'` on the foreign key and a
+ * matching 409 from the API.
+ */
+export function canDeleteCategory(category: Pick<CategoryOption, 'quizCount'>): boolean {
+  return category.quizCount === 0;
+}
 
 export const deleteQuizResponseSchema = z.object({ success: z.literal(true), id: z.string() });
 export type DeleteQuizResponse = z.infer<typeof deleteQuizResponseSchema>;

@@ -131,12 +131,12 @@ describe('GET /api/meta', () => {
     );
 
     const areas = body.roadmap.map((entry) => entry.area);
-    expect(areas).toEqual(
-      expect.arrayContaining(['categories & questions', 'attempts', 'leaderboard']),
-    );
-    // Shipped days drop off the roadmap: auth (Day 2) and quizzes (Day 5) are live.
+    expect(areas).toEqual(expect.arrayContaining(['attempts', 'leaderboard']));
+    // Shipped days drop off the roadmap: auth (2), quizzes (5), categories &
+    // questions (6) are all live.
     expect(areas).not.toContain('auth');
     expect(areas).not.toContain('quizzes');
+    expect(areas).not.toContain('categories & questions');
   });
 });
 

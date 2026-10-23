@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   BarChart3,
+  FolderTree,
   LayoutDashboard,
   ListChecks,
   Lock,
@@ -20,7 +21,8 @@ import { cn } from '@/lib/utils';
 const NAV = [
   { icon: LayoutDashboard, label: 'Overview', active: true },
   { icon: Users, label: 'Users', active: false },
-  { icon: ListChecks, label: 'Quizzes', day: 5 },
+  { icon: ListChecks, label: 'Quizzes' },
+  { icon: FolderTree, label: 'Categories' },
   { icon: BarChart3, label: 'Analytics', day: 11 },
 ];
 

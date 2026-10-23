@@ -3,12 +3,12 @@
 Quiz Management & Online Assessment Platform — a Turborepo monorepo with a **Next.js** web app,
 a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 
-> **Status: Day 5 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
+> **Status: Day 6 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
 > authentication (register / login / logout / `/me`, scrypt hashes, httpOnly JWT cookies), role-scoped
-> API namespaces, guarded `/admin` + `/student` areas, an admin console with dashboard statistics and
-> user management, and full quiz management — CRUD plus a guarded publish/unpublish lifecycle.
-> 364 automated tests and a 36-check end-to-end smoke run. Quiz categories are created on the
-> fly from the form — no fixed list to edit — and questions are next.
+> API namespaces, guarded `/admin` + `/student` areas, an admin console with dashboard statistics,
+> user management, quiz management with a guarded publish/unpublish lifecycle, category CRUD, and
+> question authoring — options, marks, difficulty, explanations and one correct answer.
+> 430 automated tests and a 46-check end-to-end smoke run. The student quiz-taking interface is next.
 
 ---
 
@@ -256,11 +256,12 @@ quizplatform/
 │  │  ├─ src/seed.ts           rich demo dataset
 │  │  ├─ src/__tests__/        schema + seed integrity tests
 │  │  └─ migrations/           drizzle-kit generated SQL (checked in)
-│  ├─ shared/                  Zod enums, auth + admin + quiz contracts, scrypt helpers
+│  ├─ shared/                  Zod enums, auth + admin + quiz + question contracts, scrypt
 │  └─ test-utils/              package-manager-agnostic test runner helper
 ├─ docs/
 │  ├─ admin-dashboard.md       stats definitions, directory API, console rules
 │  ├─ quiz-management.md       CRUD, slugs, lifecycle rules, screens
+│  ├─ categories-and-questions.md  category CRUD, question authoring, option rules
 │  ├─ authorization.md         role model, guards, redirect rules, failure modes
 │  └─ testing.md               test inventory, manual QA, security trade-offs
 ├─ scripts/
@@ -332,21 +333,21 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 338 tests, all workspaces through Turbo
+bun run test                    # 430 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
-bun run test:e2e                # 34 checks against a live server + throwaway DB
+bun run test:e2e                # 46 checks against a live server + throwaway DB
 ```
 
-**338 tests** cover the scaffolding, authentication, authorization and the admin console:
+**430 tests** cover the scaffolding, authentication, authorization, the admin console and content authoring:
 
-**`@quiz/shared`** (67) — scrypt record format, unique salts, correct/wrong passwords, unicode
+**`@quiz/shared`** (97) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
 auth contracts (trimming, lowercased emails, stripped unknown keys, the exact password policy,
 session constants), plus the Day 4 admin contracts: query coercion and defaults, the
 `updateUserSchema` refine that rejects an empty body while stripping fields the dashboard must
 never write, the credential-free user row shape, and the stats/list response schemas.
 
-**`@quiz/db`** (58) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
+**`@quiz/db`** (60) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
 and the uniqueness/lookup indexes; column defaults; millisecond timestamp precision; unique email,
 slug and per-attempt answer constraints; quiz → questions/options/attempts/answers cascade;
 category-with-quizzes protected by `restrict`; user deletion cascading while nulling the quiz author;
@@ -356,7 +357,7 @@ integrity (quiz/question/option counts, one correct option each, attempt percent
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
 
-**`@quiz/api`** (147) — service banner, health payload shape, request IDs, security headers, CORS
+**`@quiz/api`** (186) — service banner, health payload shape, request IDs, security headers, CORS
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
 the database is unreachable, `/api/meta` roadmap, and the 404 error envelope.
 
@@ -373,6 +374,15 @@ de-duplicated slugs, the full validation matrix, partial updates that keep their
 their slug, the publish/unpublish lifecycle including both 409s and idempotent republishing, deletion
 with cascade for untouched quizzes and `QUIZ_HAS_ATTEMPTS` for attempted ones.
 
+Day 6 adds 31 more. Categories: list and detail, create plus the idempotent re-create under a
+different casing, rename with a stable slug, re-casing a category's own name, `409 CATEGORY_EXISTS`
+against a sibling, description set/clear, empty body → 422, deletion blocked by
+`CATEGORY_HAS_QUIZZES` until the quizzes are gone. Questions: ordered reads that assert exactly one
+correct option per question, append semantics, the option-set validation matrix, option
+reconciliation by id (`OPTION_HAS_ANSWERS` when a picked option is dropped, `OPTION_NOT_FOUND` for a
+foreign id), delete rules (`QUESTION_HAS_ANSWERS`, `QUIZ_WOULD_HAVE_NO_QUESTIONS`), whole-list
+reordering and its mismatch case, and publishing the moment a question exists.
+
 Category resolution adds eight more: a typed name that matches an existing category reuses it in any
 casing ("javascript" → "JavaScript"), an unknown name is created and used in the same request, a new
 name that differs only by internal whitespace collapses to the existing row, `POST
@@ -386,18 +396,21 @@ email search, empty values, unknown roles), pagination, both sorts, 422s for bad
 lookups, 404/422 handling, promotion/demotion, deactivation lockout and restoration, `SELF_LOCKOUT`
 for self-demotion and self-deactivation, and 401/403 on every admin route.
 
-**`@quiz/web`** (66) — the error-envelope narrowing every auth form relies on (API error codes,
+**`@quiz/web`** (87) — the error-envelope narrowing every auth form relies on (API error codes,
 Zod issue extraction, fallbacks for malformed bodies, network-error mapping), the Day 3 page guard
 rules, the Day 4 directory parameters (query parsing with defaults and clamping, `toUserQuery`,
 `usersHref` round-trips and encoding, filter summaries, pagination range labels, initials), and the
 Day 5 quiz helpers: filter parsing, `toQuizQuery`, `quizzesHref` round-trips, duration formatting,
-badge tones and the blocked-action hints.
+badge tones and the blocked-action hints. Day 6 adds the question-form helpers: form ↔ payload
+round-trips that keep option ids, blank-row compaction that keeps the correct answer correct,
+validation messages, `moveItem`, and the marks/answered summaries.
 
 Beyond Vitest, `bun run test:e2e` boots the real API process against a throwaway database and walks
-the whole auth flow, the admin console and quiz management over HTTP (34 checks, including cookie
-flags, a tampered-cookie replay, both role denials, dashboard aggregates, filtered user listing, a
-promote/demote round trip, `SELF_LOCKOUT`, a deactivation lockout, quiz creation, slug stability
-across a rename, the publish rules and the delete rules). See
+the whole auth flow, the admin console, quiz management and question authoring over HTTP (46 checks,
+including cookie flags, a tampered-cookie replay, both role denials, dashboard aggregates, filtered
+user listing, a promote/demote round trip, `SELF_LOCKOUT`, a deactivation lockout, quiz creation,
+slug stability across a rename, the publish rules, the delete rules, category create/rename/delete,
+question authoring, reordering, `PUT` with retained option ids, and the last-question guard). See
 [`docs/testing.md`](docs/testing.md) for the full inventory, a manual QA checklist and the known
 security trade-offs.
 
@@ -411,31 +424,40 @@ The Turso-only rule applies to the running application, not to tests.
 
 ---
 
-## API surface (Day 5)
+## API surface (Day 6)
 
-| Method | Path                               | Description                                         |
-| ------ | ---------------------------------- | --------------------------------------------------- |
-| GET    | `/api`                             | Service banner                                      |
-| GET    | `/api/health`                      | Liveness: version, runtime, uptime                  |
-| GET    | `/api/health/db`                   | Readiness: target, latency, live row counts         |
-| GET    | `/api/meta`                        | API index + the spec's remaining endpoint roadmap   |
-| POST   | `/api/auth/register`               | Create a STUDENT account, sign in, set the cookie   |
-| POST   | `/api/auth/login`                  | Exchange email + password for a session cookie      |
-| POST   | `/api/auth/logout`                 | Clear the session cookie (idempotent)               |
-| GET    | `/api/auth/me`                     | Current user + session expiry (requires a session)  |
-| GET    | `/api/admin/stats`                 | Dashboard aggregates + newest accounts and attempts |
-| GET    | `/api/admin/users`                 | Paged, filtered, sorted user directory              |
-| GET    | `/api/admin/users/:id`             | One user with attempt statistics                    |
-| PATCH  | `/api/admin/users/:id`             | Change a role and/or status                         |
-| GET    | `/api/admin/categories`            | Category list + quiz counts (feeds the typeahead)   |
-| POST   | `/api/admin/categories`            | Find-or-create a category by name (201 / 200)       |
-| GET    | `/api/admin/quizzes`               | Paged, filtered, sorted quiz directory              |
-| POST   | `/api/admin/quizzes`               | Create a quiz — always starts as `DRAFT`            |
-| GET    | `/api/admin/quizzes/:id`           | One quiz with question and attempt counts           |
-| PATCH  | `/api/admin/quizzes/:id`           | Edit a quiz; the slug stays stable                  |
-| DELETE | `/api/admin/quizzes/:id`           | Delete a quiz that has no attempts                  |
-| POST   | `/api/admin/quizzes/:id/publish`   | Publish — needs at least one question               |
-| POST   | `/api/admin/quizzes/:id/unpublish` | Take a published quiz offline                       |
+| Method | Path                                     | Description                                         |
+| ------ | ---------------------------------------- | --------------------------------------------------- |
+| GET    | `/api`                                   | Service banner                                      |
+| GET    | `/api/health`                            | Liveness: version, runtime, uptime                  |
+| GET    | `/api/health/db`                         | Readiness: target, latency, live row counts         |
+| GET    | `/api/meta`                              | API index + the spec's remaining endpoint roadmap   |
+| POST   | `/api/auth/register`                     | Create a STUDENT account, sign in, set the cookie   |
+| POST   | `/api/auth/login`                        | Exchange email + password for a session cookie      |
+| POST   | `/api/auth/logout`                       | Clear the session cookie (idempotent)               |
+| GET    | `/api/auth/me`                           | Current user + session expiry (requires a session)  |
+| GET    | `/api/admin/stats`                       | Dashboard aggregates + newest accounts and attempts |
+| GET    | `/api/admin/users`                       | Paged, filtered, sorted user directory              |
+| GET    | `/api/admin/users/:id`                   | One user with attempt statistics                    |
+| PATCH  | `/api/admin/users/:id`                   | Change a role and/or status                         |
+| GET    | `/api/admin/categories`                  | Category list + quiz counts (feeds the typeahead)   |
+| POST   | `/api/admin/categories`                  | Find-or-create a category by name (201 / 200)       |
+| GET    | `/api/admin/categories/:id`              | One category + the quizzes filed under it           |
+| PATCH  | `/api/admin/categories/:id`              | Rename / re-describe; the slug stays stable         |
+| DELETE | `/api/admin/categories/:id`              | Delete — only while no quizzes are filed under it   |
+| GET    | `/api/admin/quizzes`                     | Paged, filtered, sorted quiz directory              |
+| POST   | `/api/admin/quizzes`                     | Create a quiz — always starts as `DRAFT`            |
+| GET    | `/api/admin/quizzes/:id`                 | One quiz with question and attempt counts           |
+| PATCH  | `/api/admin/quizzes/:id`                 | Edit a quiz; the slug stays stable                  |
+| DELETE | `/api/admin/quizzes/:id`                 | Delete a quiz that has no attempts                  |
+| GET    | `/api/admin/quizzes/:id/questions`       | A quiz's questions, ordered, each with its options  |
+| POST   | `/api/admin/quizzes/:id/questions`       | Author a question (2–6 options, exactly one right)  |
+| PATCH  | `/api/admin/quizzes/:id/questions/order` | Reorder a quiz's questions as a whole list          |
+| GET    | `/api/admin/questions/:id`               | One question with its options and answer count      |
+| PUT    | `/api/admin/questions/:id`               | Replace a question; options reconcile by id         |
+| DELETE | `/api/admin/questions/:id`               | Delete an unanswered question                       |
+| POST   | `/api/admin/quizzes/:id/publish`         | Publish — needs at least one question               |
+| POST   | `/api/admin/quizzes/:id/unpublish`       | Take a published quiz offline                       |
 
 Responses use a consistent error envelope:
 
@@ -664,6 +686,59 @@ where each rule is tested — is in [`docs/quiz-management.md`](docs/quiz-manage
 
 ---
 
+## Categories & questions (Day 6)
+
+### Categories are data, not an enum
+
+```
+POST { "name": "react" }   → 200 { created: false }   reuses "React"
+POST { "name": "Rust" }    → 201 { created: true }    creates it
+DELETE (3 quizzes filed)   → 409 CATEGORY_HAS_QUIZZES
+```
+
+Names are compared `trim` → collapse whitespace → `toLowerCase`, so casing can never create a
+duplicate; a `unique index on lower(name)` enforces the same thing at the database level for
+concurrent writes. Renaming keeps the slug (it may already be in a link) and answers
+`409 CATEGORY_EXISTS` when a sibling already owns the name. Deleting is `restrict`ed by the foreign
+key: removing a label never removes content.
+
+### A question is a set, not a row
+
+```json
+{
+  "questionText": "Which method parses JSON?",
+  "options": [{ "text": "JSON.stringify()" }, { "text": "JSON.parse()" }],
+  "correctIndex": 1,
+  "marks": 2,
+  "difficulty": "EASY"
+}
+```
+
+Because the option list and the correct index are validated together, "no correct answer" and "two
+correct answers" are not states the database can hold. Two further rules keep history honest:
+
+| Situation                                    | Answer                             |
+| -------------------------------------------- | ---------------------------------- |
+| delete a question that has recorded answers  | `409 QUESTION_HAS_ANSWERS`         |
+| remove an option a student already picked    | `409 OPTION_HAS_ANSWERS`           |
+| delete the last question of a published quiz | `409 QUIZ_WOULD_HAVE_NO_QUESTIONS` |
+| reorder with a partial or foreign id list    | `422 QUESTION_ORDER_MISMATCH`      |
+
+Editing is a `PUT` that replaces the whole set: a partial patch could delete the option the
+`correctIndex` points at. Options are reconciled **by id**, so retained options keep the identity
+every past answer references. Positions are compacted to `0..n-1` after deletes and rewritten on
+reorder.
+
+The UI is an inline authoring panel on the quiz edit page — add, edit, reorder, delete — plus a
+`/admin/categories` table with inline rename. Rules are mirrored in
+`packages/shared/src/question.ts` so the console disables a button and explains it, while the API
+stays the authority.
+
+Full detail — every validation rule, the reconciliation table, the screens and their failure states
+— is in [`docs/categories-and-questions.md`](docs/categories-and-questions.md).
+
+---
+
 ## Environment variables
 
 | Variable             | Required | Default                 | Used by                 |
@@ -693,7 +768,14 @@ paths with open-redirect protection, 184 Vitest tests and a 17-check end-to-end 
 Day 5 (done): quiz CRUD behind the admin guard, server-derived stable slugs, `GET /api/admin/quizzes`
 with search/filter/sort/pagination, a publish/unpublish lifecycle that refuses to publish empty
 quizzes, deletion that refuses to erase student history, and create/edit screens for the console.
-338 Vitest tests and a 34-check end-to-end smoke run.
+364 Vitest tests and a 36-check end-to-end smoke run.
+
+Day 6 (done): category CRUD with case-insensitive find-or-create, rename that keeps the slug and a
+delete that refuses to cascade into quizzes; question authoring with 2–6 options and exactly one
+correct answer, marks, difficulty and explanations; option reconciliation by id so past answers stay
+intact; whole-list reordering; and delete rules that protect answers and keep a published quiz from
+going empty. `/admin/categories` plus a full authoring panel on the quiz edit page. 430 Vitest tests
+and a 46-check end-to-end smoke run.
 
 Day 4 (done): admin console shell with sidebar navigation, `GET /api/admin/stats` aggregates,
 `GET /api/admin/users` with search/filter/sort/pagination, `GET` and `PATCH /api/admin/users/:id`
@@ -706,7 +788,7 @@ and a 25-check end-to-end smoke run.
 | 3   | ✅ Role-based authorization — admin/student guards                |
 | 4   | ✅ Admin console — statistics + user management                   |
 | 5   | ✅ Quiz management — CRUD + publish/unpublish                     |
-| 6   | Categories & questions — CRUD, options, correct answers           |
+| 6   | ✅ Categories & questions — CRUD, options, correct answers        |
 | 7   | Student quiz UI — listing, details, navigation, timer             |
 | 8   | Submission & scoring — server-side grading, expiry enforcement    |
 | 9   | Results & answer review, attempt history                          |

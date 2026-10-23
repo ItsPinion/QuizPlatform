@@ -1,10 +1,12 @@
+import type { QuestionListResponse } from '@quiz/shared/question';
 import type { CategoryListResponse, QuizDetailResponse } from '@quiz/shared/quiz';
-import { ArrowLeft, CalendarClock, HelpCircle, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, CalendarClock, ListChecks, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { QuizActions } from '@/components/quiz-actions';
 import { QuizForm } from '@/components/quiz-form';
+import { QuestionsPanel } from '@/components/questions-panel';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { serverApi } from '@/lib/api-server';
@@ -25,19 +27,22 @@ export default async function AdminQuizPage({ params }: PageProps) {
 
   let quiz: QuizDetailResponse['quiz'] | null = null;
   let categories: CategoryListResponse['categories'] = [];
+  let questions: QuestionListResponse['questions'] = [];
   let unreachable = false;
 
   try {
     const api = await serverApi();
-    const [quizRes, categoryRes] = await Promise.all([
+    const [quizRes, categoryRes, questionRes] = await Promise.all([
       api.api.admin.quizzes[':id'].$get({ param: { id } }),
       api.api.admin.categories.$get(),
+      api.api.admin.quizzes[':quizId'].questions.$get({ param: { quizId: id } }),
     ]);
 
     // The RPC type only knows the declared 200; error statuses arrive at runtime.
     if ((quizRes.status as number) === 404) notFound();
     if (quizRes.ok) quiz = (await quizRes.json()).quiz;
     if (categoryRes.ok) categories = (await categoryRes.json()).categories;
+    if (questionRes.ok) questions = (await questionRes.json()).questions;
   } catch {
     unreachable = true;
   }
@@ -68,6 +73,7 @@ export default async function AdminQuizPage({ params }: PageProps) {
             ADMIN
           </Badge>
           <Badge variant={statusTone(quiz.status)}>{quiz.status}</Badge>
+          <Badge variant="outline">Day 6 · question authoring</Badge>
         </div>
 
         <Link
@@ -128,19 +134,6 @@ export default async function AdminQuizPage({ params }: PageProps) {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sm">
-                <HelpCircle className="text-primary size-4" />
-                Questions
-              </CardTitle>
-              <CardDescription>
-                Question and option editing is Day 6. The count above is live: a quiz needs at least
-                one question before it can be published.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-sm">
                 <CalendarClock className="text-primary size-4" />
                 Record
               </CardTitle>
@@ -171,6 +164,22 @@ export default async function AdminQuizPage({ params }: PageProps) {
           </Card>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ListChecks className="text-primary size-4" />
+            Questions
+          </CardTitle>
+          <CardDescription>
+            Multiple choice, one correct option. Marks, difficulty and the explanation travel with
+            the question; position is the order students will see.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <QuestionsPanel quizId={quiz.id} quizStatus={quiz.status} initialQuestions={questions} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -475,6 +475,7 @@ try {
 
   let createdQuizId = '';
   let createdQuizSlug = '';
+  let e2eCategoryId = '';
 
   await check('GET /api/admin/categories lists categories with counts', async () => {
     const res = await fetch(`${baseUrl}/api/admin/categories`, {
@@ -705,6 +706,282 @@ try {
     return '200 · then 404';
   });
 
+  /* ------------------------------- Day 6 --------------------------------- */
+
+  let authoredQuizId = '';
+  let authoredQuestionIds: string[] = [];
+  let retainedOptionId = '';
+
+  await check('POST /api/admin/categories creates, PATCH renames it', async () => {
+    const name = `E2E Category ${Date.now()}`;
+
+    const created = await fetch(`${baseUrl}/api/admin/categories`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({ name }),
+    });
+    expectStatus(created, 201);
+
+    const body = (await created.json()) as {
+      category: { id: string; name: string; slug: string };
+      created: boolean;
+    };
+    if (!body.created) throw new Error('a new name must report created: true');
+
+    const renamed = await fetch(`${baseUrl}/api/admin/categories/${body.category.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({ name: `${name} Renamed`, description: 'Made by the smoke run.' }),
+    });
+    expectStatus(renamed, 200);
+
+    const after = (await renamed.json()) as {
+      category: { name: string; slug: string; description: string | null };
+    };
+    if (after.category.name !== `${name} Renamed`) throw new Error('rename did not apply');
+    if (after.category.slug !== body.category.slug) throw new Error('the slug must stay stable');
+    if (after.category.description !== 'Made by the smoke run.') {
+      throw new Error('description did not save');
+    }
+
+    e2eCategoryId = body.category.id;
+
+    return `201 → 200 · ${after.category.slug}`;
+  });
+
+  await check('deleting a category with quizzes is refused', async () => {
+    const list = (await (
+      await fetch(`${baseUrl}/api/admin/categories`, { headers: { cookie: adminCookie } })
+    ).json()) as { categories: { id: string; quizCount: number }[] };
+
+    const inUse = list.categories.find((category) => category.quizCount > 0);
+    if (!inUse) throw new Error('expected a category with quizzes');
+
+    const res = await fetch(`${baseUrl}/api/admin/categories/${inUse.id}`, {
+      method: 'DELETE',
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(res, 409);
+
+    const body = (await res.json()) as { error: { code: string } };
+    if (body.error.code !== 'CATEGORY_HAS_QUIZZES')
+      throw new Error(`unexpected ${body.error.code}`);
+
+    return `409 · CATEGORY_HAS_QUIZZES · ${inUse.quizCount} quizzes`;
+  });
+
+  await check('deleting an empty category succeeds', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/categories/${e2eCategoryId}`, {
+      method: 'DELETE',
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(res, 200);
+
+    const after = await fetch(`${baseUrl}/api/admin/categories/${e2eCategoryId}`, {
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(after, 404);
+
+    return '200 · then 404';
+  });
+
+  await check('POST /api/admin/quizzes/:id/questions authors a question', async () => {
+    const categories = (await (
+      await fetch(`${baseUrl}/api/admin/categories`, { headers: { cookie: adminCookie } })
+    ).json()) as { categories: { name: string }[] };
+
+    const quizRes = await fetch(`${baseUrl}/api/admin/quizzes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({
+        title: 'E2E Authored Quiz',
+        categoryName: categories.categories[0]?.name,
+        durationMinutes: 10,
+        passingScore: 50,
+      }),
+    });
+    expectStatus(quizRes, 201);
+
+    authoredQuizId = ((await quizRes.json()) as { quiz: { id: string } }).quiz.id;
+
+    const empty = await fetch(`${baseUrl}/api/admin/quizzes/${authoredQuizId}/questions`, {
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(empty, 200);
+    if (((await empty.json()) as { questions: unknown[] }).questions.length !== 0) {
+      throw new Error('a new quiz should have no questions');
+    }
+
+    const res = await fetch(`${baseUrl}/api/admin/quizzes/${authoredQuizId}/questions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({
+        questionText: 'Which method parses JSON?',
+        explanation: 'JSON.parse turns a string into an object.',
+        marks: 2,
+        difficulty: 'EASY',
+        options: [
+          { text: 'JSON.stringify()' },
+          { text: 'JSON.parse()' },
+          { text: 'JSON.convert()' },
+          { text: 'JSON.object()' },
+        ],
+        correctIndex: 1,
+      }),
+    });
+    expectStatus(res, 201);
+
+    const question = (
+      (await res.json()) as {
+        question: {
+          id: string;
+          position: number;
+          marks: number;
+          options: { id: string; isCorrect: boolean }[];
+        };
+      }
+    ).question;
+
+    if (question.position !== 0) throw new Error('the first question should sit at position 0');
+    if (question.marks !== 2) throw new Error('marks were not stored');
+    if (question.options.filter((option) => option.isCorrect).length !== 1) {
+      throw new Error('exactly one option must be correct');
+    }
+
+    authoredQuestionIds = [question.id];
+    retainedOptionId = question.options[0]?.id ?? '';
+
+    return `201 · position 0 · ${question.options.length} options · 1 correct`;
+  });
+
+  await check('a question with no options in range is rejected', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/quizzes/${authoredQuizId}/questions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({
+        questionText: 'Too few options here?',
+        options: [{ text: 'Only one' }],
+        correctIndex: 0,
+      }),
+    });
+    expectStatus(res, 422);
+
+    return '422 · VALIDATION_ERROR';
+  });
+
+  await check('questions can be reordered as a whole list', async () => {
+    const second = await fetch(`${baseUrl}/api/admin/quizzes/${authoredQuizId}/questions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({
+        questionText: 'Which one runs first?',
+        options: [{ text: 'Sync code' }, { text: 'A microtask' }],
+        correctIndex: 0,
+      }),
+    });
+    expectStatus(second, 201);
+
+    const secondId = ((await second.json()) as { question: { id: string } }).question.id;
+    authoredQuestionIds = [...authoredQuestionIds, secondId];
+
+    const res = await fetch(`${baseUrl}/api/admin/quizzes/${authoredQuizId}/questions/order`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({ ids: [secondId, authoredQuestionIds[0]] }),
+    });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as { questions: { id: string; position: number }[] };
+    if (body.questions[0]?.id !== secondId) throw new Error('the order did not change');
+    if (body.questions.map((question) => question.position).join() !== '0,1') {
+      throw new Error('positions were not compacted');
+    }
+
+    return '200 · positions 0,1';
+  });
+
+  await check('PUT replaces a question and keeps retained option ids', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/questions/${authoredQuestionIds[0]}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({
+        questionText: 'Which method parses JSON into an object?',
+        options: [{ id: retainedOptionId, text: 'JSON.stringify()' }, { text: 'JSON.parse()' }],
+        correctIndex: 1,
+      }),
+    });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as {
+      question: { questionText: string; options: { id: string; isCorrect: boolean }[] };
+    };
+
+    if (body.question.options.length !== 2) throw new Error('options were not replaced');
+    if (body.question.options[0]?.id !== retainedOptionId) {
+      throw new Error('a retained option must keep its id');
+    }
+    if (!body.question.options[1]?.isCorrect) throw new Error('the new correct option was lost');
+
+    return '200 · 4 → 2 options, 1 correct';
+  });
+
+  await check('publishing works once a quiz has questions', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/quizzes/${authoredQuizId}/publish`, {
+      method: 'POST',
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as { quiz: { status: string; questionCount: number } };
+    if (body.quiz.status !== 'PUBLISHED') throw new Error('publish did not apply');
+    if (body.quiz.questionCount !== 2) throw new Error('questionCount should be 2');
+
+    return '200 · PUBLISHED · 2 questions';
+  });
+
+  await check('a published quiz cannot lose its last question', async () => {
+    const first = await fetch(`${baseUrl}/api/admin/questions/${authoredQuestionIds[0]}`, {
+      method: 'DELETE',
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(first, 200);
+
+    const blocked = await fetch(`${baseUrl}/api/admin/questions/${authoredQuestionIds[1]}`, {
+      method: 'DELETE',
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(blocked, 409);
+
+    const body = (await blocked.json()) as { error: { code: string } };
+    if (body.error.code !== 'QUIZ_WOULD_HAVE_NO_QUESTIONS') {
+      throw new Error(`unexpected ${body.error.code}`);
+    }
+
+    const unpublish = await fetch(`${baseUrl}/api/admin/quizzes/${authoredQuizId}/unpublish`, {
+      method: 'POST',
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(unpublish, 200);
+
+    const allowed = await fetch(`${baseUrl}/api/admin/questions/${authoredQuestionIds[1]}`, {
+      method: 'DELETE',
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(allowed, 200);
+
+    return 'DELETE 200 · 409 · unpublish · 200';
+  });
+
+  await check('the authored quiz is removed again', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/quizzes/${authoredQuizId}`, {
+      method: 'DELETE',
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(res, 200);
+
+    return '200 · cleaned up';
+  });
+
   await check('quiz management rejects a student', async () => {
     const list = await fetch(`${baseUrl}/api/admin/quizzes`, {
       headers: { cookie: studentCookie },
@@ -724,6 +1001,11 @@ try {
       body: JSON.stringify({ name: 'Student Category' }),
     });
     expectStatus(category, 403);
+
+    const question = await fetch(`${baseUrl}/api/admin/questions/${crypto.randomUUID()}`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(question, 403);
 
     return '403 · FORBIDDEN';
   });

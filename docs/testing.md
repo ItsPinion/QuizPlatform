@@ -3,8 +3,8 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test       # 338 unit + integration tests across the four workspaces
-bun run test:e2e   # 34 checks against a real HTTP server (own process, own port)
+bun run test       # 430 unit + integration tests across the four workspaces
+bun run test:e2e   # 46 checks against a real HTTP server (own process, own port)
 ```
 
 Neither touches Turso. Every suite builds a throwaway `file:` database in `.data/` with the project's
@@ -107,6 +107,37 @@ bun run test --filter=@quiz/web
 - **Web helpers** — `rankCategories` puts an exact match first regardless of casing, ranks prefix
   matches above substring matches, drops non-matches, and honours the limit.
 
+### Categories & questions coverage (Day 6)
+
+- **Category CRUD** — the list with counts, detail with the quizzes filed under it, create with a
+  derived slug, the idempotent re-create under a different casing, rename that keeps the slug,
+  re-casing a category's own name, `409 CATEGORY_EXISTS` against a sibling, description set and
+  clear, empty body → 422, 404 for unknown ids, and 401/403 for anonymous and student callers.
+- **Category deletion** — an empty category deletes and then 404s; one with quizzes answers
+  `409 CATEGORY_HAS_QUIZZES` and the row count is unchanged; the same delete succeeds once its
+  quizzes are gone.
+- **Question reads** — seeded questions come back in `0..n-1` order with exactly one correct option
+  each; unknown quiz → 404; malformed id → 422.
+- **Question creation** — appends at `max + 1`, stores marks/difficulty/explanation, defaults marks to
+  1 and difficulty to `MEDIUM`, and rejects too few or too many options, an out-of-range correct
+  index, duplicate options (case-insensitive), a blank option, short text and marks outside 1–10.
+- **Question editing** — `PUT` replaces the text and the option set, keeps the ids of retained
+  options, drops removed ones, re-points the correct answer, refuses to drop an option that appears
+  in a recorded answer (`409 OPTION_HAS_ANSWERS`, with nothing written), and rejects an option id
+  that belongs to another question (`422 OPTION_NOT_FOUND`).
+- **Question deletion** — an unanswered question deletes and the remaining positions are compacted;
+  a question with answers answers `409 QUESTION_HAS_ANSWERS` and stays; the last question of a
+  published quiz answers `409 QUIZ_WOULD_HAVE_NO_QUESTIONS` until the quiz is unpublished.
+- **Ordering** — a whole-list reorder persists and rewrites positions; a partial list or a foreign id
+  answers `422 QUESTION_ORDER_MISMATCH`.
+- **Publish integration** — a quiz with no questions is refused, adding a question makes the same
+  publish succeed with `questionCount: 1`.
+- **Contracts** — `questionInputSchema` (limits, duplicates, index bounds, defaults, option ids),
+  `questionOrderSchema`, `canDeleteQuestion`, `canDeleteLastQuestion`, `totalMarks`,
+  `updateCategorySchema` and `canDeleteCategory`.
+- **Web helpers** — form ↔ payload round-trips, blank-row compaction that keeps the correct answer
+  correct, validation messages, `moveItem`, `summarizeQuestions` and the difficulty tones.
+
 ---
 
 ## End-to-end smoke run
@@ -151,9 +182,19 @@ then asserts:
 31. a seeded draft publishes and then unpublishes
 32. deleting an attempted quiz → 409 `QUIZ_HAS_ATTEMPTS`
 33. deleting the created quiz → 200, then `GET` → 404
-34. quiz management and category creation → 403 for the student
-35. logout → 200 with `Max-Age=0`
-36. unknown route → 404 `NOT_FOUND`
+34. `POST /api/admin/categories` → 201, then `PATCH` renames it → 200 with the same slug
+35. deleting a category that still has quizzes → 409 `CATEGORY_HAS_QUIZZES`
+36. deleting an empty category → 200, then `GET` → 404
+37. `POST /api/admin/quizzes/:id/questions` → 201 at position 0, 4 options, one correct
+38. a question with a single option → 422 `VALIDATION_ERROR`
+39. `PATCH …/questions/order` → 200, the order flips and positions are `0,1`
+40. `PUT /api/admin/questions/:id` → 200, 4 → 2 options, the retained option keeps its id
+41. publishing the quiz now → 200 `PUBLISHED` with `questionCount: 2`
+42. deleting both questions → first 200, then 409 `QUIZ_WOULD_HAVE_NO_QUESTIONS`; unpublish → 200
+43. the authored quiz is deleted again → 200
+44. quiz management, category creation and question routes → 403 for the student
+45. logout → 200 with `Max-Age=0`
+46. unknown route → 404 `NOT_FOUND`
 
 It prints a pass/fail table, exits non-zero on failure, and removes the database afterwards.
 
@@ -208,6 +249,19 @@ Useful after changing auth, the proxy, or the cookie. Start with `bun dev`, then
       create form and type `rust 2026` → it now suggests that category instead of offering to create it.
 - [ ] Wide spacing (`Data   Engineering`) resolves to the existing `Data Engineering` rather than
       making a duplicate, and `/admin/categories` (via `curl`) still lists one row per name.
+- [ ] `/admin/categories` lists all ten seeded categories with quiz counts; renaming one keeps its
+      slug, and renaming it to another category's name is refused with a readable message.
+- [ ] Delete is disabled on a category that has quizzes; on an empty one it asks for confirmation,
+      then the row disappears.
+- [ ] On a quiz's edit page, **Add question** with four options and one radio selected → the question
+      appears at the end with its correct option highlighted and the explanation underneath.
+- [ ] Edit that question, drop one option → the saved question has one fewer option and still exactly
+      one correct answer; the retained options keep working.
+- [ ] Try to delete a question marked "n recorded answers" → the button is disabled; `curl` the same
+      `DELETE` and get `409 QUESTION_HAS_ANSWERS`.
+- [ ] Publish a quiz with one question, then try to delete that question → `409
+QUIZ_WOULD_HAVE_NO_QUESTIONS`; unpublish and the delete goes through.
+- [ ] Use ↑ / ↓ on a question → the numbering updates and survives a reload.
 
 ---
 

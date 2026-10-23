@@ -6,14 +6,15 @@ const tree = `quizplatform/
 ├─ apps/
 │  ├─ web/            Next.js 16 · App Router · Tailwind v4
 │  │  ├─ src/app/              landing, /login, /register, /admin, /student
-│  │  ├─ src/app/admin/        layout · overview · users · quizzes (list/new/[id])
+│  │  ├─ src/app/admin/        layout · overview · users · quizzes · categories
 │  │  ├─ src/lib/session.ts    server-side session lookup (cookie → API)
 │  │  ├─ src/lib/api-server.ts cookie-forwarding RPC client for pages
 │  │  ├─ src/lib/guards.ts     role decision for /admin and /student
 │  │  ├─ src/lib/admin-params.ts  filters ⇄ ?search=&role=&page=
-│  │  ├─ src/lib/quiz-params.ts   quiz filters, badges, lifecycle hints
+│  │  ├─ src/lib/quiz-params.ts   quiz filters, badges, category ranking
+│  │  ├─ src/lib/question-params.ts  option reconciliation + form validation
 │  │  ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
-│  │  ├─ src/components/       admin nav, users table, stat cards, auth forms
+│  │  ├─ src/components/       admin nav, users table, combobox, question editor
 │  │  └─ next.config.ts        /api/* → Hono rewrite
 │  └─ api/            Hono 4 · @hono/node-server
 │     ├─ src/app.ts            chained routes → AppType
@@ -22,6 +23,8 @@ const tree = `quizplatform/
 │     ├─ src/lib/admin-stats.ts   dashboard aggregates (one per section)
 │     ├─ src/lib/admin-users.ts   directory query + guarded role/status writes
 │     ├─ src/lib/admin-quizzes.ts CRUD, derived slugs, publish/delete rules
+│     ├─ src/lib/admin-categories.ts  find-or-create, rename, guarded delete
+│     ├─ src/lib/admin-questions.ts   options by id, ordering, delete rules
 │     ├─ src/routes/admin-quizzes.ts  /api/admin/quizzes (mounted under the guard)
 │     ├─ src/lib/auth.ts       JWT signing + session cookies
 │     └─ src/lib/              env, jsonBody validator, error envelope
@@ -31,7 +34,7 @@ const tree = `quizplatform/
 │  │  ├─ src/seed.ts           rich demo dataset
 │  │  ├─ src/__tests__/        schema + seed integrity
 │  │  └─ migrations/           drizzle-kit SQL (checked in)
-│  ├─ shared/         Zod enums, auth + admin + quiz contracts, scrypt hashing
+│  ├─ shared/         Zod enums, auth + admin + quiz + question contracts, hashing
 │  └─ test-utils/     package-manager-agnostic test helpers
 ├─ turbo.json         task graph + cache
 ├─ package.json       Bun workspaces + scripts (pins Bun)
@@ -63,6 +66,14 @@ const highlights = [
   {
     path: 'apps/api/src/lib/admin-quizzes.ts',
     note: 'one place for CRUD and the lifecycle guards',
+  },
+  {
+    path: 'packages/shared/src/question.ts',
+    note: 'option set + correct index: an invalid question cannot be built',
+  },
+  {
+    path: 'apps/api/src/lib/admin-questions.ts',
+    note: 'options reconciled by id, so past answers keep their rows',
   },
   { path: 'apps/web/src/lib/api.ts', note: 'hc<AppType>() — zero codegen RPC' },
   { path: 'packages/db/src/schema.ts', note: 'users → attempts → answers relations' },

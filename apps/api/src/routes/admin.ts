@@ -7,12 +7,12 @@ import {
   userListResponseSchema,
 } from '@quiz/shared/admin';
 import { PERMISSIONS, type AccessDescriptor } from '@quiz/shared/auth';
-import { categoryListResponseSchema, createCategorySchema } from '@quiz/shared/quiz';
 import { Hono } from 'hono';
 
 import { buildDashboardStats } from '../lib/admin-stats';
 import { getUserById, listUsers, updateUser } from '../lib/admin-users';
-import { createCategory, listCategories } from '../lib/admin-quizzes';
+import { adminCategoryRoutes } from './admin-categories';
+import { adminQuestionRoutes } from './admin-questions';
 import { adminQuizRoutes } from './admin-quizzes';
 import { ApiError, jsonBody } from '../lib/errors';
 import type { AppEnv } from '../lib/types';
@@ -35,8 +35,9 @@ function queryObject(url: string): Record<string, string> {
  * The guard is mounted once, at router level, so every route here inherits the
  * same protection — there is no per-handler `if (role !== 'ADMIN')` to forget.
  *
- * Day 3 added the namespace itself (the access probe); Day 4 fills it in with
- * the dashboard statistics and user management the admin console renders.
+ * Day 3 added the namespace itself (the access probe); Day 4 filled it in with
+ * the dashboard statistics and user management, Day 5 with quiz management, and
+ * Day 6 with category CRUD and question authoring.
  *
  * The whole chain is one expression on purpose: Hono accumulates the route
  * schema in the builder's type, and that is what the web app's `hc<AppType>`
@@ -89,23 +90,15 @@ export const adminRoutes = new Hono<AppEnv>()
     return c.json(userDetailResponseSchema.parse({ user }), 200);
   })
 
-  /* ------------------------------- quizzes -------------------------------- */
-  /** Full category list with quiz counts, for the console's category picker. */
-  .get('/categories', async (c) => {
-    const categories = await listCategories();
-    return c.json(categoryListResponseSchema.parse({ categories }), 200);
-  })
-
+  /* ------------------------- categories & questions ----------------------- */
   /**
-   * Create-or-pick: naming an existing category (any casing) returns it with
-   * `created: false`, so the console can offer "type a name" without ever
-   * producing "React" and "react" side by side.
+   * Categories get their own screen on Day 6: list, create, rename, delete.
+   * The quiz form still uses the same list endpoint to power its typeahead.
    */
-  .post('/categories', jsonBody(createCategorySchema), async (c) => {
-    const { category, created } = await createCategory(c.req.valid('json').name);
+  .route('/categories', adminCategoryRoutes)
 
-    return c.json({ category, created }, created ? 201 : 200);
-  })
+  /** Questions by id (`GET`, `PUT`, `DELETE`) — quiz-scoped routes live below. */
+  .route('/questions', adminQuestionRoutes)
 
   .route('/quizzes', adminQuizRoutes)
 

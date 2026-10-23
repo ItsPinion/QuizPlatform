@@ -29,8 +29,9 @@ router (Day 3) runs before any of these handlers. The screens live at `/admin/qu
 | `POST`   | `/api/admin/categories`            | Find-or-create a category by name          |
 
 `POST /api/admin/categories` is idempotent: `201 { created: true }` for a brand-new name,
-`200 { created: false }` when it already exists under any casing. Day 6 adds rename and
-delete.
+`200 { created: false }` when it already exists under any casing. The rest of the category
+CRUD (detail, rename, delete) landed on Day 6 — see
+[`categories-and-questions.md`](categories-and-questions.md).
 
 ---
 
@@ -123,6 +124,11 @@ actually knows.
 `PATCH` accepts `categoryName` on the same terms and only writes `category_id` when the
 resolved row actually differs from the current one — so editing a title no longer touches
 the category column at all.
+
+Day 6 added the question panel directly below this form; a quiz with questions can be
+published from the lifecycle card, and a published quiz can never lose its last question
+(`409 QUIZ_WOULD_HAVE_NO_QUESTIONS`). See
+[`categories-and-questions.md`](categories-and-questions.md).
 
 In the browser, `components/category-combobox.tsx` ranks suggestions
 (`rankCategories()` in `lib/quiz-params.ts`: exact → prefix → substring, alphabetical
@@ -239,6 +245,6 @@ verbatim, so the UI can never invent a rule the server does not enforce.
 | E2E    | `scripts/e2e-smoke.ts`                         | 11 Day-5 checks over real HTTP: categories, case-insensitive reuse, quiz-by-name, aggregates, create, edit, publish/publish-blocked, lifecycle, delete rules, 403                                                         |
 
 ```bash
-bun run test        # 364 Vitest tests
-bun run test:e2e    # 36 checks against a live API + throwaway database
+bun run test        # 430 Vitest tests
+bun run test:e2e    # 46 checks against a live API + throwaway database
 ```

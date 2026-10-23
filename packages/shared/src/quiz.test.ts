@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   canDelete,
+  canDeleteCategory,
   canPublish,
   createQuizSchema,
   findCategoryByName,
@@ -9,6 +10,7 @@ import {
   quizListQuerySchema,
   slugify,
   uniqueSlug,
+  updateCategorySchema,
   updateQuizSchema,
 } from './quiz';
 
@@ -281,5 +283,30 @@ describe('category choice on a quiz', () => {
     expect(
       updateQuizSchema.safeParse({ categoryId: CATEGORY_ID, categoryName: 'React' }).success,
     ).toBe(false);
+  });
+});
+
+describe('category editing', () => {
+  it('accepts a name, a description, or both', () => {
+    expect(updateCategorySchema.parse({ name: '  Data   Science ' }).name).toBe('Data Science');
+    expect(updateCategorySchema.parse({ description: 'Numbers.' }).description).toBe('Numbers.');
+  });
+
+  it('refuses an empty update', () => {
+    expect(updateCategorySchema.safeParse({}).success).toBe(false);
+  });
+
+  it('clears a description with an empty string', () => {
+    expect(updateCategorySchema.parse({ description: '' }).description).toBeNull();
+  });
+
+  it('rejects names that are too short or too long', () => {
+    expect(updateCategorySchema.safeParse({ name: 'x' }).success).toBe(false);
+    expect(updateCategorySchema.safeParse({ name: 'a'.repeat(81) }).success).toBe(false);
+  });
+
+  it('only allows deleting an empty category', () => {
+    expect(canDeleteCategory({ quizCount: 0 })).toBe(true);
+    expect(canDeleteCategory({ quizCount: 3 })).toBe(false);
   });
 });

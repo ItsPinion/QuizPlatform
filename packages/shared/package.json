@@ -8,7 +8,8 @@
     "./crypto": "./src/crypto.ts",
     "./auth": "./src/auth.ts",
     "./admin": "./src/admin.ts",
-    "./quiz": "./src/quiz.ts"
+    "./quiz": "./src/quiz.ts",
+    "./question": "./src/question.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

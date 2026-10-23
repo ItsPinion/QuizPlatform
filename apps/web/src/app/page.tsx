@@ -6,6 +6,7 @@ import {
   Database,
   GitBranch,
   KeyRound,
+  FolderTree,
   LayoutDashboard,
   ListChecks,
   Radio,
@@ -15,6 +16,7 @@ import {
 
 import { AccessAreas } from '@/components/access-areas';
 import { AdminConsole } from '@/components/admin-console';
+import { QuestionManagement } from '@/components/question-management';
 import { QuizManagement } from '@/components/quiz-management';
 import { Roadmap } from '@/components/roadmap';
 import { SectionHeading } from '@/components/section-heading';
@@ -48,6 +50,9 @@ const TERMINAL_LINES: { prompt?: boolean; text: string; tone?: 'muted' | 'accent
   { prompt: true, text: 'curl -b jar.txt -X POST /api/admin/quizzes' },
   { text: '201 ▸ DRAFT · slug derived from title', tone: 'ok' },
   { text: 'publish ▸ 409 · QUIZ_HAS_NO_QUESTIONS', tone: 'muted' },
+  { prompt: true, text: 'curl -b jar.txt -X POST …/questions' },
+  { text: '201 ▸ 4 options · 1 correct · 3 marks', tone: 'ok' },
+  { text: 'categories ▸ CRUD · 409 CATEGORY_HAS_QUIZZES', tone: 'muted' },
 ];
 
 const HIGHLIGHTS = [
@@ -83,7 +88,7 @@ export default function HomePage() {
             <div>
               <Badge className="border-primary/30 bg-primary/10 gap-2 py-1">
                 <span className="bg-primary size-1.5 rounded-full" />
-                Milestone · Day 5 of 14 complete
+                Milestone · Day 6 of 14 complete
               </Badge>
 
               <h1 className="mt-6 text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-[3.4rem]">
@@ -98,7 +103,8 @@ export default function HomePage() {
                 Turborepo monorepo with a Next.js 16 web app, a Hono RPC API and a Drizzle schema on
                 Turso. Sign-in is real — scrypt hashes, httpOnly JWT cookies — the admin and student
                 areas are separated by role guards on both sides, the admin console reports live
-                statistics, and quizzes can be created, edited, published and retired.
+                statistics, quizzes can be created, edited, published and retired — and each quiz
+                now gets its own questions, with options and a single correct answer.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -287,6 +293,20 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* ------------------------------ questions ---------------------------- */}
+        <section id="questions" className="border-border/60 bg-card/20 w-full border-y">
+          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
+            <SectionHeading
+              eyebrow="Day 6 · categories & questions"
+              title="The part that makes a quiz a quiz"
+              description="Quizzes now carry questions: an ordered option set with exactly one correct answer, marks, difficulty and an explanation. Categories became a real CRUD screen — create, rename, delete — and the rules around both are enforced where the data lives, not in the form."
+            />
+            <div className="mt-8">
+              <QuestionManagement />
+            </div>
+          </div>
+        </section>
+
         {/* ----------------------------- workspace ---------------------------- */}
         <section id="workspace" className="border-border/60 bg-card/20 w-full border-y">
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
@@ -306,8 +326,8 @@ export default function HomePage() {
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
             <SectionHeading
               eyebrow="Two-week plan"
-              title="Five days shipped, nine to go"
-              description="The spec's build schedule, tracked in the repo. Day 5 adds quiz CRUD with a guarded lifecycle, on top of the Day 4 dashboard and the Day 3 role guards."
+              title="Six days shipped, eight to go"
+              description="The spec's build schedule, tracked in the repo. Day 6 adds category CRUD and question authoring with options, marks and correct answers — the content a quiz was missing."
             />
             <div className="mt-8">
               <Roadmap />
@@ -317,7 +337,7 @@ export default function HomePage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <LayoutDashboard className="text-primary size-4" />
-                  Shipped in Days 2–5
+                  Shipped in Days 2–6
                 </CardTitle>
                 <CardDescription>
                   Everything below is covered by the test suite and live on this deployment.
@@ -369,6 +389,14 @@ export default function HomePage() {
                   </div>
                   Create, edit and delete quizzes, derive slugs on the server, and publish or
                   unpublish only when the rules allow it.
+                </div>
+                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
+                  <div className="text-foreground flex items-center gap-1.5 font-medium">
+                    <FolderTree className="text-success size-3.5" />
+                    Categories &amp; questions
+                  </div>
+                  Category CRUD with case-insensitive names, plus multiple choice questions that
+                  carry options, marks, difficulty and one correct answer.
                 </div>
               </CardContent>
             </Card>

@@ -20,6 +20,7 @@ import {
 } from '../lib/admin-quizzes';
 import { ApiError, jsonBody } from '../lib/errors';
 import type { AppEnv } from '../lib/types';
+import { adminQuizQuestionRoutes } from './admin-questions';
 
 /** `?status=` (cleared filter) must behave like "no filter". */
 function queryObject(url: string): Record<string, string> {
@@ -45,6 +46,12 @@ export const adminQuizRoutes = new Hono<AppEnv>()
 
     return c.json(quizListResponseSchema.parse(result), 200);
   })
+
+  /**
+   * Questions live under their quiz. Declared before `/:id` for readability;
+   * the paths do not overlap (`/:id` has no child segment).
+   */
+  .route('/:quizId/questions', adminQuizQuestionRoutes)
 
   .post('/', jsonBody(createQuizSchema), async (c) => {
     const quiz = await createQuiz(c.req.valid('json'));
