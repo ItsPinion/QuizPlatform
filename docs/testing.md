@@ -3,8 +3,8 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test       # 154 unit + integration tests across the four workspaces
-bun run test:e2e   # 12 checks against a real HTTP server (own process, own port)
+bun run test       # 184 unit + integration tests across the four workspaces
+bun run test:e2e   # 17 checks against a real HTTP server (own process, own port)
 ```
 
 Neither touches Turso. Every suite builds a throwaway `file:` database in `.data/` with the project's
@@ -45,6 +45,15 @@ bun run test --filter=@quiz/web
   replayed token still works (stateless sessions — see the security notes below).
 - **Guards** — `requireRole` allows the matching role, returns 403 `FORBIDDEN` for a different one,
   and 401 when no user is attached.
+- **Role namespaces (Day 3)** — `/api/admin/access` and `/api/student/access` answer 200 with the
+  right scope descriptor and permissions for the matching role, 403 for the opposite role, 401
+  anonymously, 401 on a forged cookie, and 403 `ACCOUNT_INACTIVE` for a deactivated admin. The guard
+  runs before route matching (unknown admin paths answer 401/403 to the wrong caller, 404 to the
+  right one), and `requireAdmin` / `requireStudent` are also exercised standalone.
+- **Page guards** — `decideAccess` sends anonymous visitors to `/login?next=…` (URL-encoded),
+  redirects a student off `/admin` and an admin off `/student`, and allows the matching role.
+  `safeNextPath` rejects absolute URLs, protocol-relative URLs, backslash tricks, schemes, control
+  characters and repeated query keys.
 - **Cookie attributes** — `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age=604800`; `Secure` is
   asserted in both branches (absent in development, present when TLS is in play).
 
@@ -68,8 +77,13 @@ then asserts:
 8. wrong password → 401
 9. duplicate registration → 409
 10. weak password → 422
-11. logout → 200 with `Max-Age=0`
-12. unknown route → 404 `NOT_FOUND`
+11. `/api/admin/access` → 200 for the admin
+12. `/api/admin/access` → 403 for the student
+13. `/api/student/access` → 403 for the admin
+14. `/api/student/access` → 200 for the student
+15. role-scoped routes → 401 anonymously
+16. logout → 200 with `Max-Age=0`
+17. unknown route → 404 `NOT_FOUND`
 
 It prints a pass/fail table, exits non-zero on failure, and removes the database afterwards.
 
@@ -91,6 +105,13 @@ Useful after changing auth, the proxy, or the cookie. Start with `bun dev`, then
 - [ ] Registering a duplicate email shows “An account with this email already exists.”
 - [ ] Sign in, then set the user to `INACTIVE` in the database → the next request answers 403 and the
       header drops the session.
+- [ ] `/admin` while signed out → `/login?next=%2Fadmin`; signing in as the seeded admin returns to
+      `/admin`.
+- [ ] `/admin` while signed in as `rahul@quiz.dev` → redirected to `/student` (and the reverse for an
+      admin opening `/student`).
+- [ ] `curl` the namespaces with each cookie: `200` for the matching role, `403 FORBIDDEN` otherwise,
+      `401` without a cookie.
+- [ ] `/login?next=https://evil.example` still redirects to `/` after signing in.
 - [ ] The landing page **Runtime checks** card shows the user, role and expiry for a signed-in session.
 
 ---
@@ -105,6 +126,8 @@ Useful after changing auth, the proxy, or the cookie. Start with `bun dev`, then
   enumerate accounts.
 - `requireAuth` re-reads the user row, so deleting or deactivating an account takes effect on the next
   request rather than at token expiry.
+- Authorization happens on the server: the web guards read the session through the API, so hiding a
+  link is never the only protection — the API rejects the request regardless of the UI.
 - CSRF: the cookie is `SameSite=Lax`, requests require JSON bodies, and every state-changing route is
   POST-only. A double-submit token can be layered on in Day 13 if the deployment needs it.
 - `JWT_SECRET` is mandatory in production (the API exits at boot without a 32+ character secret);

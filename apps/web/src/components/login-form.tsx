@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { client } from '@/lib/api';
 import { parseApiFailure, toApiFailure, type ApiFailure } from '@/lib/api-error';
 
-export function LoginForm() {
+export function LoginForm({ next = '/' }: { next?: string }) {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,7 +32,7 @@ export function LoginForm() {
       }
 
       // Refresh so server components re-render with the new session cookie.
-      router.replace('/');
+      router.replace(next);
       router.refresh();
     } catch (cause) {
       setFailure(toApiFailure(cause));

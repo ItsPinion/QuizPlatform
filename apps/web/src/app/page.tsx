@@ -36,6 +36,7 @@ const TERMINAL_LINES: { prompt?: boolean; text: string; tone?: 'muted' | 'accent
   { text: '' },
   { prompt: true, text: 'curl -X POST /api/auth/login -c jar.txt' },
   { text: '200 ▸ role STUDENT · httpOnly JWT · 7d', tone: 'accent' },
+  { text: 'GET /api/admin/access ▸ 403 · FORBIDDEN', tone: 'muted' },
 ];
 
 const HIGHLIGHTS = [
@@ -71,7 +72,7 @@ export default function HomePage() {
             <div>
               <Badge className="border-primary/30 bg-primary/10 gap-2 py-1">
                 <span className="bg-primary size-1.5 rounded-full" />
-                Milestone · Day 2 of 14 complete
+                Milestone · Day 3 of 14 complete
               </Badge>
 
               <h1 className="mt-6 text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-[3.4rem]">
@@ -84,8 +85,8 @@ export default function HomePage() {
 
               <p className="text-muted-foreground mt-5 max-w-xl text-[15px] leading-relaxed">
                 Turborepo monorepo with a Next.js 16 web app, a Hono RPC API and a Drizzle schema on
-                Turso. All seven tables are live and authentication is real: scrypt hashes, httpOnly
-                JWT session cookies and guards that read the user back from the database.
+                Turso. Sign-in is real — scrypt hashes, httpOnly JWT cookies — and the admin and
+                student areas are separated by role guards on both the API and the page.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -251,8 +252,8 @@ export default function HomePage() {
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
             <SectionHeading
               eyebrow="Two-week plan"
-              title="Two days shipped, twelve to go"
-              description="The spec's build schedule, tracked in the repo. Day 2 delivered registration, login, logout and httpOnly JWT sessions; Day 3 turns the guards into protected admin and student routes."
+              title="Three days shipped, eleven to go"
+              description="The spec's build schedule, tracked in the repo. Day 3 adds role-scoped namespaces on the API and guarded /admin and /student areas in the web app."
             />
             <div className="mt-8">
               <Roadmap />
@@ -262,7 +263,7 @@ export default function HomePage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <ShieldCheck className="text-primary size-4" />
-                  Shipped in Day 2
+                  Shipped in Days 2–3
                 </CardTitle>
                 <CardDescription>
                   Everything below is covered by the test suite and live on this deployment.
@@ -288,13 +289,16 @@ export default function HomePage() {
                 <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
                   <div className="text-foreground flex items-center gap-1.5 font-medium">
                     <Check className="text-success size-3.5" />
-                    Role guards
+                    Role areas
                   </div>
-                  <code className="bg-muted rounded px-1 py-0.5 font-mono text-[11px]">ADMIN</code>
-                  <code className="bg-muted mx-1 rounded px-1 py-0.5 font-mono text-[11px]">
-                    STUDENT
+                  <code className="bg-muted rounded px-1 py-0.5 font-mono text-[11px]">
+                    /api/admin
                   </code>
-                  guards that re-read the user row, so deactivation is immediate.
+                  and
+                  <code className="bg-muted mx-1 rounded px-1 py-0.5 font-mono text-[11px]">
+                    /api/student
+                  </code>
+                  are guarded end to end, and the web pages redirect the wrong role to its own area.
                 </div>
               </CardContent>
             </Card>

@@ -8,9 +8,11 @@ import { secureHeaders } from 'hono/secure-headers';
 import { APP_VERSION, allowedOrigins, env } from './lib/env';
 import { errorHandler, notFoundHandler } from './lib/errors';
 import type { AppEnv } from './lib/types';
+import { adminRoutes } from './routes/admin';
 import { authRoutes } from './routes/auth';
 import { healthRoutes } from './routes/health';
 import { metaRoutes } from './routes/meta';
+import { studentRoutes } from './routes/student';
 
 /**
  * Sub-router mounted at `/api`.
@@ -21,7 +23,9 @@ import { metaRoutes } from './routes/meta';
 const apiRoutes = new Hono<AppEnv>()
   .route('/health', healthRoutes)
   .route('/meta', metaRoutes)
-  .route('/auth', authRoutes);
+  .route('/auth', authRoutes)
+  .route('/admin', adminRoutes)
+  .route('/student', studentRoutes);
 
 export const app = new Hono<AppEnv>()
   .use(requestId())
@@ -69,6 +73,8 @@ export const app = new Hono<AppEnv>()
           '/api/auth/login',
           '/api/auth/logout',
           '/api/auth/me',
+          '/api/admin/access',
+          '/api/student/access',
         ],
       },
       200,

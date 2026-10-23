@@ -3,9 +3,10 @@
 Quiz Management & Online Assessment Platform — a Turborepo monorepo with a **Next.js** web app,
 a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 
-> **Status: Day 2 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
-> authentication (register / login / logout / `/me`, scrypt hashes, httpOnly JWT cookies) and 154
-> automated tests plus a 12-check end-to-end smoke run are in place. Role-guarded routes are next.
+> **Status: Day 3 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
+> authentication (register / login / logout / `/me`, scrypt hashes, httpOnly JWT cookies), role-scoped
+> API namespaces and guarded `/admin` + `/student` areas, 184 automated tests and a 17-check
+> end-to-end smoke run. Quiz management is next.
 
 ---
 
@@ -210,6 +211,8 @@ quizplatform/
 │  ├─ api/                     Hono API (port 3001)
 │  │  ├─ src/app.ts            chained routes → exported AppType
 │  │  ├─ src/routes/auth.ts    register / login / logout / me
+│  │  ├─ src/routes/admin.ts   ADMIN-only namespace (requireAdmin)
+│  │  ├─ src/routes/student.ts STUDENT-only namespace (requireStudent)
 │  │  ├─ src/routes/health.ts  liveness + database readiness (Drizzle $count)
 │  │  ├─ src/routes/meta.ts    API index / roadmap
 │  │  ├─ src/middleware/       requireAuth + requireRole guards
@@ -217,7 +220,9 @@ quizplatform/
 │  │  ├─ src/__tests__/        Vitest suite + test-database setup
 │  │  └─ src/lib/              env parsing, error envelope
 │  └─ web/                     Next.js app (port 3000)
-│     ├─ src/app/              layout, landing page, /login, /register
+│     ├─ src/app/              landing, /login, /register, /admin, /student
+│     ├─ src/lib/session.ts    server-side session lookup (cookie → API)
+│     ├─ src/lib/guards.ts     role decision used by the protected pages
 │     ├─ src/components/       header, session nav, auth forms, status panels
 │     ├─ src/components/ui/    shadcn/ui primitives (button, card, badge, input, label)
 │     ├─ src/lib/api.ts        hc<AppType> RPC client
@@ -300,12 +305,12 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 154 tests, all workspaces through Turbo
+bun run test                    # 184 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
-bun run test:e2e                # 12 checks against a live server + throwaway DB
+bun run test:e2e                # 17 checks against a live server + throwaway DB
 ```
 
-**154 tests** cover the scaffolding and authentication end to end:
+**184 tests** cover the scaffolding and authentication end to end:
 
 **`@quiz/shared`** (24) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
@@ -322,7 +327,7 @@ integrity (quiz/question/option counts, one correct option each, attempt percent
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
 
-**`@quiz/api`** (66) — service banner, health payload shape, request IDs, security headers, CORS
+**`@quiz/api`** (81) — service banner, health payload shape, request IDs, security headers, CORS
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
 the database is unreachable, `/api/meta` roadmap, and the 404 error envelope.
 
@@ -333,11 +338,11 @@ plus wrong-password/unknown-email parity, inactive accounts, `/me` with cookie a
 tampered/expired/foreign-signed tokens, deleted and deactivated users, logout clearing the cookie,
 and the `requireRole` guard (allow, 403, 401).
 
-**`@quiz/web`** (6) — the error-envelope narrowing every auth form relies on: API error codes,
+**`@quiz/web`** (21) — the error-envelope narrowing every auth form relies on: API error codes,
 Zod issue extraction, fallbacks for malformed bodies, and network-error mapping.
 
 Beyond Vitest, `bun run test:e2e` boots the real API process against a throwaway database and walks
-the whole auth flow over HTTP (12 checks, including cookie flags and a tampered-cookie replay). See
+the whole auth flow over HTTP (17 checks, including cookie flags, a tampered-cookie replay and both role denials). See
 [`docs/testing.md`](docs/testing.md) for the full inventory, a manual QA checklist and the known
 security trade-offs.
 
@@ -351,7 +356,7 @@ The Turso-only rule applies to the running application, not to tests.
 
 ---
 
-## API surface (Day 2)
+## API surface (Day 3)
 
 | Method | Path                 | Description                                        |
 | ------ | -------------------- | -------------------------------------------------- |
@@ -417,6 +422,64 @@ Guards live in `apps/api/src/middleware/auth.ts`: `requireAuth` (session → use
 
 ---
 
+## Authorization (Day 3)
+
+Two role-scoped namespaces, both guarded at the moment a request enters the router:
+
+```
+/api/admin/*    →  requireAdmin    (auth + role ADMIN)
+/api/student/*  →  requireStudent  (auth + role STUDENT)
+```
+
+`apps/api/src/middleware/auth.ts` exposes four guards: `requireAuth`, `requireRole(...roles)`,
+`requireAdmin` and `requireStudent`. The namespaced guards authenticate **and** check the role in a
+single middleware, so a route added under `/api/admin` in Day 4+ cannot ship without a role check —
+the guard is registered on the router (`adminRoutes.use('*', requireAdmin)`), not per handler.
+
+Roles are **exclusive**: an admin calling `/api/student/access` gets `403`, and a student calling
+`/api/admin/access` gets `403`. Both endpoints answer with a scope descriptor:
+
+```json
+{
+  "scope": "ADMIN",
+  "user": { "id": "…", "name": "Alex Admin", "role": "ADMIN", "status": "ACTIVE", "…": "…" },
+  "permissions": [
+    "quizzes:manage",
+    "questions:manage",
+    "categories:manage",
+    "users:manage",
+    "analytics:read"
+  ]
+}
+```
+
+| Status | Code               | When                                                 |
+| ------ | ------------------ | ---------------------------------------------------- |
+| 401    | `UNAUTHENTICATED`  | No session cookie or Bearer token                    |
+| 401    | `INVALID_SESSION`  | Bad signature, expired, or the user no longer exists |
+| 403    | `ACCOUNT_INACTIVE` | Valid session, but the account is disabled           |
+| 403    | `FORBIDDEN`        | Signed in with the wrong role for this namespace     |
+
+Guards run **before** route matching, so an unknown path under `/api/admin` answers `401`/`403` to
+callers who should not be there and `404` to an authorised one — the namespace does not leak its
+shape.
+
+### Protected pages
+
+The web app guards `/admin` and `/student` in the server component, because the cookie is httpOnly and
+only the API can verify it:
+
+1. `lib/session.ts` reads the cookie with `next/headers` and calls `/api/auth/me` with it forwarded.
+2. `lib/guards.ts` decides: no session → `/login?next=<target>`; wrong role → that role's own area;
+   otherwise render.
+3. `lib/redirect.ts` validates `?next=` before the login form uses it — protocol-relative, absolute
+   and control-character paths all fall back to `/`, so the parameter cannot become an open redirect.
+
+The header shows **Admin area** or **My area** for the signed-in role, and the session card on the
+landing page calls the same endpoint, so the guards are visible without opening DevTools.
+
+---
+
 ## Environment variables
 
 | Variable             | Required | Default                 | Used by                 |
@@ -439,10 +502,14 @@ Day 2 (done): register, login, logout, `/me`, scrypt hashing, httpOnly JWT cooki
 pages, session-aware header, live session card on the landing page, `requireAuth` / `requireRole`
 guards, 154 Vitest tests and a 12-check end-to-end smoke run.
 
+Day 3 (done): `requireAdmin` / `requireStudent`, guarded `/api/admin/*` and `/api/student/*`
+namespaces with access descriptors, server-side guards on `/admin` and `/student`, `?next=` return
+paths with open-redirect protection, 184 Vitest tests and a 17-check end-to-end smoke run.
+
 | Day | Milestone                                                         |
 | --- | ----------------------------------------------------------------- |
 | 2   | ✅ Authentication — register, login, logout, hashing, JWT cookies |
-| 3   | Role-based authorization — admin/student guards                   |
+| 3   | ✅ Role-based authorization — admin/student guards                |
 | 4   | Admin dashboard — stats, user management                          |
 | 5   | Quiz management — CRUD + publish/unpublish                        |
 | 6   | Categories & questions — CRUD, options, correct answers           |
@@ -527,6 +594,20 @@ cookie is issued on the web origin so the Next.js `/api/*` rewrite keeps it firs
 **`401 INVALID_SESSION` right after a restart** — the JWT no longer verifies. Changing `JWT_SECRET`
 invalidates every existing session, and an unset secret falls back to the development one (the API
 logs `[auth] JWT_SECRET is not set …`). Set a stable secret, then sign in again.
+
+**`403 FORBIDDEN` on `/api/admin/...` (or `/api/student/...`)** — you are signed in with the wrong
+role: the two namespaces are exclusive. Use the seeded admin (`admin@quiz.dev`) for `/api/admin/*`
+and a student account for `/api/student/*`, or promote the account in the database
+(`UPDATE users SET role = 'ADMIN' WHERE email = …`) and sign in again.
+
+**`/admin` bounces me to `/student` (or the reverse)** — that is the page guard working: each role is
+redirected to the area it owns. Anonymous visitors land on `/login?next=/admin` and come back to
+`/admin` after signing in, as long as `?next=` is a same-origin path (off-origin values fall back to
+`/`).
+
+**The header shows “Sign in” on `/admin` even though you just logged in** — the session cookie was not
+sent with the request. Sign in on the web origin (port 3000) rather than on the API port, and check
+that the browser is not blocking the `quiz_session` cookie.
 
 **`JWT_SECRET must be set to at least 32 characters in production`** — the API refuses to boot in
 production without one. Generate it with `openssl rand -base64 48` and set it in the environment.

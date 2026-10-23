@@ -68,3 +68,35 @@ export type AuthSession = z.infer<typeof authSessionSchema>;
 
 export const logoutResponseSchema = z.object({ success: z.literal(true) });
 export type LogoutResponse = z.infer<typeof logoutResponseSchema>;
+
+/* -------------------------------------------------------------------------- */
+/*  Role-scoped areas (Day 3)                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a signed-in user may do in their area.
+ *
+ * The web app renders navigation from this list instead of duplicating
+ * `role === 'ADMIN'` checks, and each entry maps to a route the API guards.
+ */
+export const PERMISSIONS = {
+  ADMIN: [
+    'quizzes:manage',
+    'questions:manage',
+    'categories:manage',
+    'users:manage',
+    'analytics:read',
+  ],
+  STUDENT: ['quizzes:take', 'results:read', 'leaderboard:read'],
+} as const satisfies Record<AuthUser['role'], readonly string[]>;
+
+export type Permission =
+  (typeof PERMISSIONS)['ADMIN'][number] | (typeof PERMISSIONS)['STUDENT'][number];
+
+/** Response of `GET /api/{admin,student}/access` — proof of which scope you hold. */
+export const accessDescriptorSchema = z.object({
+  scope: z.enum(['ADMIN', 'STUDENT']),
+  user: authUserSchema,
+  permissions: z.array(z.string()),
+});
+export type AccessDescriptor = z.infer<typeof accessDescriptorSchema>;

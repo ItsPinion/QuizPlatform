@@ -77,9 +77,17 @@ export function SessionNav() {
 
   const { user } = session;
   const isAdmin = user.role === 'ADMIN';
+  const areaHref = isAdmin ? '/admin' : '/student';
 
   return (
     <>
+      <Link
+        href={areaHref}
+        className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'hidden sm:inline-flex')}
+      >
+        {isAdmin ? 'Admin area' : 'My area'}
+      </Link>
+
       <div className="border-border/70 bg-card/60 hidden items-center gap-2 rounded-full border py-1 pr-3 pl-1 sm:flex">
         <span className="bg-primary/15 text-primary grid size-6 place-items-center rounded-full">
           {isAdmin ? <ShieldCheck className="size-3.5" /> : <UserRound className="size-3.5" />}

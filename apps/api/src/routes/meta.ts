@@ -19,10 +19,11 @@ export const metaRoutes = new Hono().get('/', (c) =>
         'POST /api/auth/register': 'Create a STUDENT account and sign in',
         'POST /api/auth/login': 'Exchange email + password for a session cookie',
         'POST /api/auth/logout': 'Clear the session cookie',
+        'GET /api/admin/access': 'ADMIN-only scope descriptor (role guard)',
+        'GET /api/student/access': 'STUDENT-only scope descriptor (role guard)',
         'GET /api/meta': 'This document',
       },
       roadmap: [
-        { day: 3, area: 'authorization', endpoints: ['role-based middleware for ADMIN / STUDENT'] },
         { day: 5, area: 'quizzes', endpoints: ['CRUD + publish/unpublish'] },
         { day: 6, area: 'questions', endpoints: ['CRUD + options'] },
         { day: 8, area: 'attempts', endpoints: ['start', 'submit', 'backend scoring'] },

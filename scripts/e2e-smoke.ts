@@ -167,6 +167,7 @@ try {
 
   const studentEmail = `e2e-${randomUUID()}@quiz.dev`;
   let studentCookie = '';
+  let adminCookie = '';
 
   await check('GET /api/health answers 200', async () => {
     const res = await fetch(`${baseUrl}/api/health`);
@@ -242,7 +243,7 @@ try {
       body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
     });
     expectStatus(res, 200);
-    cookieFrom(res);
+    adminCookie = cookieFrom(res);
     const body = (await res.json()) as { user: { role: string } };
     if (body.user.role !== 'ADMIN') throw new Error(`expected ADMIN, got ${body.user.role}`);
     return '200 · ADMIN';
@@ -283,6 +284,46 @@ try {
     });
     expectStatus(res, 422);
     return '422 · VALIDATION_ERROR';
+  });
+
+  await check('GET /api/admin/access serves the admin scope', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/access`, { headers: { cookie: adminCookie } });
+    expectStatus(res, 200);
+    const body = (await res.json()) as { scope: string; permissions: string[] };
+    if (body.scope !== 'ADMIN' || !body.permissions.includes('users:manage')) {
+      throw new Error(`unexpected descriptor: ${JSON.stringify(body)}`);
+    }
+    return '200 · scope ADMIN';
+  });
+
+  await check('GET /api/admin/access forbids a student', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/access`, { headers: { cookie: studentCookie } });
+    expectStatus(res, 403);
+    const body = (await res.json()) as { error: { code: string } };
+    if (body.error.code !== 'FORBIDDEN') throw new Error(`unexpected code ${body.error.code}`);
+    return '403 · FORBIDDEN';
+  });
+
+  await check('GET /api/student/access forbids an admin', async () => {
+    const res = await fetch(`${baseUrl}/api/student/access`, { headers: { cookie: adminCookie } });
+    expectStatus(res, 403);
+    return '403 · FORBIDDEN';
+  });
+
+  await check('GET /api/student/access serves the student scope', async () => {
+    const res = await fetch(`${baseUrl}/api/student/access`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(res, 200);
+    const body = (await res.json()) as { scope: string };
+    if (body.scope !== 'STUDENT') throw new Error(`unexpected scope ${body.scope}`);
+    return '200 · scope STUDENT';
+  });
+
+  await check('role-scoped routes reject anonymous callers', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/access`);
+    expectStatus(res, 401);
+    return '401 · UNAUTHENTICATED';
   });
 
   await check('POST /api/auth/logout clears the cookie', async () => {

@@ -12,7 +12,11 @@ interface Day {
 const weekOne: Day[] = [
   { day: 1, title: 'Project setup', detail: 'Monorepo, API, database schema, git, env config' },
   { day: 2, title: 'Authentication', detail: 'Register, login, logout, hashing, JWT cookies' },
-  { day: 3, title: 'Role-based auth', detail: 'Admin & student guards, protected routes' },
+  {
+    day: 3,
+    title: 'Role-based auth',
+    detail: 'Guarded API namespaces + protected admin and student areas',
+  },
   { day: 4, title: 'Admin dashboard', detail: 'Layout, statistics, user management' },
   { day: 5, title: 'Quiz management', detail: 'Create, edit, delete, publish / unpublish' },
   { day: 6, title: 'Categories & questions', detail: 'CRUD, options, correct answers' },
@@ -20,7 +24,7 @@ const weekOne: Day[] = [
 ];
 
 /** Highest day that has landed in the repo — keep in sync with README + /api/meta. */
-const SHIPPED_THROUGH_DAY = 2;
+const SHIPPED_THROUGH_DAY = 3;
 
 const weekTwo: Day[] = [
   { day: 8, title: 'Submission & scoring', detail: 'Server-side grading, expiry enforcement' },

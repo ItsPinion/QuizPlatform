@@ -6,6 +6,7 @@ import { LoginForm } from '@/components/login-form';
 import { SiteHeader } from '@/components/site-header';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { safeNextPath } from '@/lib/redirect';
 
 export const metadata: Metadata = {
   title: 'Sign in — QuizPlatform',
@@ -17,7 +18,13 @@ const DEMO_ACCOUNTS = [
   { email: 'rahul@quiz.dev', password: 'Password123', role: 'STUDENT' as const },
 ];
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const next = safeNextPath(params.next);
   return (
     <div className="flex min-h-dvh flex-col">
       <SiteHeader />
@@ -33,7 +40,7 @@ export default function LoginPage() {
             </CardHeader>
 
             <CardContent className="flex flex-col gap-6">
-              <LoginForm />
+              <LoginForm next={next} />
 
               <p className="text-muted-foreground text-sm">
                 New here?{' '}
