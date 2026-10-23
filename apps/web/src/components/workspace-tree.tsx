@@ -5,14 +5,16 @@ import { Card, CardContent } from '@/components/ui/card';
 const tree = `quizplatform/
 ├─ apps/
 │  ├─ web/            Next.js 16 · App Router · Tailwind v4
-│  │  ├─ src/app/              landing, /login, /register, layout
-│  │  ├─ src/components/       session nav, auth forms, status panels
-│  │  ├─ src/components/ui/    shadcn/ui primitives
+│  │  ├─ src/app/              landing, /login, /register, /admin, /student
+│  │  ├─ src/lib/session.ts    server-side session lookup (cookie → API)
+│  │  ├─ src/lib/guards.ts     role decision for /admin and /student
+│  │  ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
+│  │  ├─ src/components/       session nav, auth forms, access matrix, status
 │  │  └─ next.config.ts        /api/* → Hono rewrite
 │  └─ api/            Hono 4 · @hono/node-server
 │     ├─ src/app.ts            chained routes → AppType
-│     ├─ src/routes/           auth · health · meta
-│     ├─ src/middleware/       requireAuth · requireRole
+│     ├─ src/routes/           auth · admin · student · health · meta
+│     ├─ src/middleware/       requireAuth · requireAdmin · requireStudent
 │     ├─ src/lib/auth.ts       JWT signing + session cookies
 │     └─ src/lib/              env, error envelope
 ├─ packages/
@@ -32,10 +34,15 @@ const tree = `quizplatform/
 const highlights = [
   { path: 'turbo.json', note: 'build / dev / test / typecheck pipelines with caching' },
   { path: 'apps/api/src/app.ts', note: 'every route chained so `AppType` is complete' },
-  { path: 'apps/api/src/middleware/auth.ts', note: 'session guard + role guard, typed context' },
+  { path: 'apps/api/src/middleware/auth.ts', note: 'session, role, admin and student guards' },
+  {
+    path: 'apps/api/src/routes/admin.ts',
+    note: 'requireAdmin mounted on the router, not handlers',
+  },
+  { path: 'apps/web/src/lib/guards.ts', note: 'no session → sign in · wrong role → own area' },
   { path: 'apps/web/src/lib/api.ts', note: 'hc<AppType>() — zero codegen RPC' },
   { path: 'packages/db/src/schema.ts', note: 'users → attempts → answers relations' },
-  { path: 'packages/shared/src/auth.ts', note: 'register/login schemas used by both apps' },
+  { path: 'packages/shared/src/auth.ts', note: 'login schemas + role permissions, both apps' },
   { path: '.env.example', note: 'Turso URL + token template, never committed' },
 ];
 

@@ -379,6 +379,17 @@ export function SetupStatus() {
                   })}
                 />
                 <Row label="Cookie" value="httpOnly · SameSite=Lax" />
+                <Row
+                  label="Area"
+                  value={
+                    <Link
+                      href={session.data.user.role === 'ADMIN' ? '/admin' : '/student'}
+                      className="text-primary hover:underline"
+                    >
+                      {session.data.user.role === 'ADMIN' ? '/admin' : '/student'}
+                    </Link>
+                  }
+                />
               </div>
             ) : null}
           </div>

@@ -50,7 +50,7 @@ bun run test --filter=@quiz/web
   anonymously, 401 on a forged cookie, and 403 `ACCOUNT_INACTIVE` for a deactivated admin. The guard
   runs before route matching (unknown admin paths answer 401/403 to the wrong caller, 404 to the
   right one), and `requireAdmin` / `requireStudent` are also exercised standalone.
-- **Page guards** — `decideAccess` sends anonymous visitors to `/login?next=…` (URL-encoded),
+- **Page guards** — see [`authorization.md`](authorization.md) for the rule itself; `decideAccess` sends anonymous visitors to `/login?next=…` (URL-encoded),
   redirects a student off `/admin` and an admin off `/student`, and allows the matching role.
   `safeNextPath` rejects absolute URLs, protocol-relative URLs, backslash tricks, schemes, control
   characters and repeated query keys.

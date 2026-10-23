@@ -31,14 +31,16 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 ┌──────────────────────────┐        ┌───────────────────────────┐
 │  Browser                 │        │  Next.js server (RSC)     │
 │  client component        │        │  rewrite /api/*           │
-│  hc<AppType>('/api')     │───────▶│  API_INTERNAL_URL         │
+│  hc<AppType>('/api')     │───────▶│  /admin · /student guards │
 └──────────────────────────┘        └─────────────┬─────────────┘
-                                                  │ HTTP
+                                                  │ HTTP (cookie forwarded)
                                                   ▼
                                     ┌───────────────────────────┐
                                     │  Hono API (:3001)         │
-                                    │  /api/health, /api/meta   │
-                                    │  exports AppType          │
+                                    │  /api/auth/*              │
+                                    │  /api/admin/*   requireAdmin
+                                    │  /api/student/* requireStudent
+                                    │  /api/health · /api/meta  │
                                     └─────────────┬─────────────┘
                                                   │ Drizzle ORM
                                                   ▼
@@ -50,7 +52,9 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 ```
 
 Browser requests go to the **same origin** (`/api/*`), then Next proxies them to Hono. That keeps
-httpOnly auth cookies first-party and removes CORS from the critical path.
+httpOnly auth cookies first-party and removes CORS from the critical path. Server components read the
+same cookie, forward it to `/api/auth/me`, and guard `/admin` + `/student` before rendering — see
+[`docs/authorization.md`](docs/authorization.md).
 
 The RPC client is typed from the API's exported `AppType`:
 
@@ -145,6 +149,9 @@ bun dev
 | --------- | ----------------------------------- |
 | Web       | http://localhost:3000               |
 | API       | http://localhost:3001               |
+| Sign in   | http://localhost:3000/login         |
+| Admin     | http://localhost:3000/admin         |
+| Student   | http://localhost:3000/student       |
 | Health    | http://localhost:3000/api/health    |
 | DB probe  | http://localhost:3000/api/health/db |
 | API index | http://localhost:3000/api/meta      |
@@ -160,6 +167,8 @@ bun dev
 
 Each account is stored as a `scrypt` hash with its own salt and signs in through
 `POST /api/auth/login` — the plaintext above exists only in this documentation and the seed script.
+The admin lands in `/admin` and students in `/student`; opening the other area redirects to the one
+your role owns.
 
 ---
 
@@ -223,6 +232,7 @@ quizplatform/
 │     ├─ src/app/              landing, /login, /register, /admin, /student
 │     ├─ src/lib/session.ts    server-side session lookup (cookie → API)
 │     ├─ src/lib/guards.ts     role decision used by the protected pages
+│     ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
 │     ├─ src/components/       header, session nav, auth forms, status panels
 │     ├─ src/components/ui/    shadcn/ui primitives (button, card, badge, input, label)
 │     ├─ src/lib/api.ts        hc<AppType> RPC client
@@ -238,6 +248,7 @@ quizplatform/
 │  ├─ shared/                  Zod enums, auth contracts, scrypt helpers
 │  └─ test-utils/              package-manager-agnostic test runner helper
 ├─ docs/
+│  ├─ authorization.md         role model, guards, redirect rules, failure modes
 │  └─ testing.md               test inventory, manual QA, security trade-offs
 ├─ scripts/
 │  └─ e2e-smoke.ts             boots the real API and walks the auth flow
@@ -310,7 +321,7 @@ bun run test --filter=@quiz/api # one package
 bun run test:e2e                # 17 checks against a live server + throwaway DB
 ```
 
-**184 tests** cover the scaffolding and authentication end to end:
+**184 tests** cover the scaffolding, authentication and authorization end to end:
 
 **`@quiz/shared`** (24) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
@@ -417,12 +428,16 @@ addresses exist. In the browser, `/login` and `/register` post through the Next.
 keeping the cookie first-party; the header swaps to the signed-in user, their role and a sign-out
 button.
 
-Guards live in `apps/api/src/middleware/auth.ts`: `requireAuth` (session → user row) and
-`requireRole('ADMIN')`, which Day 3's protected routes compose rather than re-implementing checks.
+Guards live in `apps/api/src/middleware/auth.ts`: `requireAuth` (session → user row),
+`requireRole(...roles)`, and the composed `requireAdmin` / `requireStudent` used by the Day 3
+namespaces.
 
 ---
 
 ## Authorization (Day 3)
+
+Full details — guard internals, the scope descriptor, redirect rules and every failure mode — are in
+[`docs/authorization.md`](docs/authorization.md).
 
 Two role-scoped namespaces, both guarded at the moment a request enters the router:
 
@@ -475,8 +490,9 @@ only the API can verify it:
 3. `lib/redirect.ts` validates `?next=` before the login form uses it — protocol-relative, absolute
    and control-character paths all fall back to `/`, so the parameter cannot become an open redirect.
 
-The header shows **Admin area** or **My area** for the signed-in role, and the session card on the
-landing page calls the same endpoint, so the guards are visible without opening DevTools.
+The header shows **Admin area** or **My area** for the signed-in role, the landing page has an
+_Access control_ section that links straight into both guarded areas, and the session card calls the
+same endpoint — so the guards are visible without opening DevTools.
 
 ---
 

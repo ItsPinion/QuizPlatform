@@ -11,6 +11,7 @@ import {
   TerminalSquare,
 } from 'lucide-react';
 
+import { AccessAreas } from '@/components/access-areas';
 import { Roadmap } from '@/components/roadmap';
 import { SectionHeading } from '@/components/section-heading';
 import { SetupStatus } from '@/components/setup-status';
@@ -235,15 +236,29 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ----------------------------- workspace ---------------------------- */}
-        <section id="workspace" className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
+        {/* ------------------------------- access ------------------------------ */}
+        <section id="access" className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
           <SectionHeading
-            eyebrow="Monorepo"
-            title="Where everything lives"
-            description="Two apps, two shared packages, and a task graph that only rebuilds what changed."
+            eyebrow="Authorization"
+            title="Two doors, one session"
+            description="Every /api/admin and /api/student request is authenticated and role-checked before it reaches a handler. The pages behind them are guarded on the server too, so a student never renders the admin shell — and neither side trusts the UI for it."
           />
           <div className="mt-8">
-            <WorkspaceTree />
+            <AccessAreas />
+          </div>
+        </section>
+
+        {/* ----------------------------- workspace ---------------------------- */}
+        <section id="workspace" className="border-border/60 bg-card/20 w-full border-y">
+          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
+            <SectionHeading
+              eyebrow="Monorepo"
+              title="Where everything lives"
+              description="Two apps, two shared packages, and a task graph that only rebuilds what changed."
+            />
+            <div className="mt-8">
+              <WorkspaceTree />
+            </div>
           </div>
         </section>
 
