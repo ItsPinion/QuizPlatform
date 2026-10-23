@@ -280,7 +280,51 @@ bento cards keep their own pointer-following light from §3.
 
 ---
 
-## 8. The auth screens
+## 8. The navigation bar
+
+`components/nav/nav-bar.tsx` replaced a `<header>` that was a logo, three links
+and a row of small buttons. It is the same chrome on every page — the landing
+page, both auth screens, the student area and the admin console — so it had to
+earn its height.
+
+### What it does
+
+| Behaviour                    | Detail                                                                                                                                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Says where you are**       | The current page is a filled pill with `aria-current="page"`. On the landing page the pill follows the section you have scrolled to, via an `IntersectionObserver` watching `#platform` and `#tour` in a band across the middle of the viewport. |
+| **Shrinks**                  | 64px at the top of the page, 56px once you scroll, with the background, border and shadow strengthening at the same time.                                                                                                                        |
+| **Shows your progress**      | A 1px gradient line along the bottom edge, driven by a `requestAnimationFrame`-throttled scroll listener.                                                                                                                                        |
+| **Keeps the session honest** | One `/api/auth/me` shared by the bar, the account menu and the drawer (`lib/use-session.ts`), with a module-level snapshot and a subscriber list. Signing out publishes `guest` to all of them at once.                                          |
+| **Knows your area**          | A signed-in visitor gets the only filled button in the bar — "My dashboard" or "Admin console" — and an account menu holding the name, the email, the role, the way into the area and the way out.                                               |
+| **Works on a phone**         | Below `lg` the links live in a drawer instead of disappearing.                                                                                                                                                                                   |
+
+### The drawer
+
+The old bar hid its links under `md`, which left a phone visitor able to reach
+the logo and nothing else. The drawer is a small modal and behaves like one:
+
+- `aria-expanded` and `aria-controls` on the trigger, which swaps to a close icon;
+- `role="dialog"` / `aria-modal="true"`, focus moved to the first link on open;
+- **Escape** closes it and returns focus to the trigger; so does the backdrop;
+- **Tab** cycles inside the panel rather than escaping into the page behind;
+- the body does not scroll while it is open (`overflow: hidden`, restored on close);
+- it closes on a route change and when the viewport grows past `lg` — a
+  `matchMedia` listener, not a resize handler.
+
+### The rules underneath
+
+`lib/nav-sections.ts` holds the two decisions that are easy to get wrong and
+easy to test:
+
+- **`activeHref(pathname, links)`** — exact match, or a path continuing after a
+  slash (`/student` covers `/student/results`, `/stud` covers nothing), and when
+  several links match, the _longest_ wins. Fifteen tests cover the table.
+- **`activeSection(visible, order)`** — the first visible landing section in page
+  order, so the pill never flickers between two sections that both intersect.
+
+---
+
+## 9. The auth screens
 
 `/login` and `/register` are the only two pages every visitor has to get through,
 so they are the largest type and the biggest targets in the app. Both share
@@ -341,7 +385,7 @@ not what you signed up for.
 
 ---
 
-## 9. Next
+## 10. Next
 
 - The admin shell (`/admin`) and the student dashboard are still on the flat card.
   Same primitives, different grid: stat cards become bento cells with a

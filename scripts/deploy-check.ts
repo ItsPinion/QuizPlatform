@@ -207,6 +207,23 @@ async function liveChecks(webUrl: string, apiUrl: string, admin?: string): Promi
     return `200 · ${body.counts.publishedQuizzes} published · ${demos} demo logins`;
   });
 
+  await add('Navigation', async () => {
+    const res = await fetchWithTimeout(webUrl);
+    if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+
+    const html = await res.text();
+    const missing = [
+      'aria-label="Primary"',
+      'aria-controls="site-nav-mobile"',
+      'Skip to content',
+      'id="main"',
+    ].filter((needle) => !html.includes(needle));
+
+    if (missing.length > 0) throw new Error(`missing ${missing.join(', ')}`);
+
+    return '200 · nav landmark · mobile trigger · skip link · main';
+  });
+
   await add('Sign-in screen', async () => {
     const res = await fetchWithTimeout(`${webUrl}/login`);
     if (res.status !== 200) throw new Error(`HTTP ${res.status}`);

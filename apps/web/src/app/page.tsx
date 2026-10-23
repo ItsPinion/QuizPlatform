@@ -51,7 +51,14 @@ export default async function HomePage() {
     <div className="flex min-h-dvh flex-col">
       <SiteHeader version={payload?.service.version} />
 
-      <main className="relative flex-1 overflow-hidden">
+      <a
+        href="#main"
+        className="focus:bg-primary focus:text-primary-foreground sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-100 focus:rounded-lg focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:shadow-lg"
+      >
+        Skip to content
+      </a>
+
+      <main id="main" className="relative flex-1 overflow-hidden">
         <Atmosphere />
 
         {payload?.unavailableReason ? (
@@ -92,7 +99,10 @@ export default async function HomePage() {
         ) : null}
 
         {/* ------------------------------ platform ----------------------------- */}
-        <section id="platform" className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 lg:py-20">
+        <section
+          id="platform"
+          className="mx-auto w-full max-w-6xl scroll-mt-24 px-5 py-16 sm:px-8 lg:py-20"
+        >
           <div className="flex flex-wrap items-end justify-between gap-6">
             <SectionHeading
               eyebrow="The platform"
@@ -111,7 +121,7 @@ export default async function HomePage() {
         </section>
 
         {/* -------------------------------- tour ------------------------------- */}
-        <section id="tour" className="border-border/60 bg-card/20 border-y">
+        <section id="tour" className="border-border/60 bg-card/20 scroll-mt-16 border-y">
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 lg:py-20">
             <SectionHeading
               eyebrow="The tour"

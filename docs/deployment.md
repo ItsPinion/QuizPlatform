@@ -254,19 +254,20 @@ bun run deploy:check --url https://quiz.example.com --api https://api.quiz.examp
 bun run deploy:check --url https://quiz.example.com --admin admin@quiz.dev:'<password>'
 ```
 
-| Probe                    | Asks                                                                                |
-| ------------------------ | ----------------------------------------------------------------------------------- |
-| API liveness             | `GET /api/health` → 200 with `status: 'ok'`                                         |
-| API readiness + database | `GET /api/health/db` → 200, `connected: true`, and **not** `target: 'file'`         |
-| Session guard            | `GET /api/auth/me` without a cookie → 401 `UNAUTHENTICATED`                         |
-| Hardening headers        | `nosniff`, a referrer policy, a request id, and `Cache-Control: no-store`           |
-| Error envelope           | an unknown route → 404 `NOT_FOUND`, not an HTML page or a stack trace               |
-| Web app reachable        | the landing page → 200                                                              |
-| Content-Security-Policy  | present, `default-src 'self'`, and no `'unsafe-eval'`                               |
-| Landing data             | `/api/landing` → 200, at least one published quiz, no `unavailableReason`           |
-| Web → API proxy          | `/api/health` through the **web** origin → 200 (the rewrite is wired)               |
-| Sign-in screen           | `/login` → 200 with labelled fields, autofill hints and the skip link               |
-| Server self-report       | optional: sign in as an admin, read `/api/admin/system`, refuse a `blocked` verdict |
+| Probe                    | Asks                                                                                    |
+| ------------------------ | --------------------------------------------------------------------------------------- |
+| API liveness             | `GET /api/health` → 200 with `status: 'ok'`                                             |
+| API readiness + database | `GET /api/health/db` → 200, `connected: true`, and **not** `target: 'file'`             |
+| Session guard            | `GET /api/auth/me` without a cookie → 401 `UNAUTHENTICATED`                             |
+| Hardening headers        | `nosniff`, a referrer policy, a request id, and `Cache-Control: no-store`               |
+| Error envelope           | an unknown route → 404 `NOT_FOUND`, not an HTML page or a stack trace                   |
+| Web app reachable        | the landing page → 200                                                                  |
+| Content-Security-Policy  | present, `default-src 'self'`, and no `'unsafe-eval'`                                   |
+| Landing data             | `/api/landing` → 200, at least one published quiz, no `unavailableReason`               |
+| Web → API proxy          | `/api/health` through the **web** origin → 200 (the rewrite is wired)                   |
+| Navigation               | `/` → 200 with the nav landmark, the mobile trigger, a skip link and `<main id="main">` |
+| Sign-in screen           | `/login` → 200 with labelled fields, autofill hints and the skip link                   |
+| Server self-report       | optional: sign in as an admin, read `/api/admin/system`, refuse a `blocked` verdict     |
 
 The last probe is the important one: it is the server's own opinion of its configuration, not the
 deploy script's idea of what it might be.
