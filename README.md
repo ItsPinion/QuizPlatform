@@ -90,6 +90,18 @@ cp .env.example .env
 The app runs **without Turso credentials**: with no `DATABASE_URL`, the database layer falls back to
 `.data/quizplatform.db` (gitignored) using the same schema and migrations.
 
+Configuration is layered, highest precedence first:
+
+1. variables already exported in the environment (CI / hosting platform)
+2. `.env.local` — machine-specific overrides, gitignored
+3. `.env` — shared configuration, gitignored
+
+Check what the CLI would connect to at any time:
+
+```bash
+pnpm db:status
+```
+
 #### Using Turso (recommended for the real setup)
 
 ```bash
@@ -115,8 +127,11 @@ pnpm db:migrate     # apply packages/db/migrations to the configured database
 pnpm db:seed        # demo users, categories, quizzes, questions, attempts
 ```
 
-Migrations work identically against a local file and a remote Turso database. To regenerate them
-after editing `packages/db/src/schema.ts`:
+Migrations work identically against a local file and a remote Turso database. Verify the target
+first with `pnpm db:status` — it reports the resolved database, whether a token is present, row
+counts, and a clear cause when the connection fails.
+
+To regenerate migrations after editing `packages/db/src/schema.ts`:
 
 ```bash
 pnpm db:generate
@@ -219,21 +234,22 @@ Design notes:
 
 ## Scripts
 
-| Command            | Scope      | Description                                    |
-| ------------------ | ---------- | ---------------------------------------------- |
-| `pnpm dev`         | root       | Run web + API together through Turbo           |
-| `pnpm dev:web`     | root       | Web only                                       |
-| `pnpm dev:api`     | root       | API only                                       |
-| `pnpm build`       | root       | `next build` + API typecheck                   |
-| `pnpm typecheck`   | root       | TypeScript across all four packages            |
-| `pnpm lint`        | root       | Alias of typecheck (ESLint arrives with Day 2) |
-| `pnpm format`      | root       | Prettier write                                 |
-| `pnpm db:generate` | `@quiz/db` | Generate SQL from the Drizzle schema           |
-| `pnpm db:migrate`  | `@quiz/db` | Apply migrations                               |
-| `pnpm db:push`     | `@quiz/db` | Push schema without migration files (dev)      |
-| `pnpm db:seed`     | `@quiz/db` | Seed demo data (`-- --force` to reset)         |
-| `pnpm db:studio`   | `@quiz/db` | Open Drizzle Studio                            |
-| `pnpm setup`       | root       | install + migrate + seed                       |
+| Command            | Scope      | Description                                     |
+| ------------------ | ---------- | ----------------------------------------------- |
+| `pnpm dev`         | root       | Run web + API together through Turbo            |
+| `pnpm dev:web`     | root       | Web only                                        |
+| `pnpm dev:api`     | root       | API only                                        |
+| `pnpm build`       | root       | `next build` + API typecheck                    |
+| `pnpm typecheck`   | root       | TypeScript across all four packages             |
+| `pnpm lint`        | root       | Alias of typecheck (ESLint arrives with Day 2)  |
+| `pnpm format`      | root       | Prettier write                                  |
+| `pnpm db:generate` | `@quiz/db` | Generate SQL from the Drizzle schema            |
+| `pnpm db:migrate`  | `@quiz/db` | Apply migrations                                |
+| `pnpm db:push`     | `@quiz/db` | Push schema without migration files (dev)       |
+| `pnpm db:seed`     | `@quiz/db` | Seed demo data (`-- --force` to reset)          |
+| `pnpm db:status`   | `@quiz/db` | Resolved DB target, connectivity and row counts |
+| `pnpm db:studio`   | `@quiz/db` | Open Drizzle Studio                             |
+| `pnpm setup`       | root       | install + migrate + seed                        |
 
 ---
 
@@ -300,6 +316,10 @@ Day 1 (done): monorepo, API, database schema, migrations, seed, env config.
 **`no such table: users`** — migrations were not applied. Run `pnpm db:migrate`, then `pnpm db:seed`.
 
 **`DATABASE_URL is required in production`** — the local file fallback is dev-only by design.
+
+**`pnpm db:status` says `fetch failed`** — the machine cannot reach Turso. Turso requires HTTPS to
+`*.turso.io` on port 443; restricted/sandboxed networks often block it. Run the migration from a
+network that can reach Turso, or point `DATABASE_URL` at a local file for offline work.
 
 **Preview host blocks the request** — `next.config.ts` lists `*.e2b.app` in `allowedDevOrigins`. Add
 your own preview domain there if it differs.

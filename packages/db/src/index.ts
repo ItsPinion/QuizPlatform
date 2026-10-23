@@ -23,6 +23,12 @@ function buildClient(): { client: Client; db: Database } {
     ...(config.authToken ? { authToken: config.authToken } : {}),
   });
 
+  // Turso enables foreign keys by default; local SQLite files need the pragma
+  // to make cascade/restrict behaviour match between environments.
+  void client.execute('PRAGMA foreign_keys = ON').catch((error: unknown) => {
+    console.warn('[db] could not enable foreign_keys pragma:', error);
+  });
+
   return { client, db: drizzle(client, { schema, casing: 'snake_case' }) };
 }
 

@@ -3,3 +3,4 @@ Web - Quiz Management & Online Assessment Platform.md
 .next/
 node_modules/
 packages/db/migrations/
+apps/web/next-env.d.ts

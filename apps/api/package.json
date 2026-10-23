@@ -14,7 +14,6 @@
     "@hono/node-server": "^2.1.5",
     "@quiz/db": "workspace:*",
     "@quiz/shared": "workspace:*",
-    "dotenv": "^18.0.9",
     "hono": "^4.13.13",
     "zod": "^4.6.7"
   },

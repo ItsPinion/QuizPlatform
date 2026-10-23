@@ -1,16 +1,11 @@
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-import { config as loadDotenv } from 'dotenv';
 import { z } from 'zod';
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-/** <root>/apps/api/src/lib -> <root> */
-const REPO_ROOT = path.resolve(HERE, '../../../..');
+import { loadEnvFiles } from '@quiz/db/load-env';
+import { REPO_ROOT } from '@quiz/db/env';
 
-// Shared root file first, then the app-local file (already-set vars win).
-loadDotenv({ path: path.join(REPO_ROOT, '.env'), override: false, quiet: true });
-loadDotenv({ path: path.join(REPO_ROOT, 'apps/api/.env'), override: false, quiet: true });
+loadEnvFiles();
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),

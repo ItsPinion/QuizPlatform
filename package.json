@@ -2,7 +2,7 @@
   "name": "quizplatform",
   "version": "0.1.0",
   "private": true,
-  "description": "Quiz Management & Online Assessment Platform — Turborepo monorepo (Next.js + Hono RPC + Drizzle/Turso)",
+  "description": "Quiz Management & Online Assessment Platform \u2014 Turborepo monorepo (Next.js + Hono RPC + Drizzle/Turso)",
   "packageManager": "pnpm@12.15.0",
   "engines": {
     "node": ">=20.11"
@@ -20,6 +20,7 @@
     "db:migrate": "pnpm --filter @quiz/db db:migrate",
     "db:push": "pnpm --filter @quiz/db db:push",
     "db:seed": "pnpm --filter @quiz/db db:seed",
+    "db:status": "pnpm --filter @quiz/db db:status",
     "db:studio": "pnpm --filter @quiz/db db:studio",
     "setup": "pnpm install && pnpm db:migrate && pnpm db:seed"
   },
