@@ -4,6 +4,7 @@
   "globalDependencies": [".env"],
   "globalEnv": [
     "NODE_ENV",
+    "TURSO_DATABASE_URL",
     "DATABASE_URL",
     "TURSO_AUTH_TOKEN",
     "API_PORT",
@@ -23,6 +24,10 @@
     "lint": {},
     "typecheck": {},
     "@quiz/api#build": {
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^test"],
       "outputs": []
     }
   }

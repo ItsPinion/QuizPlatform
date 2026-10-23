@@ -1,13 +1,14 @@
 /**
- * Connection diagnostic: `pnpm db:status`
+ * Connection diagnostic backed by Drizzle: `pnpm db:status`
  *
- * Prints which database the current configuration resolves to, then attempts a
- * lightweight query so you can tell "credentials wrong" apart from "schema not
- * applied" and "network unreachable".
+ * Reports which database the configuration resolves to, verifies the
+ * connection with a Drizzle query, and counts rows through the schema.
  */
+import { count, eq } from 'drizzle-orm';
+
 import { resolveDatabaseConfig } from './env';
 import { loadEnvFiles } from './load-env';
-import { getDatabaseClient } from './index';
+import { db, schema } from './index';
 
 loadEnvFiles();
 
@@ -36,45 +37,53 @@ async function main() {
   console.log(`  target      ${config.target}`);
   console.log(`  url         ${config.urlHint}`);
   console.log(`  auth token  ${config.authToken ? 'present' : 'not set'}`);
-  console.log(`  fallback    ${config.isFallback ? 'yes (DATABASE_URL not set)' : 'no'}`);
+  console.log(`  fallback    ${config.isFallback ? 'yes (no Turso URL configured)' : 'no'}`);
   console.log('');
 
-  const client = getDatabaseClient();
   const started = performance.now();
 
   try {
-    await withTimeout(client.execute('select 1 as ok'), TIMEOUT_MS, 'Connection');
-    console.log(`  ✔ connected in ${Math.round(performance.now() - started)}ms`);
-
-    const tables = await client.execute(
-      "select name from sqlite_master where type = 'table' and name not like 'sqlite_%' order by name",
+    const [users, categories, quizzes, questions, options, attempts, answers] = await withTimeout(
+      Promise.all([
+        db.$count(schema.users),
+        db.$count(schema.categories),
+        db.$count(schema.quizzes),
+        db.$count(schema.questions),
+        db.$count(schema.options),
+        db.$count(schema.attempts),
+        db.$count(schema.answers),
+      ]),
+      TIMEOUT_MS,
+      'Connection',
     );
-    const names = tables.rows.map((row) => String(row.name));
 
-    if (!names.includes('users')) {
-      console.log('  ⚠ schema not applied — run `pnpm db:migrate`');
-    } else {
-      const rows = await client.execute(`
-        select
-          (select count(*) from users)      as users,
-          (select count(*) from categories) as categories,
-          (select count(*) from quizzes)    as quizzes,
-          (select count(*) from questions)  as questions,
-          (select count(*) from attempts)   as attempts
-      `);
-      const row = rows.rows[0] as Record<string, unknown> | undefined;
+    console.log(`  ✔ connected in ${Math.round(performance.now() - started)}ms`);
+    console.log(
+      `  rows        users ${users} · categories ${categories} · quizzes ${quizzes} · questions ${questions} · options ${options} · attempts ${attempts} · answers ${answers}`,
+    );
 
-      console.log(
-        `  rows        users ${Number(row?.users ?? 0)} · categories ${Number(row?.categories ?? 0)} · quizzes ${Number(row?.quizzes ?? 0)} · questions ${Number(row?.questions ?? 0)} · attempts ${Number(row?.attempts ?? 0)}`,
-      );
-    }
+    const [{ published } = { published: 0 }] = await db
+      .select({ published: count() })
+      .from(schema.quizzes)
+      .where(eq(schema.quizzes.status, 'PUBLISHED'));
+
+    console.log(`  published   ${published} quiz(zes)`);
   } catch (error) {
-    console.error(`  ✖ ${error instanceof Error ? error.message : String(error)}`);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`  ✖ ${message}`);
     console.error('');
-    console.error('  Common causes:');
-    console.error('    • DATABASE_URL / TURSO_AUTH_TOKEN missing or wrong');
-    console.error('    • network egress blocked — Turso needs HTTPS to *.turso.io on port 443');
-    console.error('    • database deleted or token revoked');
+
+    if (/no such table/i.test(message)) {
+      console.error('  The database is reachable but has no schema yet.');
+      console.error('  Apply the Drizzle migrations:  pnpm db:migrate');
+      console.error('  Then load demo data:            pnpm db:seed');
+    } else {
+      console.error('  Common causes:');
+      console.error('    • TURSO_DATABASE_URL / TURSO_AUTH_TOKEN missing or wrong');
+      console.error('    • network egress blocked — Turso needs HTTPS to *.turso.io on port 443');
+      console.error('    • database deleted or token revoked');
+    }
+
     process.exitCode = 1;
   }
 

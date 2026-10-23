@@ -13,7 +13,7 @@ serve({ fetch: app.fetch, port: env.API_PORT, hostname: '0.0.0.0' }, (info) => {
   console.log(`  ▸ Database      ${config.urlHint} [${config.target}]`);
   if (config.isFallback) {
     console.log(
-      '    ⚠ Using the local fallback DB — set DATABASE_URL + TURSO_AUTH_TOKEN for Turso.',
+      '    ⚠ Using the local fallback DB — set TURSO_DATABASE_URL + TURSO_AUTH_TOKEN for Turso.',
     );
   }
   console.log('');

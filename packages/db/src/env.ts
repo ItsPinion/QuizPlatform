@@ -28,15 +28,17 @@ function looksRemote(url: string): boolean {
 /**
  * Resolve the database connection from the environment.
  *
- * - `DATABASE_URL` may be a Turso URL (`libsql://…`) or a local `file:` URL.
+ * - `TURSO_DATABASE_URL` (the name used by Drizzle's Turso guide) is preferred;
+ *   `DATABASE_URL` is accepted as an alias.
+ * - The URL may be a Turso `libsql://…` target or a local `file:` database.
  * - `TURSO_AUTH_TOKEN` is required for remote Turso databases.
- * - With no `DATABASE_URL`, development falls back to a local SQLite file so the
- *   app boots before Turso credentials are configured.
+ * - With neither variable set, development falls back to a local SQLite file so
+ *   the app boots before Turso credentials are configured.
  */
 export function resolveDatabaseConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): ResolvedDatabaseConfig {
-  const rawUrl = env.DATABASE_URL?.trim();
+  const rawUrl = (env.TURSO_DATABASE_URL ?? env.DATABASE_URL)?.trim();
 
   if (rawUrl) {
     const target: DatabaseTarget = looksRemote(rawUrl) ? 'turso' : 'local-file';
@@ -50,7 +52,9 @@ export function resolveDatabaseConfig(
   }
 
   if (env.NODE_ENV === 'production') {
-    throw new Error('DATABASE_URL is required in production (Turso libsql:// URL).');
+    throw new Error(
+      'TURSO_DATABASE_URL is required in production (Turso libsql:// URL, or DATABASE_URL as an alias).',
+    );
   }
 
   return {

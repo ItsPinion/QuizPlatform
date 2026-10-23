@@ -1,4 +1,4 @@
-import { getDatabaseClient, getDatabaseConfig } from '@quiz/db';
+import { db, getDatabaseConfig, schema } from '@quiz/db';
 import type { DatabaseStatus, Health } from '@quiz/shared';
 import { Hono } from 'hono';
 
@@ -6,16 +6,6 @@ import { APP_VERSION } from '../lib/env';
 import { errorBody } from '../lib/errors';
 
 const startedAt = Date.now();
-
-interface CountRow {
-  users: number | bigint;
-  categories: number | bigint;
-  quizzes: number | bigint;
-  questions: number | bigint;
-  attempts: number | bigint;
-}
-
-const toNumber = (value: unknown): number => Number(value ?? 0);
 
 export const healthRoutes = new Hono()
   /** Liveness probe — no database access. */
@@ -37,29 +27,20 @@ export const healthRoutes = new Hono()
     const started = performance.now();
 
     try {
-      const client = getDatabaseClient();
-      const result = await client.execute(`
-        select
-          (select count(*) from users)      as users,
-          (select count(*) from categories) as categories,
-          (select count(*) from quizzes)    as quizzes,
-          (select count(*) from questions)  as questions,
-          (select count(*) from attempts)   as attempts
-      `);
+      const [users, categories, quizzes, questions, attempts] = await Promise.all([
+        db.$count(schema.users),
+        db.$count(schema.categories),
+        db.$count(schema.quizzes),
+        db.$count(schema.questions),
+        db.$count(schema.attempts),
+      ]);
 
-      const row = result.rows[0] as unknown as CountRow | undefined;
       const body: DatabaseStatus = {
         connected: true,
         target: config.target,
         urlHint: config.urlHint,
         latencyMs: Math.round((performance.now() - started) * 100) / 100,
-        counts: {
-          users: toNumber(row?.users),
-          categories: toNumber(row?.categories),
-          quizzes: toNumber(row?.quizzes),
-          questions: toNumber(row?.questions),
-          attempts: toNumber(row?.attempts),
-        },
+        counts: { users, categories, quizzes, questions, attempts },
       };
 
       return c.json(body, 200);
@@ -74,7 +55,7 @@ export const healthRoutes = new Hono()
             {
               hint:
                 config.target === 'turso'
-                  ? 'Check DATABASE_URL and TURSO_AUTH_TOKEN in your environment.'
+                  ? 'Check TURSO_DATABASE_URL and TURSO_AUTH_TOKEN, then run `pnpm db:migrate`.'
                   : 'Run `pnpm db:migrate` to create the local database.',
               reason: message,
             },

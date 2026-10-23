@@ -11,13 +11,15 @@
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/migrate.ts",
+    "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/seed.ts",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "db:status": "tsx src/status.ts"
+    "db:status": "tsx src/status.ts",
+    "test": "vitest run",
+    "db:pull": "drizzle-kit pull"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

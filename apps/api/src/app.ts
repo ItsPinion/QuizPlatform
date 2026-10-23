@@ -41,8 +41,14 @@ export const app = new Hono()
     }),
   )
   .use(async (c, next) => {
-    if (env.NODE_ENV !== 'production') logger()(c, next);
-    else await next();
+    // The logger middleware must be awaited, otherwise the context is never
+    // finalised and Hono answers with a 500.
+    if (env.NODE_ENV === 'production') {
+      await next();
+      return;
+    }
+
+    await logger()(c, next);
   })
   .get('/', (c) =>
     c.json(

@@ -35,21 +35,30 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [scheme, n, r, p, saltHex, hashHex] = stored.split('$');
+  const [scheme, nRaw, rRaw, pRaw, saltHex, hashHex] = stored.split('$');
 
-  if (scheme !== 'scrypt' || !n || !r || !p || !saltHex || !hashHex) return false;
+  if (scheme !== 'scrypt' || !nRaw || !rRaw || !pRaw || !saltHex || !hashHex) return false;
+  if (!/^[0-9a-f]+$/i.test(saltHex) || !/^[0-9a-f]+$/i.test(hashHex)) return false;
+
+  const params = { N: Number(nRaw), r: Number(rRaw), p: Number(pRaw) };
+  // Reject nonsense cost parameters instead of letting scrypt throw: a corrupt
+  // record must fail closed, never crash the login route.
+  if (!Object.values(params).every((value) => Number.isInteger(value) && value > 0)) return false;
 
   const expected = Buffer.from(hashHex, 'hex');
-  const derived = await scryptAsync(
-    password.normalize('NFKC'),
-    Buffer.from(saltHex, 'hex'),
-    expected.length,
-    {
-      N: Number(n),
-      r: Number(r),
-      p: Number(p),
-    },
-  );
+  if (expected.length === 0) return false;
+
+  let derived: Buffer;
+  try {
+    derived = await scryptAsync(
+      password.normalize('NFKC'),
+      Buffer.from(saltHex, 'hex'),
+      expected.length,
+      params,
+    );
+  } catch {
+    return false;
+  }
 
   return derived.length === expected.length && timingSafeEqual(derived, expected);
 }

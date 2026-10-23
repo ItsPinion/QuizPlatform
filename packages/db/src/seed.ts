@@ -130,9 +130,10 @@ async function main() {
   const categoryIdByName = new Map(categoryRows.map((row) => [row.name, row.id]));
 
   /* -------------------------------- users --------------------------------- */
-  const [adminHash, demoHash] = await Promise.all([
+  // Hash every account separately so each row carries its own salt.
+  const [adminHash, ...demoHashes] = await Promise.all([
     hashPassword(ADMIN_PASSWORD),
-    hashPassword(DEMO_PASSWORD),
+    ...studentPlans.map(() => hashPassword(DEMO_PASSWORD)),
   ]);
 
   const admin: NewUser = {
@@ -149,7 +150,7 @@ async function main() {
     id: randomUUID(),
     name: student.name,
     email: student.email,
-    passwordHash: demoHash,
+    passwordHash: demoHashes[index] ?? demoHashes[0]!,
     role: 'STUDENT',
     status: 'ACTIVE',
     createdAt: new Date(now - (45 - index * 7) * 24 * 60 * 60 * 1000),
