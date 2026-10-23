@@ -1,0 +1,30 @@
+{
+  "name": "@quiz/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "@quiz/db": "workspace:*",
+    "@quiz/shared": "workspace:*",
+    "dotenv": "^18.0.9",
+    "hono": "^4.13.13",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  },
+  "exports": {
+    ".": "./src/app.ts",
+    "./app": "./src/app.ts"
+  }
+}

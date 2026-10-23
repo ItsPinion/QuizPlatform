@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+.next/
+out/
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# env — never commit real credentials
+.env
+.env.*
+!.env.example
+
+# local database artifacts
+.data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# misc
+.DS_Store
+*.log
+npm-debug.log*
+coverage/
+.vercel/

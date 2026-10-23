@@ -1,0 +1,5 @@
+pnpm-lock.yaml
+Web - Quiz Management & Online Assessment Platform.md
+.next/
+node_modules/
+packages/db/migrations/

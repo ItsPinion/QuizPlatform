@@ -1,0 +1,33 @@
+{
+  "name": "quizplatform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Quiz Management & Online Assessment Platform — Turborepo monorepo (Next.js + Hono RPC + Drizzle/Turso)",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=@quiz/web",
+    "dev:api": "turbo run dev --filter=@quiz/api",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "pnpm --filter @quiz/db db:generate",
+    "db:migrate": "pnpm --filter @quiz/db db:migrate",
+    "db:push": "pnpm --filter @quiz/db db:push",
+    "db:seed": "pnpm --filter @quiz/db db:seed",
+    "db:studio": "pnpm --filter @quiz/db db:studio",
+    "setup": "pnpm install && pnpm db:migrate && pnpm db:seed"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "prettier": "^3.9.10",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "turbo": "^2.11.10",
+    "typescript": "^5.9.3"
+  }
+}

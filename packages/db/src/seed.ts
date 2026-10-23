@@ -1,0 +1,367 @@
+import { randomUUID } from 'node:crypto';
+
+import { hashPassword } from '@quiz/shared/crypto';
+
+import { db } from './index';
+import { loadEnvFiles } from './load-env';
+import { resolveDatabaseConfig } from './env';
+import {
+  answers,
+  attempts,
+  categories,
+  options,
+  questions,
+  quizzes,
+  users,
+  type NewAnswer,
+  type NewAttempt,
+  type NewOption,
+  type NewQuestion,
+  type NewQuiz,
+  type NewUser,
+} from './schema';
+import { categorySeeds, quizSeeds } from './seed-data';
+
+loadEnvFiles();
+
+const FORCE = process.argv.includes('--force');
+
+/** Deterministic PRNG so repeated seeds produce similar dashboards. */
+function mulberry32(seed: number) {
+  let state = seed;
+  return () => {
+    state |= 0;
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const random = mulberry32(42_042);
+
+function pick<T>(items: readonly T[]): T {
+  const item = items[Math.floor(random() * items.length)];
+  if (item === undefined) throw new Error('pick() called with an empty array');
+  return item;
+}
+
+const DEMO_PASSWORD = 'Password123';
+const ADMIN_PASSWORD = 'Admin12345';
+
+interface StudentPlan {
+  name: string;
+  email: string;
+  /** slug -> list of correctness ratios for each attempt */
+  plan: Record<string, number[]>;
+}
+
+const studentPlans: StudentPlan[] = [
+  {
+    name: 'Rahul Verma',
+    email: 'rahul@quiz.dev',
+    plan: {
+      'javascript-fundamentals': [0.55, 0.85],
+      'react-basics': [0.9],
+      'python-programming': [0.75],
+      'sql-databases': [0.4],
+      'html-fundamentals': [0.95],
+    },
+  },
+  {
+    name: 'Priya Nair',
+    email: 'priya@quiz.dev',
+    plan: {
+      'css-essentials': [1],
+      'react-basics': [0.85],
+      'cyber-security-basics': [0.55],
+      'python-programming': [0.85],
+    },
+  },
+  {
+    name: 'Amit Shah',
+    email: 'amit@quiz.dev',
+    plan: {
+      'html-fundamentals': [0.4],
+      'nodejs-rest-apis': [0.4],
+      'sql-databases': [0.75],
+      'python-programming': [0.45],
+    },
+  },
+];
+
+async function resetData() {
+  console.log('▸ Resetting existing data (--force)');
+  await db.delete(answers);
+  await db.delete(attempts);
+  await db.delete(options);
+  await db.delete(questions);
+  await db.delete(quizzes);
+  await db.delete(categories);
+  await db.delete(users);
+}
+
+async function main() {
+  const config = resolveDatabaseConfig();
+  console.log(`▸ Seeding ${config.urlHint} (${config.target})`);
+
+  const existing = await db.select({ id: users.id }).from(users).limit(1);
+
+  if (existing.length > 0) {
+    if (!FORCE) {
+      console.log(
+        '✔ Database already contains users — skipping seed. Re-run with `pnpm db:seed -- --force` to reset.',
+      );
+      return;
+    }
+    await resetData();
+  }
+
+  const now = Date.now();
+
+  /* ------------------------------ categories ------------------------------ */
+  const categoryRows = categorySeeds.map((category) => ({
+    id: randomUUID(),
+    ...category,
+    createdAt: new Date(now - 60 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(now - 60 * 24 * 60 * 60 * 1000),
+  }));
+  await db.insert(categories).values(categoryRows);
+  const categoryIdByName = new Map(categoryRows.map((row) => [row.name, row.id]));
+
+  /* -------------------------------- users --------------------------------- */
+  const [adminHash, demoHash] = await Promise.all([
+    hashPassword(ADMIN_PASSWORD),
+    hashPassword(DEMO_PASSWORD),
+  ]);
+
+  const admin: NewUser = {
+    id: randomUUID(),
+    name: 'Alex Admin',
+    email: 'admin@quiz.dev',
+    passwordHash: adminHash,
+    role: 'ADMIN',
+    status: 'ACTIVE',
+    createdAt: new Date(now - 60 * 24 * 60 * 60 * 1000),
+  };
+
+  const studentRows: NewUser[] = studentPlans.map((student, index) => ({
+    id: randomUUID(),
+    name: student.name,
+    email: student.email,
+    passwordHash: demoHash,
+    role: 'STUDENT',
+    status: 'ACTIVE',
+    createdAt: new Date(now - (45 - index * 7) * 24 * 60 * 60 * 1000),
+  }));
+
+  await db.insert(users).values([admin, ...studentRows]);
+  const studentIdByEmail = new Map(studentRows.map((row) => [row.email, row.id]));
+
+  /* --------------------------- quizzes + questions ------------------------ */
+  const quizIds = new Map<string, string>();
+  const quizById = new Map<string, (typeof quizSeeds)[number]>();
+  /** quiz slug -> list of { id, marks, optionIds, correctOptionId } */
+  const questionMap = new Map<
+    string,
+    { id: string; marks: number; correctOptionId: string; optionIds: string[] }[]
+  >();
+
+  for (const [index, seed] of quizSeeds.entries()) {
+    const categoryId = categoryIdByName.get(seed.category);
+    if (!categoryId)
+      throw new Error(`Unknown category "${seed.category}" for quiz "${seed.title}"`);
+
+    const quizId = randomUUID();
+    const createdAt = new Date(now - (50 - index * 3) * 24 * 60 * 60 * 1000);
+
+    const quizRow: NewQuiz = {
+      id: quizId,
+      title: seed.title,
+      slug: seed.slug,
+      description: seed.description,
+      categoryId,
+      difficulty: seed.difficulty,
+      durationMinutes: seed.durationMinutes,
+      passingScore: seed.passingScore,
+      maxAttempts: seed.maxAttempts,
+      status: seed.status,
+      createdBy: admin.id,
+      createdAt,
+      updatedAt: createdAt,
+    };
+
+    const questionRows: NewQuestion[] = [];
+    const optionRows: NewOption[] = [];
+    const collected: { id: string; marks: number; correctOptionId: string; optionIds: string[] }[] =
+      [];
+
+    seed.questions.forEach((question, questionIndex) => {
+      const questionId = randomUUID();
+      const questionMarks = question.marks ?? 1;
+      const createdAtOffset = new Date(createdAt.getTime() + questionIndex * 60_000);
+
+      questionRows.push({
+        id: questionId,
+        quizId,
+        questionText: question.text,
+        explanation: question.explanation,
+        marks: questionMarks,
+        difficulty: question.difficulty ?? seed.difficulty,
+        position: questionIndex,
+        createdAt: createdAtOffset,
+        updatedAt: createdAtOffset,
+      });
+
+      const optionIds = question.options.map((optionText, optionIndex) => {
+        const optionId = randomUUID();
+        optionRows.push({
+          id: optionId,
+          questionId,
+          optionText,
+          isCorrect: optionIndex === question.correct,
+          position: optionIndex,
+        });
+        return optionId;
+      });
+
+      const correctOptionId = optionIds[question.correct];
+      if (!correctOptionId)
+        throw new Error(`Invalid correct index for question "${question.text}"`);
+
+      collected.push({ id: questionId, marks: questionMarks, correctOptionId, optionIds });
+    });
+
+    await db.insert(quizzes).values(quizRow);
+    await db.insert(questions).values(questionRows);
+    await db.insert(options).values(optionRows);
+
+    quizIds.set(seed.slug, quizId);
+    quizById.set(quizId, seed);
+    questionMap.set(seed.slug, collected);
+  }
+
+  /* ------------------------------- attempts ------------------------------- */
+  const attemptRows: NewAttempt[] = [];
+  const answerRows: NewAnswer[] = [];
+
+  for (const student of studentPlans) {
+    const userId = studentIdByEmail.get(student.email);
+    if (!userId) throw new Error(`Missing seeded student ${student.email}`);
+
+    for (const [slug, ratios] of Object.entries(student.plan)) {
+      const quizId = quizIds.get(slug);
+      const quiz = quizBySlug(slug);
+      const questionsForQuiz = questionMap.get(slug);
+      if (!quizId || !quiz || !questionsForQuiz) continue;
+
+      ratios.forEach((ratio, attemptIndex) => {
+        // Spread attempts across the last 4 weeks; first attempts are older.
+        const daysAgo = 25 - attemptIndex * 6 - Math.floor(random() * 4);
+        const startedAt = new Date(
+          now - daysAgo * 24 * 60 * 60 * 1000 + Math.floor(random() * 6) * 3_600_000,
+        );
+        const durationMs = quiz.durationMinutes * 60_000;
+        const timeTakenSeconds = Math.round((durationMs / 1000) * (0.35 + random() * 0.5));
+        const attemptId = randomUUID();
+
+        const ordered = [...questionsForQuiz].sort(() => random() - 0.5);
+        const totalMarks = ordered.reduce((sum, question) => sum + question.marks, 0);
+        const targetMarks = Math.round(ratio * totalMarks);
+        // A struggling student often leaves the last question blank.
+        const unansweredIndex = ratio < 0.65 ? ordered.length - 1 : -1;
+
+        let obtained = 0;
+        let correctCount = 0;
+        let incorrectCount = 0;
+        let unansweredCount = 0;
+        let runningMarks = 0;
+
+        const localAnswers: NewAnswer[] = [];
+
+        ordered.forEach((question, index) => {
+          const selectedOptions = question.optionIds.filter(
+            (id) => id !== question.correctOptionId,
+          );
+
+          if (index === unansweredIndex) {
+            unansweredCount += 1;
+            return;
+          }
+
+          const isCorrect = runningMarks + question.marks <= targetMarks;
+          if (isCorrect) {
+            runningMarks += question.marks;
+            obtained += question.marks;
+            correctCount += 1;
+          } else {
+            incorrectCount += 1;
+          }
+
+          localAnswers.push({
+            id: randomUUID(),
+            attemptId,
+            questionId: question.id,
+            selectedOptionId: isCorrect ? question.correctOptionId : pick(selectedOptions),
+            isCorrect,
+          });
+        });
+
+        const percentage = Math.round((obtained / totalMarks) * 10000) / 100;
+        const status = percentage >= quiz.passingScore ? 'PASSED' : 'FAILED';
+
+        attemptRows.push({
+          id: attemptId,
+          quizId,
+          userId,
+          score: obtained,
+          totalMarks,
+          percentage,
+          correctAnswers: correctCount,
+          incorrectAnswers: incorrectCount,
+          unanswered: unansweredCount,
+          timeTakenSeconds,
+          status,
+          startedAt,
+          expiresAt: new Date(startedAt.getTime() + durationMs),
+          completedAt: new Date(startedAt.getTime() + timeTakenSeconds * 1000),
+        });
+
+        answerRows.push(...localAnswers);
+      });
+    }
+  }
+
+  if (attemptRows.length > 0) await db.insert(attempts).values(attemptRows);
+  if (answerRows.length > 0) await db.insert(answers).values(answerRows);
+
+  console.log('');
+  console.log('✔ Seed complete');
+  console.log(`  categories: ${categoryRows.length}`);
+  console.log(`  users:      ${1 + studentRows.length}`);
+  console.log(
+    `  quizzes:    ${quizSeeds.length} (${quizSeeds.filter((q) => q.status === 'PUBLISHED').length} published)`,
+  );
+  console.log(`  attempts:   ${attemptRows.length}`);
+  console.log('');
+  console.log('  Demo accounts');
+  console.log('  ┌──────────────┬───────────────────┬───────────────┐');
+  console.log('  │ Role         │ Email             │ Password      │');
+  console.log('  ├──────────────┼───────────────────┼───────────────┤');
+  console.log(`  │ Admin        │ admin@quiz.dev    │ ${ADMIN_PASSWORD.padEnd(13)} │`);
+  console.log(`  │ Student      │ rahul@quiz.dev    │ ${DEMO_PASSWORD.padEnd(13)} │`);
+  console.log(`  │ Student      │ priya@quiz.dev    │ ${DEMO_PASSWORD.padEnd(13)} │`);
+  console.log(`  │ Student      │ amit@quiz.dev     │ ${DEMO_PASSWORD.padEnd(13)} │`);
+  console.log('  └──────────────┴───────────────────┴───────────────┘');
+}
+
+function quizBySlug(slug: string) {
+  return quizSeeds.find((quiz) => quiz.slug === slug);
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error('✖ Seed failed:', error);
+    process.exit(1);
+  });
