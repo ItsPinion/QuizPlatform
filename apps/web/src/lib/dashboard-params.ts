@@ -71,6 +71,16 @@ export function trendDateLabel(iso: string): string {
   return `${date.getDate()} ${date.toLocaleString('en-GB', { month: 'short' })}`;
 }
 
+/** The tooltip for one point: `SQL Databases · 40% · 18 Feb`. */
+export function trendPointLabel(
+  point: Pick<TrendPoint, 'quizTitle' | 'percentage' | 'completedAt'>,
+): string {
+  const score = percentLabel(point.percentage);
+  const when = trendDateLabel(point.completedAt);
+
+  return when ? `${point.quizTitle} · ${score} · ${when}` : `${point.quizTitle} · ${score}`;
+}
+
 /** Screen-reader summary of the trend, since an SVG is otherwise silent. */
 export function trendSummary(points: readonly TrendPoint[]): string {
   if (points.length === 0) return 'No graded attempts yet.';

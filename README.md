@@ -11,7 +11,7 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 > automatic at the deadline, idempotent, with the whole result stored on the attempt — results:
 > a per-question answer review with the key and the explanations, plus a filterable attempt history,
 > and a student dashboard: the spec's six statistics, a score trend, per-category averages and a
-> fourteen-day activity chart in one API call. 621 automated tests and a 65-check end-to-end smoke
+> fourteen-day activity chart in one API call. 622 automated tests and a 65-check end-to-end smoke
 > run. Admin analytics is next.
 
 ---
@@ -346,12 +346,12 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 621 tests, all workspaces through Turbo
+bun run test                    # 622 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
 bun run test:e2e                # 65 checks against a live server + throwaway DB
 ```
 
-**621 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review and dashboard statistics:
+**622 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review and dashboard statistics:
 
 **`@quiz/shared`** (182) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
@@ -439,7 +439,7 @@ email search, empty values, unknown roles), pagination, both sorts, 422s for bad
 lookups, 404/422 handling, promotion/demotion, deactivation lockout and restoration, `SELF_LOCKOUT`
 for self-demotion and self-deactivation, and 401/403 on every admin route.
 
-**`@quiz/web`** (142) — the error-envelope narrowing every auth form relies on (API error codes,
+**`@quiz/web`** (143) — the error-envelope narrowing every auth form relies on (API error codes,
 Zod issue extraction, fallbacks for malformed bodies, network-error mapping), the Day 3 page guard
 rules, the Day 4 directory parameters, the Day 5 quiz helpers, the Day 6 question-form helpers, and
 the Day 7–9 student helpers: catalogue filter parsing with `toStudentQuery`/`quizzesHref` round-trips
@@ -1006,7 +1006,7 @@ Day 10 (done): the student dashboard. `GET /api/student/dashboard` answers the s
 plus a streak, a twelve-attempt score trend, per-category averages, a fourteen-day activity window and
 the five most recent attempts — all scoped to the caller, settled by the expiry sweep, and defined so
 that a live attempt moves no average. `/student` becomes the dashboard with server-rendered SVG
-charts; the catalogue moves to `/student/quizzes`. 621 Vitest tests and a 65-check end-to-end smoke
+charts; the catalogue moves to `/student/quizzes`. 622 Vitest tests and a 65-check end-to-end smoke
 run.
 
 Day 9 (done): results and review. `GET /api/student/attempts/:id/review` releases the key, the

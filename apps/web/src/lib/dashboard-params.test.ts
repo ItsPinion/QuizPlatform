@@ -15,6 +15,7 @@ import {
   toneFor,
   trendDateLabel,
   trendDelta,
+  trendPointLabel,
   trendSummary,
   type TrendPoint,
 } from './dashboard-params';
@@ -90,6 +91,16 @@ describe('trend', () => {
   it('labels the last point with a short date', () => {
     expect(trendDateLabel('2026-03-12T10:00:00.000Z')).toMatch(/1[12] Mar/);
     expect(trendDateLabel('nonsense')).toBe('');
+  });
+
+  it('builds a single-string tooltip per point', () => {
+    // A single string, never an array: <title> cannot hold mixed children.
+    const label = trendPointLabel(point(72.5));
+    expect(typeof label).toBe('string');
+    expect(label).toBe('CSS Essentials · 72.5% · 12 Mar');
+
+    expect(trendPointLabel({ ...point(40), quizTitle: 'SQL' })).toBe('SQL · 40% · 12 Mar');
+    expect(trendPointLabel({ ...point(40), completedAt: 'nonsense' })).toBe('CSS Essentials · 40%');
   });
 
   it('summarises the series for screen readers', () => {

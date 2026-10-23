@@ -6,7 +6,13 @@ import {
   scoreChartPoints,
 } from '@quiz/shared/dashboard';
 
-import { deltaLabel, trendDelta, trendDateLabel, trendSummary } from '@/lib/dashboard-params';
+import {
+  deltaLabel,
+  trendDateLabel,
+  trendDelta,
+  trendPointLabel,
+  trendSummary,
+} from '@/lib/dashboard-params';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -127,28 +133,34 @@ export function ScoreTrendChart({ trend, passMark = 60, height = 132 }: Props) {
           strokeLinejoin="round"
         />
 
-        {points.map((point, index) => (
-          <circle
-            key={trend[index]?.attemptId ?? index}
-            cx={point.x}
-            cy={point.y}
-            r={trend[index]?.passed ? 3.2 : 2.6}
-            className={cn(
-              trend[index]?.passed
-                ? 'fill-primary stroke-background'
-                : 'fill-destructive stroke-background',
-            )}
-            strokeWidth={1.4}
-          />
-        ))}
+        {/*
+          Each point owns its <title> so the browser shows the tooltip when the
+          pointer is anywhere on the dot. The text must be a single string:
+          JSX text mixed with expressions produces an array of children, which
+          React cannot serialise inside <title> (it warns, then the server and
+          client markup disagree and hydration fails).
+        */}
+        {points.map((point, index) => {
+          const item = trend[index];
+          if (!item) return null;
 
-        {points.map((point, index) =>
-          trend[index]?.passed ? null : (
-            <title key={`t-${trend[index]?.attemptId ?? index}`}>
-              {trend[index]?.quizTitle}: {trend[index]?.percentage}%
-            </title>
-          ),
-        )}
+          return (
+            <circle
+              key={item.attemptId}
+              cx={point.x}
+              cy={point.y}
+              r={item.passed ? 3.2 : 2.6}
+              className={cn(
+                item.passed
+                  ? 'fill-primary stroke-background'
+                  : 'fill-destructive stroke-background',
+              )}
+              strokeWidth={1.4}
+            >
+              <title>{trendPointLabel(item)}</title>
+            </circle>
+          );
+        })}
       </svg>
 
       <div className="text-muted-foreground flex items-center justify-between text-[10.5px]">

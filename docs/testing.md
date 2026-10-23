@@ -3,7 +3,7 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test       # 621 unit + integration tests across the four workspaces
+bun run test       # 622 unit + integration tests across the four workspaces
 bun run test:e2e   # 65 checks against a real HTTP server (own process, own port)
 ```
 
@@ -21,7 +21,7 @@ tests.
 | `@quiz/shared` | 182   | auth + content contracts, attempt clocks, the grader, review/history and dashboard helpers |
 | `@quiz/db`     | 61    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring   |
 | `@quiz/api`    | 236   | health/readiness, auth, guards, content, taking, grading, reviewing, dashboard stats       |
-| `@quiz/web`    | 142   | error envelopes, page guards, directory/quiz/student/review/dashboard helpers              |
+| `@quiz/web`    | 143   | error envelopes, page guards, directory/quiz/student/review/dashboard helpers              |
 
 Run one workspace at a time when you are iterating:
 
