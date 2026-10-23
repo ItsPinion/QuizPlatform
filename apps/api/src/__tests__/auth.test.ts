@@ -151,6 +151,54 @@ describe('POST /api/auth/register', () => {
     expect(body.error.code).toBe('EMAIL_TAKEN');
   });
 
+  it('treats an email that only differs in case as a duplicate', async () => {
+    const { email } = await register();
+
+    const res = await post('/api/auth/register', {
+      name: 'Same Person',
+      email: email.toUpperCase(),
+      password: 'Secret12345',
+    });
+
+    expect(res.status).toBe(409);
+  });
+
+  it('salts every hash, so identical passwords never share a hash', async () => {
+    const first = freshEmail('salt-a');
+    const second = freshEmail('salt-b');
+    createdEmails.push(first, second);
+
+    await post('/api/auth/register', { name: 'Salt A', email: first, password: 'Secret12345' });
+    await post('/api/auth/register', { name: 'Salt B', email: second, password: 'Secret12345' });
+
+    const rows = await db
+      .select({ email: schema.users.email, hash: schema.users.passwordHash })
+      .from(schema.users)
+      .where(eq(schema.users.email, first));
+    const other = await db
+      .select({ hash: schema.users.passwordHash })
+      .from(schema.users)
+      .where(eq(schema.users.email, second));
+
+    expect(rows[0]?.hash).not.toBe(other[0]?.hash);
+  });
+
+  it('rejects a password over the 128 character ceiling', async () => {
+    const res = await post('/api/auth/register', {
+      name: 'Long Password',
+      email: freshEmail('long'),
+      password: `A1${'x'.repeat(140)}`,
+    });
+
+    expect(res.status).toBe(422);
+  });
+
+  it('rejects a request with no body at all', async () => {
+    const res = await app.request('/api/auth/register', { method: 'POST' });
+
+    expect(res.status).toBe(400);
+  });
+
   it('rejects a weak password with 422 and field detail', async () => {
     const res = await post('/api/auth/register', {
       name: 'Weak Password',
@@ -369,6 +417,18 @@ describe('POST /api/auth/logout', () => {
     expect(body.success).toBe(true);
     expect(cleared).toBeDefined();
     expect(cleared).toContain('Max-Age=0');
+  });
+
+  it('does not revoke the token server-side — sessions are stateless', async () => {
+    // Honest pin of current behaviour: logout clears the cookie, but a copied
+    // token stays valid until it expires. Server-side revocation (session ids or
+    // a token version column) is Day 13 hardening work.
+    const { cookie } = await register();
+    await post('/api/auth/logout', {}, { cookie: cookie! });
+
+    const replay = await app.request('/api/auth/me', { headers: { cookie: cookie! } });
+
+    expect(replay.status).toBe(200);
   });
 
   it('is idempotent without a session', async () => {

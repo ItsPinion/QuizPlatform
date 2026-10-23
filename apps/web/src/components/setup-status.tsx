@@ -1,11 +1,21 @@
 'use client';
 
+import type { AuthSession } from '@quiz/shared/auth';
 import type { DatabaseStatus, Health } from '@quiz/shared';
-import { CircleAlert, Clock3, RefreshCw, Wifi } from 'lucide-react';
+import {
+  CircleAlert,
+  Clock3,
+  KeyRound,
+  RefreshCw,
+  ShieldCheck,
+  UserRound,
+  Wifi,
+} from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { client } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -35,6 +45,19 @@ async function loadHealth(): Promise<Health> {
 
 interface ErrorEnvelope {
   error?: { code?: string; message?: string; details?: { hint?: string; reason?: string } };
+}
+
+/**
+ * `null` means "no session" — a 401 is the expected, healthy answer for a
+ * visitor who has not signed in, not a failure of the check.
+ */
+async function loadSession(): Promise<AuthSession | null> {
+  const res = await client.api.auth.me.$get();
+
+  if (res.status === 401 || res.status === 403) return null;
+  if (!res.ok) throw new Error(`Session check failed with status ${res.status}`);
+
+  return (await res.json()) as AuthSession;
 }
 
 async function loadDatabase(): Promise<DatabaseStatus> {
@@ -118,6 +141,7 @@ function Skeleton() {
 export function SetupStatus() {
   const [health, setHealth] = useState<Loadable<Health>>({ state: 'loading' });
   const [database, setDatabase] = useState<Loadable<DatabaseStatus>>({ state: 'loading' });
+  const [session, setSession] = useState<Loadable<AuthSession | null>>({ state: 'loading' });
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -125,8 +149,19 @@ export function SetupStatus() {
     setBusy(true);
     setHealth({ state: 'loading' });
     setDatabase({ state: 'loading' });
+    setSession({ state: 'loading' });
 
-    const [healthResult, databaseResult] = await Promise.allSettled([loadHealth(), loadDatabase()]);
+    const [healthResult, databaseResult, sessionResult] = await Promise.allSettled([
+      loadHealth(),
+      loadDatabase(),
+      loadSession(),
+    ]);
+
+    setSession(
+      sessionResult.status === 'fulfilled'
+        ? { state: 'ready', data: sessionResult.value }
+        : { state: 'error', error: toLoadError(sessionResult.reason) },
+    );
 
     setHealth(
       healthResult.status === 'fulfilled'
@@ -167,7 +202,7 @@ export function SetupStatus() {
         </Button>
       </CardHeader>
 
-      <CardContent className="grid gap-4 lg:grid-cols-2">
+      <CardContent className="grid gap-4 lg:grid-cols-3">
         {/* ------------------------------- API ------------------------------- */}
         <div className="border-border/80 bg-background/40 rounded-lg border p-4">
           <div className="flex items-center justify-between gap-3">
@@ -275,6 +310,75 @@ export function SetupStatus() {
                     </div>
                   ))}
                 </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* ------------------------------ Session ---------------------------- */}
+        <div className="border-border/80 bg-background/40 rounded-lg border p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <StatusDot tone={session.state} />
+              <span className="text-sm font-medium">Session</span>
+            </div>
+            {session.state === 'ready' ? (
+              session.data ? (
+                <Badge variant="success">{session.data.user.role}</Badge>
+              ) : (
+                <Badge variant="outline">Signed out</Badge>
+              )
+            ) : session.state === 'error' ? (
+              <Badge variant="destructive">Failed</Badge>
+            ) : (
+              <Badge variant="outline">Checking…</Badge>
+            )}
+          </div>
+
+          <div className="mt-4 min-h-28">
+            {session.state === 'loading' ? <Skeleton /> : null}
+
+            {session.state === 'error' ? (
+              <ErrorNote message={session.error.message}>
+                Sign-in needs the API and database to be reachable.
+              </ErrorNote>
+            ) : null}
+
+            {session.state === 'ready' && session.data === null ? (
+              <div className="space-y-3">
+                <div className="text-muted-foreground flex items-start gap-2 text-[12.5px]">
+                  <KeyRound className="mt-0.5 size-3.5 shrink-0" />
+                  No cookie on this browser yet. Sign in with a seeded account to see the guarded
+                  response here.
+                </div>
+                <Link
+                  href="/login"
+                  className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-full')}
+                >
+                  Sign in
+                </Link>
+              </div>
+            ) : null}
+
+            {session.state === 'ready' && session.data ? (
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-2 text-[13px]">
+                  {session.data.user.role === 'ADMIN' ? (
+                    <ShieldCheck className="text-warning size-4" />
+                  ) : (
+                    <UserRound className="text-primary size-4" />
+                  )}
+                  <span className="truncate font-medium">{session.data.user.name}</span>
+                </div>
+                <Row label="Email" value={session.data.user.email} />
+                <Row
+                  label="Expires"
+                  value={new Date(session.data.expiresAt).toLocaleDateString(undefined, {
+                    day: '2-digit',
+                    month: 'short',
+                  })}
+                />
+                <Row label="Cookie" value="httpOnly · SameSite=Lax" />
               </div>
             ) : null}
           </div>

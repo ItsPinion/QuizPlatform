@@ -5,12 +5,15 @@ import { Card, CardContent } from '@/components/ui/card';
 const tree = `quizplatform/
 ├─ apps/
 │  ├─ web/            Next.js 16 · App Router · Tailwind v4
-│  │  ├─ src/app/              landing page, layout, globals.css
+│  │  ├─ src/app/              landing, /login, /register, layout
+│  │  ├─ src/components/       session nav, auth forms, status panels
 │  │  ├─ src/components/ui/    shadcn/ui primitives
 │  │  └─ next.config.ts        /api/* → Hono rewrite
 │  └─ api/            Hono 4 · @hono/node-server
 │     ├─ src/app.ts            chained routes → AppType
-│     ├─ src/routes/           health · meta
+│     ├─ src/routes/           auth · health · meta
+│     ├─ src/middleware/       requireAuth · requireRole
+│     ├─ src/lib/auth.ts       JWT signing + session cookies
 │     └─ src/lib/              env, error envelope
 ├─ packages/
 │  ├─ db/             Drizzle ORM · libSQL / Turso
@@ -18,8 +21,9 @@ const tree = `quizplatform/
 │  │  ├─ src/seed.ts           rich demo dataset
 │  │  ├─ src/__tests__/        schema + seed integrity
 │  │  └─ migrations/           drizzle-kit SQL (checked in)
-│  ├─ shared/         Zod enums, API contracts, scrypt hashing
+│  ├─ shared/         Zod enums, auth contracts, scrypt hashing
 │  └─ test-utils/     package-manager-agnostic test helpers
+├─ scripts/           end-to-end smoke run (real HTTP)
 ├─ turbo.json         task graph + cache
 ├─ package.json       Bun workspaces + scripts
 ├─ bun.lock           committed lockfile
@@ -28,8 +32,10 @@ const tree = `quizplatform/
 const highlights = [
   { path: 'turbo.json', note: 'build / dev / test / typecheck pipelines with caching' },
   { path: 'apps/api/src/app.ts', note: 'every route chained so `AppType` is complete' },
+  { path: 'apps/api/src/middleware/auth.ts', note: 'session guard + role guard, typed context' },
   { path: 'apps/web/src/lib/api.ts', note: 'hc<AppType>() — zero codegen RPC' },
   { path: 'packages/db/src/schema.ts', note: 'users → attempts → answers relations' },
+  { path: 'packages/shared/src/auth.ts', note: 'register/login schemas used by both apps' },
   { path: '.env.example', note: 'Turso URL + token template, never committed' },
 ];
 

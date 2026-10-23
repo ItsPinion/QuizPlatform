@@ -133,11 +133,16 @@ export function readSessionToken(c: Context): string | undefined {
   return scheme?.toLowerCase() === 'bearer' && value ? value : undefined;
 }
 
-export function setSessionCookie(c: Context, token: string): void {
+export function setSessionCookie(
+  c: Context,
+  token: string,
+  options: { secure?: boolean } = {},
+): void {
   setCookie(c, SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'Lax',
-    secure: env.NODE_ENV === 'production',
+    // `Secure` in production; overridable so tests can pin both branches.
+    secure: options.secure ?? env.NODE_ENV === 'production',
     path: '/',
     maxAge: SESSION_TTL_SECONDS,
   });

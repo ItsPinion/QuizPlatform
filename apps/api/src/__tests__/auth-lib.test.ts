@@ -108,6 +108,16 @@ describe('session cookies', () => {
     expect(cookie).not.toContain('Secure');
   });
 
+  it('marks the cookie Secure when TLS is in play', async () => {
+    const { cookies } = await run((c) =>
+      setSessionCookie(c, 'header.payload.signature', { secure: true }),
+    );
+    const cookie = cookies.find((value) => value.startsWith(SESSION_COOKIE));
+
+    expect(cookie).toContain('Secure');
+    expect(cookie).toContain('HttpOnly');
+  });
+
   it('clears the cookie on the same path', async () => {
     const { cookies } = await run((c) => clearSessionCookie(c));
     const cookie = cookies.find((value) => value.startsWith(SESSION_COOKIE));

@@ -3,8 +3,9 @@
 Quiz Management & Online Assessment Platform — a Turborepo monorepo with a **Next.js** web app,
 a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 
-> **Status: Day 1 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data
-> and an automated test suite are in place. Authentication (Day 2) is next.
+> **Status: Day 2 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
+> authentication (register / login / logout / `/me`, scrypt hashes, httpOnly JWT cookies) and 154
+> automated tests plus a 12-check end-to-end smoke run are in place. Role-guarded routes are next.
 
 ---
 
@@ -18,7 +19,7 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 | API              | Hono 4 on `@hono/node-server`          | Tiny, fast, and **end-to-end typed RPC** via `AppType`        |
 | Database         | Drizzle ORM + libSQL / Turso           | Typed schema, Drizzle Kit migrations, local + cloud parity    |
 | Validation       | Zod 4 (`@quiz/shared`)                 | One contract reused by API and UI                             |
-| Password hashing | Node `scrypt` (`@quiz/shared/crypto`)  | Ready for Day 2 auth, no native dependencies                  |
+| Password hashing | Node `scrypt` (`@quiz/shared/crypto`)  | Per-user salt, deterministic verification, no native build    |
 | Tests            | Vitest 5                               | Fast, TypeScript-native, no extra config                      |
 
 ---
@@ -156,8 +157,8 @@ bun dev
 | Student | priya@quiz.dev | Password123 |
 | Student | amit@quiz.dev  | Password123 |
 
-Each account is hashed with `scrypt` and its own salt, so Day 2's login route can verify them
-directly.
+Each account is stored as a `scrypt` hash with its own salt and signs in through
+`POST /api/auth/login` — the plaintext above exists only in this documentation and the seed script.
 
 ---
 
@@ -231,6 +232,10 @@ quizplatform/
 │  │  └─ migrations/           drizzle-kit generated SQL (checked in)
 │  ├─ shared/                  Zod enums, auth contracts, scrypt helpers
 │  └─ test-utils/              package-manager-agnostic test runner helper
+├─ docs/
+│  └─ testing.md               test inventory, manual QA, security trade-offs
+├─ scripts/
+│  └─ e2e-smoke.ts             boots the real API and walks the auth flow
 ├─ turbo.json                  task graph + caching
 ├─ package.json                 workspaces + trustedDependencies (Bun)
 └─ .env.example                credential template
@@ -277,8 +282,9 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 | `bun run dev:api`     | root       | API only                                        |
 | `bun run build`       | root       | `next build` + API typecheck                    |
 | `bun run typecheck`   | root       | TypeScript across every package                 |
-| `bun run test`        | root       | Vitest across shared, db and api                |
-| `bun run lint`        | root       | Alias of typecheck (ESLint arrives with Day 2)  |
+| `bun run test`        | root       | Vitest across shared, db, api and web           |
+| `bun run test:e2e`    | root       | Real HTTP smoke run against a throwaway DB      |
+| `bun run lint`        | root       | Alias of typecheck (ESLint is not wired up yet) |
 | `bun run format`      | root       | Prettier write                                  |
 | `bun run db:generate` | `@quiz/db` | Generate SQL migrations from the Drizzle schema |
 | `bun run db:migrate`  | `@quiz/db` | Apply pending migrations with drizzle-kit       |
@@ -294,11 +300,12 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # all workspaces through Turbo
-bun run test --filter=@quiz/db  # one package
+bun run test                    # 154 tests, all workspaces through Turbo
+bun run test --filter=@quiz/api # one package
+bun run test:e2e                # 12 checks against a live server + throwaway DB
 ```
 
-142 tests cover the scaffolding and authentication end to end:
+**154 tests** cover the scaffolding and authentication end to end:
 
 **`@quiz/shared`** (24) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
@@ -315,22 +322,32 @@ integrity (quiz/question/option counts, one correct option each, attempt percent
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
 
-**`@quiz/api`** (60) — service banner, health payload shape, request IDs, security headers, CORS
+**`@quiz/api`** (66) — service banner, health payload shape, request IDs, security headers, CORS
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
 the database is unreachable, `/api/meta` roadmap, and the 404 error envelope.
 
-Authentication adds: registration (hash stored, cookie issued, email normalised, role escalation
-ignored, duplicate → 409, weak password → 422, malformed JSON → 400), login against the seeded
-admin and student plus wrong-password/unknown-email parity, inactive accounts, `/me` with cookie and
-Bearer, tampered/expired/foreign-signed tokens, deleted and deactivated users, logout clearing the
-cookie, and the `requireRole` guard (allow, 403, 401).
+Authentication adds: registration (hash stored, distinct salt per user, cookie issued, email
+normalised, role escalation ignored, duplicate → 409 even when only the casing differs, weak or
+over-long password → 422, malformed/missing JSON → 400), login against the seeded admin and student
+plus wrong-password/unknown-email parity, inactive accounts, `/me` with cookie and Bearer,
+tampered/expired/foreign-signed tokens, deleted and deactivated users, logout clearing the cookie,
+and the `requireRole` guard (allow, 403, 401).
+
+**`@quiz/web`** (6) — the error-envelope narrowing every auth form relies on: API error codes,
+Zod issue extraction, fallbacks for malformed bodies, and network-error mapping.
+
+Beyond Vitest, `bun run test:e2e` boots the real API process against a throwaway database and walks
+the whole auth flow over HTTP (12 checks, including cookie flags and a tampered-cookie replay). See
+[`docs/testing.md`](docs/testing.md) for the full inventory, a manual QA checklist and the known
+security trade-offs.
 
 Session tests sign their own JWTs with the same helpers the API uses, so expiry and forgery paths
 are exercised for real rather than mocked.
 
-Tests never touch the cloud database: each suite creates a throwaway `file:` database in a temp
-directory using the real toolchain (`drizzle-kit migrate` followed by the seed script), so the same
-SQL that ships is what gets verified. The Turso-only rule applies to the running application.
+Tests never touch the cloud database: the API suite builds `.data/test-api.db` (and the smoke run
+`.data/e2e-<pid>.db`) with the real toolchain — `drizzle-kit migrate` followed by the seed script — so
+the same SQL that ships is what gets verified. Both files are gitignored and removed after the run.
+The Turso-only rule applies to the running application, not to tests.
 
 ---
 
@@ -419,7 +436,8 @@ Guards live in `apps/api/src/middleware/auth.ts`: `requireAuth` (session → use
 Day 1 (done): monorepo, API, Drizzle schema, migrations, seed, env config, tests.
 
 Day 2 (done): register, login, logout, `/me`, scrypt hashing, httpOnly JWT cookies, login/register
-pages, session-aware header, `requireAuth` / `requireRole` guards.
+pages, session-aware header, live session card on the landing page, `requireAuth` / `requireRole`
+guards, 154 Vitest tests and a 12-check end-to-end smoke run.
 
 | Day | Milestone                                                         |
 | --- | ----------------------------------------------------------------- |
@@ -493,6 +511,25 @@ credentials; copy `.env.example` to `.env` and fill in the URL and token from th
 **`fetch failed` / `ECONNRESET` when running `bun run db:migrate`** — the machine cannot reach Turso.
 Turso needs HTTPS to `*.turso.io` on port 443, and restricted networks reset those connections. Run
 the migration from a machine with normal internet access.
+
+**Signing in fails with `401 INVALID_CREDENTIALS`** — the password is wrong, or that email has no
+account. Seeded logins are `admin@quiz.dev` / `Admin12345` and `{rahul,priya,amit}@quiz.dev` /
+`Password123`. Registration always creates a `STUDENT`; administrator accounts come from the seed or
+an owner.
+
+**`403 ACCOUNT_INACTIVE`** — the password was correct but the account's `status` is `INACTIVE`.
+Re-enable it (`UPDATE users SET status = 'ACTIVE' WHERE email = …`) or sign in with another account.
+
+**`401 UNAUTHENTICATED` on `/api/auth/me`, the header shows “Sign in”** — no `quiz_session` cookie was
+sent. Check that you sign in through the web origin (port 3000), not the API port directly: the
+cookie is issued on the web origin so the Next.js `/api/*` rewrite keeps it first-party.
+
+**`401 INVALID_SESSION` right after a restart** — the JWT no longer verifies. Changing `JWT_SECRET`
+invalidates every existing session, and an unset secret falls back to the development one (the API
+logs `[auth] JWT_SECRET is not set …`). Set a stable secret, then sign in again.
+
+**`JWT_SECRET must be set to at least 32 characters in production`** — the API refuses to boot in
+production without one. Generate it with `openssl rand -base64 48` and set it in the environment.
 
 **Preview host blocks the request** — `next.config.ts` lists `*.e2b.app` in `allowedDevOrigins`. Add
 your own preview domain there if it differs.

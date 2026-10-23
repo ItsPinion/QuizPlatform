@@ -19,6 +19,9 @@ const weekOne: Day[] = [
   { day: 7, title: 'Student quiz UI', detail: 'Listing, details, navigation, timer' },
 ];
 
+/** Highest day that has landed in the repo — keep in sync with README + /api/meta. */
+const SHIPPED_THROUGH_DAY = 2;
+
 const weekTwo: Day[] = [
   { day: 8, title: 'Submission & scoring', detail: 'Server-side grading, expiry enforcement' },
   { day: 9, title: 'Results', detail: 'Result page, answer review, history' },
@@ -30,7 +33,7 @@ const weekTwo: Day[] = [
 ];
 
 function DayRow({ item }: { item: Day }) {
-  const done = item.day <= 2;
+  const done = item.day <= SHIPPED_THROUGH_DAY;
 
   return (
     <div
@@ -80,7 +83,9 @@ export function Roadmap() {
       <div className="space-y-2.5">
         <div className="flex items-center justify-between px-1">
           <h3 className="text-[13px] font-semibold tracking-tight">Week 1</h3>
-          <span className="text-muted-foreground font-mono text-[10.5px]">1 / 7 shipped</span>
+          <span className="text-muted-foreground font-mono text-[10.5px]">
+            {weekOne.filter((item) => item.day <= SHIPPED_THROUGH_DAY).length} / 7 shipped
+          </span>
         </div>
         {weekOne.map((item) => (
           <DayRow key={item.day} item={item} />
@@ -90,7 +95,9 @@ export function Roadmap() {
       <div className="space-y-2.5">
         <div className="flex items-center justify-between px-1">
           <h3 className="text-[13px] font-semibold tracking-tight">Week 2</h3>
-          <span className="text-muted-foreground font-mono text-[10.5px]">0 / 7 shipped</span>
+          <span className="text-muted-foreground font-mono text-[10.5px]">
+            {weekTwo.filter((item) => item.day <= SHIPPED_THROUGH_DAY).length} / 7 shipped
+          </span>
         </div>
         {weekTwo.map((item) => (
           <DayRow key={item.day} item={item} />

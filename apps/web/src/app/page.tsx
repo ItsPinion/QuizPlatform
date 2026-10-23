@@ -1,6 +1,8 @@
 import {
   ArrowRight,
   ArrowUpRight,
+  Check,
+  Cookie,
   Database,
   GitBranch,
   KeyRound,
@@ -31,6 +33,9 @@ const TERMINAL_LINES: { prompt?: boolean; text: string; tone?: 'muted' | 'accent
   { text: 'api  ▸ http://localhost:3001', tone: 'accent' },
   { text: 'db   ▸ Turso Cloud (libsql)', tone: 'muted' },
   { text: 'rpc  ▸ hc<AppType> · 0 codegen', tone: 'ok' },
+  { text: '' },
+  { prompt: true, text: 'curl -X POST /api/auth/login -c jar.txt' },
+  { text: '200 ▸ role STUDENT · httpOnly JWT · 7d', tone: 'accent' },
 ];
 
 const HIGHLIGHTS = [
@@ -66,7 +71,7 @@ export default function HomePage() {
             <div>
               <Badge className="border-primary/30 bg-primary/10 gap-2 py-1">
                 <span className="bg-primary size-1.5 rounded-full" />
-                Milestone · Day 1 of 14 complete
+                Milestone · Day 2 of 14 complete
               </Badge>
 
               <h1 className="mt-6 text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-[3.4rem]">
@@ -79,24 +84,30 @@ export default function HomePage() {
 
               <p className="text-muted-foreground mt-5 max-w-xl text-[15px] leading-relaxed">
                 Turborepo monorepo with a Next.js 16 web app, a Hono RPC API and a Drizzle schema on
-                Turso. The workspace, the typed API contract and all seven database tables are in
-                place — authentication lands next.
+                Turso. All seven tables are live and authentication is real: scrypt hashes, httpOnly
+                JWT session cookies and guards that read the user back from the database.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-3">
-                <a href="#status" className={cn(buttonVariants({ size: 'lg' }))}>
-                  Check the wiring
+                <a href="/login" className={cn(buttonVariants({ size: 'lg' }))}>
+                  Sign in
                   <ArrowRight />
+                </a>
+                <a
+                  href="#status"
+                  className={cn(buttonVariants({ variant: 'outline', size: 'lg' }))}
+                >
+                  Check the wiring
                 </a>
                 <a
                   href="/api/health"
                   target="_blank"
                   rel="noreferrer"
-                  className={cn(buttonVariants({ variant: 'outline', size: 'lg' }))}
+                  className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 px-1 text-[12.5px] transition-colors"
                 >
-                  <TerminalSquare />
-                  Open API health
-                  <ArrowUpRight />
+                  <TerminalSquare className="size-3.5" />
+                  API health
+                  <ArrowUpRight className="size-3" />
                 </a>
               </div>
 
@@ -240,8 +251,8 @@ export default function HomePage() {
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
             <SectionHeading
               eyebrow="Two-week plan"
-              title="Day 1 is in the books"
-              description="The spec's build schedule, tracked in the repo. Next up: authentication with httpOnly JWT cookies and role guards."
+              title="Two days shipped, twelve to go"
+              description="The spec's build schedule, tracked in the repo. Day 2 delivered registration, login, logout and httpOnly JWT sessions; Day 3 turns the guards into protected admin and student routes."
             />
             <div className="mt-8">
               <Roadmap />
@@ -251,32 +262,39 @@ export default function HomePage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <ShieldCheck className="text-primary size-4" />
-                  What Day 2 will add
+                  Shipped in Day 2
                 </CardTitle>
                 <CardDescription>
-                  The schema and env plumbing are already prepared for it.
+                  Everything below is covered by the test suite and live on this deployment.
                 </CardDescription>
               </CardHeader>
               <CardContent className="text-muted-foreground grid gap-3 text-[12.5px] sm:grid-cols-3">
                 <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground font-medium">Password auth</div>
-                  scrypt hashing helpers ship in
-                  <code className="bg-muted mx-1 rounded px-1 py-0.5 font-mono text-[11px]">
-                    @quiz/shared/crypto
-                  </code>
-                  .
+                  <div className="text-foreground flex items-center gap-1.5 font-medium">
+                    <KeyRound className="text-success size-3.5" />
+                    Password auth
+                  </div>
+                  scrypt with a unique salt per user; unknown emails still run a decoy hash so
+                  timing does not leak who exists.
                 </div>
                 <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground font-medium">Session cookies</div>
-                  httpOnly + SameSite, issued by Hono and validated per request through middleware.
+                  <div className="text-foreground flex items-center gap-1.5 font-medium">
+                    <Cookie className="text-success size-3.5" />
+                    Session cookies
+                  </div>
+                  HS256 JWT in an httpOnly, SameSite=Lax cookie that expires after seven days. The
+                  browser never sees the token.
                 </div>
                 <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground font-medium">Role guards</div>
+                  <div className="text-foreground flex items-center gap-1.5 font-medium">
+                    <Check className="text-success size-3.5" />
+                    Role guards
+                  </div>
                   <code className="bg-muted rounded px-1 py-0.5 font-mono text-[11px]">ADMIN</code>
                   <code className="bg-muted mx-1 rounded px-1 py-0.5 font-mono text-[11px]">
                     STUDENT
                   </code>
-                  middleware with typed context variables.
+                  guards that re-read the user row, so deactivation is immediate.
                 </div>
               </CardContent>
             </Card>
