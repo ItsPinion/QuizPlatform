@@ -1,10 +1,15 @@
-import { ArrowUpRight, Sparkles } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 
 import { SessionNav } from '@/components/session-nav';
-import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+
+/** Landing-page anchors. Prefixed with `/` so they work from inside the app too. */
+const SECTIONS = [
+  { href: '/#platform', label: 'Platform' },
+  { href: '/#tour', label: 'Tour' },
+];
 
 export function SiteHeader() {
   return (
@@ -23,11 +28,27 @@ export function SiteHeader() {
           </span>
         </Link>
 
-        <nav className="flex items-center gap-2">
-          <Badge variant="outline" className="hidden gap-1.5 lg:inline-flex">
-            <Sparkles className="text-primary" />
-            Day 14 · deployed
-          </Badge>
+        <nav className="flex items-center gap-1.5 sm:gap-2">
+          <div className="text-muted-foreground mr-1 hidden items-center gap-1 md:flex">
+            {SECTIONS.map((section) => (
+              <a
+                key={section.href}
+                href={section.href}
+                className="hover:text-foreground rounded-md px-2 py-1 text-[12px] transition-colors"
+              >
+                {section.label}
+              </a>
+            ))}
+            <a
+              href="https://github.com/ItsPinion/QuizPlatform#readme"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-foreground inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] transition-colors"
+            >
+              Docs
+              <ArrowUpRight className="size-3" />
+            </a>
+          </div>
           <a
             href="/api/health"
             target="_blank"

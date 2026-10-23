@@ -1,34 +1,44 @@
-# UI system — the bento surface
+# UI system — the landing page and the bento surface
 
 The landing page was built section by section, each milestone adding its own card
-row. The result was honest but flat: sixteen sections, eight different card
-shapes, no shared interaction language.
+row: by Day 14 it had sixteen sections, eight card shapes, a file tree and a
+day-by-day log. Honest, and completely unfocused — it read like the README with
+worse typography.
 
-This pass introduces one surface — **the bento card** — and applies it across the
-front page: the six-cell product map under the hero, the stack, the two access
-panels, the three "how it is wired" notes and the fourteen shipped-in cells.
+This pass rebuilds it as a product page, and keeps one surface for the product
+itself.
 
 ---
 
-## 1. Why a bento grid
+## 1. The page
 
-The page has to answer two questions in the first screen: _what is this?_ and
-_does it work?_ A bento grid does both at once — each cell is a different fact,
-the grid reads as a product rather than a list, and the size of a cell is
-proportional to how much that fact matters.
+Six blocks, in the order a visitor asks the questions:
 
-| Cell | Width | Content                                                           | Links to      |
-| ---- | ----- | ----------------------------------------------------------------- | ------------- |
-| 1    | 2/4   | The admin console: 4 users, 10 quizzes, 47 questions — SQL counts | `/admin`      |
-| 2    | 1/4   | The clock: 15–30 minutes per quiz, resumed, never re-spent        | `#student`    |
-| 3    | 1/4   | Hardening: 51 attack tests over nine areas                        | `#security`   |
-| 4    | 1/4   | Grading: +3 right, 0 wrong, 0 blank — one pure grader             | `#submission` |
-| 5    | 2/4   | Deployment: `bun run deploy:check` → 8 checks, ready              | `#deployment` |
-| 6    | 1/4   | The stack: Next 16, Hono 4 RPC, Drizzle + Turso, Zod              | `#stack`      |
+| Block    | Answers                       | What is in it                                                                     |
+| -------- | ----------------------------- | --------------------------------------------------------------------------------- |
+| Hero     | What is this, can I see it?   | One promise, two buttons, the attempt screen, a **live** status pill              |
+| Numbers  | Is there anything behind it?  | Four counts, each one a fact: 10 categories, 47 questions, 8 published, 844 tests |
+| Platform | What does it contain?         | The six-cell bento map                                                            |
+| Tour     | What does using it feel like? | Three screens in story order: sit it → read the result → run it                   |
+| Call     | Can I try it?                 | Demo login, printed credentials, links to sign in and register                    |
+| Footer   | Where is the documentation?   | Links to the README and `docs/`, plus the live endpoints                          |
 
-Two wide cells against four narrow ones: enough asymmetry to read as a bento,
-not so much that the page becomes a puzzle. Every cell is a link, so the grid is
-also the page's table of contents.
+Three rules hold the page together:
+
+1. **The page sells, the docs explain.** The schema, the endpoint table, the
+   migration notes and the day-by-day log live in the README and `docs/`. The
+   page links to them; it does not reproduce them.
+2. **Every picture is the product.** The hero and the three tour rows are live
+   markup — the same primitives the app renders — not screenshots and not
+   illustration. They cannot go stale without the build failing.
+3. **One number is unscripted.** The hero pill calls `/api/health/db` through the
+   app's own proxy and prints the target, the quiz and question counts and the
+   round trip. If the API is down it says `degraded` instead of lying.
+
+Sixteen presentation components became eight in `components/landing/`; the rest
+were deleted, because their content was documentation and documentation already
+has a home. `docs/` is still the source of truth for everything the page no longer
+repeats — and the footer says so.
 
 ---
 
@@ -147,6 +157,8 @@ case — the pointer tracking without the theatre.
 
 ## 6. Next
 
+- The hero's live pill is the only client-side call on the page; if a second one
+  appears, they should share one fetch rather than each polling.
 - The admin shell (`/admin`) and the student dashboard are still on the flat card.
   Same primitives, different grid: stat cards become bento cells with a
   spotlight, charts stay static.

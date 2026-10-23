@@ -277,7 +277,8 @@ quizplatform/
 │     ├─ src/components/leaderboard-podium.tsx      the top three
 │     ├─ src/lib/quiz-params.ts   quiz filters, badge tones, lifecycle hints
 │     ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
-│     ├─ src/components/       header, session nav, auth forms, status panels
+│     ├─ src/components/landing/  hero · live status · product shots · tour · CTA
+│     ├─ src/components/       header, footer, session nav, auth forms
 │     ├─ src/components/ui/    shadcn/ui primitives (button, card, badge, input, label, bento)
 │     ├─ src/lib/api.ts        hc<AppType> RPC client
 │     └─ next.config.ts        /api/* rewrite + workspace transpilation
