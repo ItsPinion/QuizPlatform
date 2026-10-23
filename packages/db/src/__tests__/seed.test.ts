@@ -279,4 +279,34 @@ describe('seeded data integrity', () => {
     }
     expect(Number(rows[0]?.average)).toBeGreaterThan(0);
   });
+
+  it('dates the attempts so the day-10 activity chart is not empty', async () => {
+    const rows = await db
+      .select({
+        email: schema.users.email,
+        completedAt: schema.attempts.completedAt,
+      })
+      .from(schema.attempts)
+      .innerJoin(schema.users, eq(schema.users.id, schema.attempts.userId));
+
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    // Every seeded attempt must be in the past (no clock skew in the fixture)…
+    for (const row of rows) {
+      expect(row.completedAt).not.toBeNull();
+      expect(row.completedAt!.getTime()).toBeLessThanOrEqual(now + 60 * 60 * 1000);
+    }
+
+    // …and each student must have at least one graded attempt inside the
+    // dashboard's fourteen-day window, otherwise the activity chart draws flat.
+    const students = new Set(rows.map((row) => row.email));
+    expect(students.size).toBeGreaterThan(0);
+
+    for (const email of students) {
+      const mine = rows.filter((row) => row.email === email);
+      const recent = mine.filter((row) => now - (row.completedAt?.getTime() ?? 0) < 14 * dayMs);
+      expect(recent.length, `${email} has no attempt in the last 14 days`).toBeGreaterThan(0);
+    }
+  });
 });

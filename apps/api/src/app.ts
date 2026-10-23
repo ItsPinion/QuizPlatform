@@ -81,6 +81,7 @@ export const app = new Hono<AppEnv>()
           '/api/admin/questions',
           '/api/student/access',
           '/api/student/quizzes',
+          '/api/student/dashboard',
           '/api/student/attempts',
           '/api/student/attempts/:id',
           '/api/student/attempts/:id/review',

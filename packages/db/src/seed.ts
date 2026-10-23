@@ -251,15 +251,22 @@ async function main() {
     const userId = studentIdByEmail.get(student.email);
     if (!userId) throw new Error(`Missing seeded student ${student.email}`);
 
-    for (const [slug, ratios] of Object.entries(student.plan)) {
+    const planEntries = Object.entries(student.plan);
+
+    for (const [planIndex, [slug, ratios]] of planEntries.entries()) {
       const quizId = quizIds.get(slug);
       const quiz = quizBySlug(slug);
       const questionsForQuiz = questionMap.get(slug);
       if (!quizId || !quiz || !questionsForQuiz) continue;
 
       ratios.forEach((ratio, attemptIndex) => {
-        // Spread attempts across the last 4 weeks; first attempts are older.
-        const daysAgo = 25 - attemptIndex * 6 - Math.floor(random() * 4);
+        // Spread attempts across the last two weeks, a different quiz every few
+        // days and repeat attempts older — so the Day 10 activity chart has a
+        // populated fortnight and the trend line has some movement.
+        const daysAgo = Math.max(
+          1,
+          12 - planIndex * 3 - attemptIndex * 6 - Math.floor(random() * 3),
+        );
         const startedAt = new Date(
           now - daysAgo * 24 * 60 * 60 * 1000 + Math.floor(random() * 6) * 3_600_000,
         );

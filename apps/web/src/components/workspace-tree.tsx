@@ -7,7 +7,7 @@ const tree = `quizplatform/
 │  ├─ web/            Next.js 16 · App Router · Tailwind v4
 │  │  ├─ src/app/              landing, /login, /register, /admin, /student
 │  │  ├─ src/app/admin/        layout · overview · users · quizzes · categories
-│  │  ├─ src/app/student/      overview · quizzes · attempt/[id] · review · results
+│  │  ├─ src/app/student/      dashboard · quizzes · attempt/[id] · review · results
 │  │  ├─ src/lib/session.ts    server-side session lookup (cookie → API)
 │  │  ├─ src/lib/api-server.ts cookie-forwarding RPC client for pages
 │  │  ├─ src/lib/guards.ts     role decision for /admin and /student
@@ -30,6 +30,7 @@ const tree = `quizplatform/
 │     ├─ src/lib/student-quizzes.ts   catalogue, attempt start/resume, answers
 │     ├─ src/lib/submissions.ts       grading, idempotent submit, lazy expiry
 │     ├─ src/lib/reviews.ts           answer review + paged attempt history
+│     ├─ src/lib/student-dashboard.ts aggregates: totals, trend, categories, activity
 │     ├─ src/routes/admin-quizzes.ts  /api/admin/quizzes (mounted under the guard)
 │     ├─ src/lib/auth.ts       JWT signing + session cookies
 │     └─ src/lib/              env, jsonBody validator, error envelope
@@ -103,6 +104,14 @@ const highlights = [
   {
     path: 'apps/api/src/lib/reviews.ts',
     note: 'the key, released only for a finished attempt',
+  },
+  {
+    path: 'packages/shared/src/dashboard.ts',
+    note: 'dashboard contracts + tested chart geometry',
+  },
+  {
+    path: 'apps/api/src/lib/student-dashboard.ts',
+    note: 'five aggregates, one round trip, graded rows only',
   },
   { path: 'apps/web/src/lib/api.ts', note: 'hc<AppType>() — zero codegen RPC' },
   { path: 'packages/db/src/schema.ts', note: 'users → attempts → answers relations' },

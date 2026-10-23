@@ -3,6 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { DatabaseStatus, Health } from '@quiz/shared';
+import { db } from '@quiz/db';
+import { sql } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { app } from '../app';
@@ -64,20 +66,38 @@ describe('GET /api/health', () => {
 });
 
 describe('GET /api/health/db', () => {
-  it('confirms connectivity and reports the seeded row counts', async () => {
+  it('confirms connectivity and reports the live row counts', async () => {
     const { res, body } = await getJson<DatabaseStatus>('/api/health/db');
 
     expect(res.status).toBe(200);
     expect(body.connected).toBe(true);
     expect(body.target).toBe('file');
     expect(body.latencyMs).toBeTypeOf('number');
-    expect(body.counts).toEqual({
-      users: 4,
-      categories: 10,
-      quizzes: 10,
-      questions: 47,
-      attempts: 14,
-    });
+
+    // The probe must read the same rows a direct query sees. Compared against
+    // the database rather than a frozen snapshot: other test files share this
+    // fixture database, so a hard-coded count races with them.
+    const rows = await db
+      .select({
+        users: sql<number>`(select count(*) from users)`.mapWith(Number),
+        categories: sql<number>`(select count(*) from categories)`.mapWith(Number),
+        quizzes: sql<number>`(select count(*) from quizzes)`.mapWith(Number),
+        questions: sql<number>`(select count(*) from questions)`.mapWith(Number),
+        attempts: sql<number>`(select count(*) from attempts)`.mapWith(Number),
+      })
+      .from(sql`(select 1)`);
+
+    const live = rows[0];
+    if (!live) throw new Error('the count query returned no row');
+
+    expect(body.counts).toEqual(live);
+
+    // …and the seeded baseline is really there.
+    expect(live.users).toBeGreaterThanOrEqual(4);
+    expect(live.categories).toBeGreaterThanOrEqual(10);
+    expect(live.quizzes).toBeGreaterThanOrEqual(10);
+    expect(live.questions).toBeGreaterThanOrEqual(47);
+    expect(live.attempts).toBeGreaterThanOrEqual(14);
   });
 
   it('never leaks credentials in the reported URL', async () => {
@@ -132,13 +152,14 @@ describe('GET /api/meta', () => {
         'GET /api/student/attempts/:id',
         'PUT /api/student/attempts/:id/answers/:questionId',
         'POST /api/student/attempts/:id/submit',
+        'GET /api/student/dashboard',
         'GET /api/student/attempts',
         'GET /api/student/attempts/:id/review',
       ]),
     );
 
     const areas = body.roadmap.map((entry) => entry.area);
-    expect(areas).toEqual(expect.arrayContaining(['student dashboard', 'leaderboard']));
+    expect(areas).toEqual(expect.arrayContaining(['admin analytics', 'leaderboard']));
     // Shipped days drop off the roadmap: auth (2), quizzes (5), categories &
     // questions (6), the quiz-taking interface (7) and submission & scoring (8)
     // are all live.
@@ -148,6 +169,7 @@ describe('GET /api/meta', () => {
     expect(areas).not.toContain('attempts');
     expect(areas).not.toContain('submission & scoring');
     expect(areas).not.toContain('results & review');
+    expect(areas).not.toContain('student dashboard');
   });
 });
 

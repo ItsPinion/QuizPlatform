@@ -3,14 +3,16 @@
 Quiz Management & Online Assessment Platform — a Turborepo monorepo with a **Next.js** web app,
 a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 
-> **Status: Day 9 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
+> **Status: Day 10 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
 > authentication (register / login / logout / `/me`, scrypt hashes, httpOnly JWT cookies), role-scoped
 > API namespaces, guarded `/admin` + `/student` areas, an admin console with dashboard statistics,
 > user management, quiz management with a guarded publish/unpublish lifecycle, category CRUD,
 > question authoring, the student quiz interface, server-side submission and scoring — manual or
-> automatic at the deadline, idempotent, with the whole result stored on the attempt — and results:
-> a per-question answer review with the key and the explanations, plus a filterable attempt history.
-> 563 automated tests and a 63-check end-to-end smoke run. The student dashboard is next.
+> automatic at the deadline, idempotent, with the whole result stored on the attempt — results:
+> a per-question answer review with the key and the explanations, plus a filterable attempt history,
+> and a student dashboard: the spec's six statistics, a score trend, per-category averages and a
+> fourteen-day activity chart in one API call. 621 automated tests and a 65-check end-to-end smoke
+> run. Admin analytics is next.
 
 ---
 
@@ -240,10 +242,15 @@ quizplatform/
 │  └─ web/                     Next.js app (port 3000)
 │     ├─ src/app/              landing, /login, /register, /admin, /student
 │     ├─ src/app/admin/        layout · overview · users · quizzes (list/new/[id])
+│     ├─ src/app/student/      dashboard · quizzes · attempt/[id] · results · review
 │     ├─ src/lib/session.ts    server-side session lookup (cookie → API)
 │     ├─ src/lib/api-server.ts cookie-forwarding RPC client for admin pages
 │     ├─ src/lib/guards.ts     role decision used by the protected pages
 │     ├─ src/lib/admin-params.ts  filter ⇄ URL mapping for the user directory
+│     ├─ src/lib/dashboard-params.ts  labels, deltas and bar widths for the dashboard
+│     ├─ src/components/score-trend-chart.tsx  server-rendered SVG trend line
+│     ├─ src/components/activity-chart.tsx     fourteen-day CSS bar chart
+│     ├─ src/components/category-breakdown.tsx per-category averages
 │     ├─ src/lib/quiz-params.ts   quiz filters, badge tones, lifecycle hints
 │     ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
 │     ├─ src/components/       header, session nav, auth forms, status panels
@@ -258,7 +265,7 @@ quizplatform/
 │  │  ├─ src/seed.ts           rich demo dataset
 │  │  ├─ src/__tests__/        schema + seed integrity tests
 │  │  └─ migrations/           drizzle-kit generated SQL (checked in)
-│  ├─ shared/                  Zod enums, auth + admin + quiz + question contracts, scrypt
+│  ├─ shared/                  Zod enums, auth + admin + quiz + question + dashboard contracts, scrypt
 │  └─ test-utils/              package-manager-agnostic test runner helper
 ├─ docs/
 │  ├─ admin-dashboard.md       stats definitions, directory API, console rules
@@ -267,6 +274,7 @@ quizplatform/
 │  ├─ student-quiz-interface.md  catalogue, attempt lifecycle, the taker, timer rules
 │  ├─ submission-and-scoring.md  grading rules, lazy expiry, idempotency, result card
 │  ├─ results-and-review.md      the key release rule, verdicts, history, screens
+│  ├─ student-dashboard.md       statistic definitions, aggregates, chart geometry, screens
 │  ├─ authorization.md         role model, guards, redirect rules, failure modes
 │  └─ testing.md               test inventory, manual QA, security trade-offs
 ├─ scripts/
@@ -338,21 +346,21 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 563 tests, all workspaces through Turbo
+bun run test                    # 621 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
-bun run test:e2e                # 63 checks against a live server + throwaway DB
+bun run test:e2e                # 65 checks against a live server + throwaway DB
 ```
 
-**563 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading and review:
+**621 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review and dashboard statistics:
 
-**`@quiz/shared`** (153) — scrypt record format, unique salts, correct/wrong passwords, unicode
+**`@quiz/shared`** (182) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
 auth contracts (trimming, lowercased emails, stripped unknown keys, the exact password policy,
 session constants), plus the Day 4 admin contracts: query coercion and defaults, the
 `updateUserSchema` refine that rejects an empty body while stripping fields the dashboard must
 never write, the credential-free user row shape, and the stats/list response schemas.
 
-**`@quiz/db`** (60) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
+**`@quiz/db`** (61) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
 and the uniqueness/lookup indexes; column defaults; millisecond timestamp precision; unique email,
 slug and per-attempt answer constraints; quiz → questions/options/attempts/answers cascade;
 category-with-quizzes protected by `restrict`; user deletion cascading while nulling the quiz author;
@@ -362,7 +370,7 @@ integrity (quiz/question/option counts, one correct option each, attempt percent
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
 
-**`@quiz/api`** (224) — service banner, health payload shape, request IDs, security headers, CORS
+**`@quiz/api`** (236) — service banner, health payload shape, request IDs, security headers, CORS
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
 the database is unreachable, `/api/meta` roadmap, and the 404 error envelope.
 
@@ -412,13 +420,26 @@ splitting, earned marks, tallies, filter matching, both wire schemas and their l
 package 16 (review and history parameter parsing with href round-trips, verdict labels and tones,
 marks and selection copy, and the history timestamp formatter).
 
+Day 10 adds 12 API tests: the totals checked against hand-inserted rows, every range and `null` case,
+the trend's chronological order and twelve-point cap, category attempts summing to passed + failed,
+the fourteen-day window ending today, recent rows newest-first and capped at five, a fresh submission
+appearing on the next call, a live attempt moving no average, a timed-out attempt settled with
+`autoSubmitted` before the numbers are read, scoping between two students, 403 for an admin and 401
+for an anonymous caller, and an empty student answering zeroes with `null` averages. The shared
+package adds 29 — average/pass-rate/streak edges, duration formatting, UTC day keys, zero-filled
+activity buckets, chart geometry (single point, flat line, 0–100 clamp) and the dashboard schema
+bounds — and the web package 16 presentation helpers (percent and coverage labels, streak and
+activity captions, trend deltas, bar widths). The db package adds one: every seeded student must own
+at least one attempt inside the dashboard's fourteen-day window, so a fresh seed fills the activity
+chart instead of drawing a flat line.
+
 Day 4 adds 30 API tests: statistics arithmetic that agrees with the database, the pass-rate range,
 the newest-five strips, live reflection of a new account, directory filters (role, status, name and
 email search, empty values, unknown roles), pagination, both sorts, 422s for bad queries, detail
 lookups, 404/422 handling, promotion/demotion, deactivation lockout and restoration, `SELF_LOCKOUT`
 for self-demotion and self-deactivation, and 401/403 on every admin route.
 
-**`@quiz/web`** (126) — the error-envelope narrowing every auth form relies on (API error codes,
+**`@quiz/web`** (142) — the error-envelope narrowing every auth form relies on (API error codes,
 Zod issue extraction, fallbacks for malformed bodies, network-error mapping), the Day 3 page guard
 rules, the Day 4 directory parameters, the Day 5 quiz helpers, the Day 6 question-form helpers, and
 the Day 7–9 student helpers: catalogue filter parsing with `toStudentQuery`/`quizzesHref` round-trips
@@ -430,14 +451,15 @@ href round-trips, verdict labels and tones, marks and selection copy, history ti
 
 Beyond Vitest, `bun run test:e2e` boots the real API process against a throwaway database and walks
 the whole auth flow, the admin console, content authoring, quiz taking, grading and review over HTTP
-(63 checks, including cookie flags, a tampered-cookie replay, both role denials, dashboard aggregates,
+(65 checks, including cookie flags, a tampered-cookie replay, both role denials, dashboard aggregates,
 filtered user listing, a promote/demote round trip, `SELF_LOCKOUT`, a deactivation lockout, quiz
 creation, slug stability across a rename, the publish rules, the delete rules, category
 create/rename/delete, question authoring, reordering, `PUT` with retained option ids, the
 last-question guard, the published-only catalogue, start/resume, a payload with no answer key, an
 answer round-trip, a cross-student 404, submitting and grading over HTTP, an idempotent retry, a
 locked write after grading, the catalogue reflecting the stored score, the released answer key, the
-`409` guarding a live attempt, the history and its filters, and a cross-student review `404`). See
+`409` guarding a live attempt, the history and its filters, a cross-student review `404`, the dashboard statistics over HTTP, and
+the dashboard's 401/403 and cross-student scoping). See
 [`docs/testing.md`](docs/testing.md) for the full inventory, a manual QA checklist and the known
 security trade-offs.
 
@@ -451,7 +473,7 @@ The Turso-only rule applies to the running application, not to tests.
 
 ---
 
-## API surface (Day 9)
+## API surface (Day 10)
 
 | Method | Path                                            | Description                                         |
 | ------ | ----------------------------------------------- | --------------------------------------------------- |
@@ -491,6 +513,7 @@ The Turso-only rule applies to the running application, not to tests.
 | POST   | `/api/student/quizzes/:id/start`                | Start an attempt, or resume the one in flight       |
 | GET    | `/api/student/attempts/:id`                     | Questions, saved answers, remaining time            |
 | PUT    | `/api/student/attempts/:id/answers/:questionId` | Save or clear one answer                            |
+| GET    | `/api/student/dashboard`                        | Statistics, trend, categories, activity, recent     |
 | GET    | `/api/student/attempts`                         | Paged attempt history with scores and counts        |
 | GET    | `/api/student/attempts/:id/review`              | The answer key, only once the attempt is finished   |
 | POST   | `/api/student/attempts/:id/submit`              | Grade the paper — manual or at the deadline         |
@@ -887,6 +910,48 @@ Full detail is in [`docs/results-and-review.md`](docs/results-and-review.md).
 
 ---
 
+## Student dashboard (Day 10)
+
+```
+GET /api/student/dashboard   → totals · streak · trend · categories · activity · recent
+```
+
+Spec §15 asks for six statistics. All of them — and the charts around them — come from **one** request,
+computed in SQL over the caller's attempts, never summed in the browser:
+
+| Figure             | Rule                                                              |
+| ------------------ | ----------------------------------------------------------------- |
+| Quizzes attempted  | `count(distinct quiz_id)` — two sittings of one quiz are one quiz |
+| Passed / failed    | `PASSED` / `FAILED` statuses                                      |
+| Average score      | Mean over **graded** attempts only                                |
+| Highest score      | Max over graded attempts                                          |
+| Questions answered | `correct + incorrect` — a blank was not answered                  |
+| Pass rate          | `passed / (passed + failed)`, `null` before the first submission  |
+
+Everything averaged or rated ignores `IN_PROGRESS` rows: their stored percentage is `0`, and counting
+them would read a live attempt as a failure. The route calls the Day 8 expiry sweep first, so a
+deadline that just passed cannot leave a stale "in progress" behind. `quizzesAvailable` reports how
+many quizzes are published right now, which gives "4 of 8 attempted" a denominator; `bestPercentage`,
+`passRate`, `accuracy` and `averageTimeSeconds` are `null` — not `0` — for a student with no graded
+attempt, and the UI prints `—`.
+
+Six queries run in parallel (totals, quiz quota, the last twelve graded rows, per-category aggregates,
+the fourteen-day `strftime` grouping and Day 9's history query for the recent strip). No migration: the
+data was already there.
+
+On screen, `/student` is now the dashboard — the catalogue moved to `/student/quizzes`:
+
+- eight stat cards with captions (`of 8 published`, `75% pass rate`, `74% answer accuracy`);
+- a **score trend** line over the last twelve graded attempts, y-axis pinned 0–100, a dashed pass-mark
+  rule and a tooltip per point (server-rendered SVG, no chart library);
+- a **fourteen-day activity** chart, zero-filled so quiet days keep their slot;
+- a **category breakdown** where each bar links into the filtered catalogue;
+- recent attempts, a resume banner for a live attempt, and the quizzes still available to take.
+
+Full detail is in [`docs/student-dashboard.md`](docs/student-dashboard.md).
+
+---
+
 ## Environment variables
 
 | Variable             | Required | Default                 | Used by                 |
@@ -937,6 +1002,13 @@ change the time taken; lazy expiry on every student read; the attempt row stores
 `answers.is_correct` is stamped for the review; the attempt screen becomes a result card. 523 Vitest
 tests and a 58-check end-to-end smoke run.
 
+Day 10 (done): the student dashboard. `GET /api/student/dashboard` answers the spec's six statistics
+plus a streak, a twelve-attempt score trend, per-category averages, a fourteen-day activity window and
+the five most recent attempts — all scoped to the caller, settled by the expiry sweep, and defined so
+that a live attempt moves no average. `/student` becomes the dashboard with server-rendered SVG
+charts; the catalogue moves to `/student/quizzes`. 621 Vitest tests and a 65-check end-to-end smoke
+run.
+
 Day 9 (done): results and review. `GET /api/student/attempts/:id/review` releases the key, the
 verdicts and the explanations — only for a finished attempt, `409` while it is live. The three-way
 verdict split keeps blank questions out of the wrong count, and the per-question marks sum to the
@@ -959,8 +1031,8 @@ and a 25-check end-to-end smoke run.
 | 7   | ✅ Student quiz UI — listing, details, navigation, timer          |
 | 8   | ✅ Submission & scoring — server-side grading, expiry enforcement |
 | 9   | ✅ Results & answer review, attempt history                       |
-| 10  | Student dashboard & performance charts — next                     |
-| 11  | Admin analytics                                                   |
+| 10  | ✅ Student dashboard & performance statistics                     |
+| 11  | Admin analytics — next                                            |
 | 12  | Leaderboard                                                       |
 | 13  | Testing & security hardening                                      |
 | 14  | Deployment & docs                                                 |

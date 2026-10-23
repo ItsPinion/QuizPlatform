@@ -8,6 +8,7 @@ import {
   studentQuizListQuerySchema,
   studentQuizListResponseSchema,
 } from '@quiz/shared/attempt';
+import { studentDashboardSchema } from '@quiz/shared/dashboard';
 import {
   attemptHistoryQuerySchema,
   attemptHistoryResponseSchema,
@@ -28,6 +29,7 @@ import {
   startAttempt,
 } from '../lib/student-quizzes';
 import { getAttemptReview, listAttemptHistory } from '../lib/reviews';
+import { buildStudentDashboard } from '../lib/student-dashboard';
 import { submitAttempt } from '../lib/submissions';
 import type { AppEnv } from '../lib/types';
 
@@ -57,6 +59,9 @@ function queryObject(url: string): Record<string, string> {
  * Day 9 adds the read side of a finished attempt: `GET /attempts` (history) and
  * `GET /attempts/:id/review`, the one payload that carries the answer key — and
  * only once the attempt is finished.
+ *
+ * Day 10 adds `GET /dashboard`: the six spec statistics, the trend, the category
+ * breakdown and the activity window in one round trip.
  */
 export const studentQuizRoutes = new Hono<AppEnv>()
   /** Only categories with at least one published quiz — the catalogue filter. */
@@ -87,6 +92,13 @@ export const studentQuizRoutes = new Hono<AppEnv>()
     const id = idSchema.parse(c.req.param('id'));
 
     return c.json(startAttemptResponseSchema.parse(await startAttempt(id, user.id)), 201);
+  })
+
+  /** Everything the student dashboard renders, in one round trip. */
+  .get('/dashboard', async (c) => {
+    const user = c.get('user');
+
+    return c.json(studentDashboardSchema.parse(await buildStudentDashboard(user.id)), 200);
   })
 
   /** Attempt history — every attempt this student has ever started. */

@@ -3,8 +3,8 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test       # 563 unit + integration tests across the four workspaces
-bun run test:e2e   # 63 checks against a real HTTP server (own process, own port)
+bun run test       # 621 unit + integration tests across the four workspaces
+bun run test:e2e   # 65 checks against a real HTTP server (own process, own port)
 ```
 
 Neither touches Turso. Every suite builds a throwaway `file:` database in `.data/` with the project's
@@ -16,12 +16,12 @@ tests.
 
 ## What runs where
 
-| Workspace      | Tests | Focus                                                                                    |
-| -------------- | ----- | ---------------------------------------------------------------------------------------- |
-| `@quiz/shared` | 153   | auth + content contracts, attempt clocks, the grader, review and history schemas         |
-| `@quiz/db`     | 60    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring |
-| `@quiz/api`    | 224   | health/readiness, auth, guards, content, taking, grading and reviewing attempts          |
-| `@quiz/web`    | 126   | error envelopes, page guards, directory/quiz/student/review parameter helpers            |
+| Workspace      | Tests | Focus                                                                                      |
+| -------------- | ----- | ------------------------------------------------------------------------------------------ |
+| `@quiz/shared` | 182   | auth + content contracts, attempt clocks, the grader, review/history and dashboard helpers |
+| `@quiz/db`     | 61    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring   |
+| `@quiz/api`    | 236   | health/readiness, auth, guards, content, taking, grading, reviewing, dashboard stats       |
+| `@quiz/web`    | 142   | error envelopes, page guards, directory/quiz/student/review/dashboard helpers              |
 
 Run one workspace at a time when you are iterating:
 
@@ -220,6 +220,32 @@ bun run test --filter=@quiz/web
   emit a value the parser would drop, verdict labels and badge tones, question numbering and marks
   copy, the "what you picked" sentence, filter options with counts, and the timestamp formatter.
 
+### Student dashboard coverage (Day 10)
+
+- **The six statistics** (`@quiz/api`) — totals are compared against hand-inserted graded and
+  in-progress rows, so `attempts`, `passed`, `failed`, `inProgress`, `averagePercentage`,
+  `bestPercentage`, `questionsAnswered` and `quizzesAttempted` are checked as arithmetic rather than
+  "looks plausible".
+- **Ranges and nulls** — every percentage lands in 0–100, `passRate` agrees with `passed/(passed+failed)`,
+  and a student with no attempts gets zeroes for counts with `null` averages (never `0%`).
+- **The charts' data** — the trend is chronological, capped at twelve, and agrees with the stored
+  scores; the activity window is exactly fourteen buckets ending today, zero-filled; category attempts
+  sum to `passed + failed` and the rows are alphabetical.
+- **Recent attempts** — newest first, at most five, and a submission made inside the test appears on
+  the very next call.
+- **Live attempts move nothing** — an `IN_PROGRESS` row is counted in `attempts` but excluded from
+  every average, rate and accuracy, and a timed-out attempt is settled (with `autoSubmitted`) before
+  the numbers are read.
+- **Access** — scoping between two seeded students, `403` for an admin, `401` anonymously.
+- **The helpers** (`@quiz/shared`) — `averageOf`, `passRateOf`, `streakOf` edges (empty list, a
+  break in the streak, best run), duration formatting, UTC day keys, `activityBuckets` zero-filling,
+  `scoreChartPoints/Path/Area` (single point, flat line, clamping at 0–100) and the schema bounds.
+- **Presentation** (`@quiz/web`) — percent and coverage labels, `—` for a missing value, streak and
+  activity captions, trend deltas and their wording, and bar widths for empty and single-category
+  payloads.
+- **Health probe** — `/api/health/db` now compares its counts against a direct query rather than a
+  frozen snapshot, because the fixture database is shared by parallel test files.
+
 ---
 
 ## End-to-end smoke run
@@ -295,8 +321,13 @@ then asserts:
     lifetime totals
 60. filtering the history by `status=PASSED` → 200 with only passed rows
 61. another student reading that review → 404 `ATTEMPT_NOT_FOUND`
-62. logout → 200 with `Max-Age=0`
-63. unknown route → 404 `NOT_FOUND`
+62. `GET /api/student/dashboard` → 200, the six statistics with their invariants (counts add up, every
+    range holds, the trend is chronological, fourteen activity buckets, the graded attempt in
+    `recent`)
+63. the dashboard is scoped and guarded → 401 anonymously, 403 for the admin, no overlap between two
+    students' recent attempts
+64. logout → 200 with `Max-Age=0`
+65. unknown route → 404 `NOT_FOUND`
 
 It prints a pass/fail table, exits non-zero on failure, and removes the database afterwards.
 
@@ -406,6 +437,18 @@ QUIZ_WOULD_HAVE_NO_QUESTIONS`; unpublish and the delete goes through.
 - [ ] Sort by **Best score** → the percentages descend; a running attempt links to **Resume**, a
       finished one to **Review** and **Score**.
 - [ ] Page through the history → the ends disable, and the page number is in the URL.
+- [ ] `/student` now opens the dashboard: eight stat cards, and every caption has a denominator
+      (`of 8 published`, `75% pass rate`). Compare the numbers with `/api/student/dashboard`.
+- [ ] With no attempts at all (a fresh account), the averages read `—`, not `0%`, and the charts
+      show their empty state instead of a flat failing line.
+- [ ] Submit a quiz, go back to `/student` → the new attempt appears under **Recent attempts** and
+      the trend, category bars and today's activity bar all move.
+- [ ] Leave an attempt running and open `/student` → the resume banner is at the top, the counts show
+      one in progress, and none of the averages include it.
+- [ ] Click a category bar → it opens `/student/quizzes?categoryId=…` with only that category's
+      quizzes; the filter survives a reload.
+- [ ] Past a quiz's deadline, reload `/student` → the row is no longer "in progress" (the expiry
+      sweep settled it) and the averages include it.
 
 ---
 

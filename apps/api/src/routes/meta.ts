@@ -47,6 +47,7 @@ export const metaRoutes = new Hono().get('/', (c) =>
         'GET /api/student/quizzes': 'Published quiz catalogue with the caller’s attempt state',
         'GET /api/student/quizzes/:id': 'One published quiz + whether it can be started',
         'POST /api/student/quizzes/:id/start': 'Start an attempt, or resume the one in flight',
+        'GET /api/student/dashboard': 'Statistics, trend, category breakdown and activity',
         'GET /api/student/attempts': 'Paged attempt history with scores and counts',
         'GET /api/student/attempts/:id': 'Questions and saved answers, with no answer key',
         'GET /api/student/attempts/:id/review': 'The answer key, only once the attempt is finished',
@@ -55,8 +56,7 @@ export const metaRoutes = new Hono().get('/', (c) =>
         'GET /api/meta': 'This document',
       },
       roadmap: [
-        { day: 10, area: 'student dashboard', endpoints: ['stats', 'performance charts'] },
-        { day: 11, area: 'analytics', endpoints: ['GET /api/admin/analytics'] },
+        { day: 11, area: 'admin analytics', endpoints: ['GET /api/admin/analytics'] },
         { day: 12, area: 'leaderboard', endpoints: ['GET /api/leaderboard'] },
       ],
     },

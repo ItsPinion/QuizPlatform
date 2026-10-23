@@ -12,7 +12,8 @@
     "./question": "./src/question.ts",
     "./attempt": "./src/attempt.ts",
     "./submission": "./src/submission.ts",
-    "./review": "./src/review.ts"
+    "./review": "./src/review.ts",
+    "./dashboard": "./src/dashboard.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -1563,6 +1563,121 @@ try {
     return '404 · ATTEMPT_NOT_FOUND';
   });
 
+  /* ------------------------------- Day 10 -------------------------------- */
+
+  await check('GET /api/student/dashboard returns the six statistics', async () => {
+    const res = await fetch(`${baseUrl}/api/student/dashboard`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as {
+      totals: {
+        attempts: number;
+        quizzesAttempted: number;
+        quizzesAvailable: number;
+        passed: number;
+        failed: number;
+        inProgress: number;
+        averagePercentage: number | null;
+        bestPercentage: number | null;
+        passRate: number | null;
+        questionsAnswered: number;
+      };
+      trend: { percentage: number; completedAt: string }[];
+      categories: { attempts: number; passed: number; failed: number }[];
+      activity: { date: string; attempts: number }[];
+      recent: { id: string }[];
+      streak: { current: number; best: number };
+    };
+
+    const { totals } = body;
+
+    if (totals.attempts < 1) throw new Error('the e2e student has an attempt by now');
+    if (totals.passed + totals.failed + totals.inProgress !== totals.attempts) {
+      throw new Error('the status counts do not add up to the attempts');
+    }
+    if (totals.quizzesAttempted > totals.quizzesAvailable) {
+      throw new Error('attempted more quizzes than are published');
+    }
+    if (
+      totals.averagePercentage == null ||
+      totals.averagePercentage < 0 ||
+      totals.averagePercentage > 100
+    ) {
+      throw new Error(`average out of range: ${totals.averagePercentage}`);
+    }
+    if (totals.bestPercentage == null || totals.bestPercentage < totals.averagePercentage) {
+      throw new Error('the best score should be at least the average');
+    }
+    if (totals.passRate != null && (totals.passRate < 0 || totals.passRate > 100)) {
+      throw new Error(`pass rate out of range: ${totals.passRate}`);
+    }
+    if (body.streak.best < body.streak.current) throw new Error('streak ordering is wrong');
+
+    if (body.trend.length === 0) throw new Error('expected a trend point from the graded attempt');
+
+    const dates = body.trend.map((point) => Date.parse(point.completedAt));
+    if (JSON.stringify([...dates].sort((a, b) => a - b)) !== JSON.stringify(dates)) {
+      throw new Error('the trend must be chronological');
+    }
+
+    if (body.activity.length !== 14) throw new Error('expected a fourteen-day window');
+    if (body.activity.some((day) => day.attempts < 0)) throw new Error('negative activity');
+
+    const categoryAttempts = body.categories.reduce((sum, category) => sum + category.attempts, 0);
+    if (categoryAttempts !== totals.passed + totals.failed) {
+      throw new Error('category attempts do not add up to the graded attempts');
+    }
+
+    if (body.recent.length === 0) throw new Error('expected recent attempts');
+    if (!body.recent.some((attempt) => attempt.id === attemptId)) {
+      throw new Error('the graded attempt is missing from recent');
+    }
+
+    return `200 · ${totals.attempts} attempts · avg ${totals.averagePercentage}% · ${body.trend.length} trend points`;
+  });
+
+  await check('the dashboard is scoped to the student and rejects an admin', async () => {
+    const unknown = await fetch(`${baseUrl}/api/student/dashboard`);
+    expectStatus(unknown, 401);
+
+    const admin = await fetch(`${baseUrl}/api/student/dashboard`, {
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(admin, 403);
+
+    const mine = (await (
+      await fetch(`${baseUrl}/api/student/dashboard`, { headers: { cookie: studentCookie } })
+    ).json()) as { recent: { id: string }[] };
+
+    // Priya is a different seeded student; the e2e account must not see her rows.
+    const login = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'priya@quiz.dev', password: 'Password123' }),
+    });
+    expectStatus(login, 200);
+
+    const priyaCookie = login.headers
+      .getSetCookie()
+      .find((value) => value.startsWith('quiz_session='))
+      ?.split(';')[0];
+
+    if (!priyaCookie) throw new Error('login did not issue a cookie');
+
+    const hers = (await (
+      await fetch(`${baseUrl}/api/student/dashboard`, { headers: { cookie: priyaCookie } })
+    ).json()) as { recent: { id: string }[]; totals: { attempts: number } };
+
+    const mineIds = new Set(mine.recent.map((attempt) => attempt.id));
+    if (hers.recent.some((attempt) => mineIds.has(attempt.id))) {
+      throw new Error('dashboards overlap between students');
+    }
+
+    return `200 · ${mineIds.size} recent · 403 for admin`;
+  });
+
   await check('POST /api/auth/logout clears the cookie', async () => {
     const res = await fetch(`${baseUrl}/api/auth/logout`, {
       method: 'POST',

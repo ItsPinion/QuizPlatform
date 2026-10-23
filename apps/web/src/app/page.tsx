@@ -23,6 +23,7 @@ import { QuizManagement } from '@/components/quiz-management';
 import { Roadmap } from '@/components/roadmap';
 import { SectionHeading } from '@/components/section-heading';
 import { AnswerReviewPreview } from '@/components/answer-review-preview';
+import { StudentDashboardPreview } from '@/components/student-dashboard-preview';
 import { StudentQuizInterface } from '@/components/student-quiz-interface';
 import { SubmissionScoring } from '@/components/submission-scoring';
 import { SetupStatus } from '@/components/setup-status';
@@ -95,7 +96,7 @@ export default function HomePage() {
             <div>
               <Badge className="border-primary/30 bg-primary/10 gap-2 py-1">
                 <span className="bg-primary size-1.5 rounded-full" />
-                Milestone · Day 9 of 14 complete
+                Milestone · Day 10 of 14 complete
               </Badge>
 
               <h1 className="mt-6 text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-[3.4rem]">
@@ -111,9 +112,9 @@ export default function HomePage() {
                 Turso. Sign-in is real — scrypt hashes, httpOnly JWT cookies — the admin and student
                 areas are separated by role guards on both sides, the admin console reports live
                 statistics, quizzes can be created, edited, published and retired — and students can
-                take them: a server-timed attempt, a server-graded submission, and now a result you
-                can actually learn from — every answer reviewed against the key, with explanations
-                and a full attempt history.
+                take them: a server-timed attempt, a server-graded submission, a result you can
+                learn from, and now a dashboard that turns those rows into averages, a score trend,
+                category strengths and a fortnight of activity.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -358,6 +359,20 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* ----------------------------- dashboard ---------------------------- */}
+        <section id="dashboard" className="border-border/60 bg-card/20 w-full border-y">
+          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
+            <SectionHeading
+              eyebrow="Day 10 · student dashboard"
+              title="The numbers behind the scores"
+              description="Quizzes attempted, passed, failed, average, highest and questions answered — plus a score trend, a fourteen-day activity chart and a category breakdown. Every figure is an aggregate the API computes from graded attempts, never a number the browser adds up."
+            />
+            <div className="mt-8">
+              <StudentDashboardPreview />
+            </div>
+          </div>
+        </section>
+
         {/* ----------------------------- workspace ---------------------------- */}
         <section id="workspace" className="border-border/60 bg-card/20 w-full border-y">
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
@@ -377,8 +392,8 @@ export default function HomePage() {
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
             <SectionHeading
               eyebrow="Two-week plan"
-              title="Nine days shipped, five to go"
-              description="The spec's build schedule, tracked in the repo. Day 9 turns a score into feedback: a per-question review with the key and the explanations, plus a filterable history of every attempt."
+              title="Ten days shipped, four to go"
+              description="The spec's build schedule, tracked in the repo. Day 10 adds the student dashboard: the spec's six statistics, a score trend, a category breakdown and an activity chart — all aggregated by the API."
             />
             <div className="mt-8">
               <Roadmap />
@@ -388,7 +403,7 @@ export default function HomePage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <LayoutDashboard className="text-primary size-4" />
-                  Shipped in Days 2–9
+                  Shipped in Days 2–10
                 </CardTitle>
                 <CardDescription>
                   Everything below is covered by the test suite and live on this deployment.
@@ -472,6 +487,14 @@ export default function HomePage() {
                   </div>
                   The answer key and explanations, unlocked only after submission, plus an attempt
                   history you can filter by status and sort by score.
+                </div>
+                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
+                  <div className="text-foreground flex items-center gap-1.5 font-medium">
+                    <Gauge className="text-success size-3.5" />
+                    Student dashboard
+                  </div>
+                  The spec&apos;s six statistics in one round trip, with a score trend, per-category
+                  averages and a fortnight of activity.
                 </div>
               </CardContent>
             </Card>
