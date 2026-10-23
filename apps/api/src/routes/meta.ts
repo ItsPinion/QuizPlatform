@@ -11,23 +11,17 @@ export const metaRoutes = new Hono().get('/', (c) =>
     {
       name: 'Quiz Platform API',
       version: APP_VERSION,
-      status: 'scaffolded',
+      status: 'in progress',
       docs: {
         'GET /api/health': 'Liveness probe',
         'GET /api/health/db': 'Database readiness probe with row counts',
+        'GET /api/auth/me': 'Current session user (requires the session cookie)',
+        'POST /api/auth/register': 'Create a STUDENT account and sign in',
+        'POST /api/auth/login': 'Exchange email + password for a session cookie',
+        'POST /api/auth/logout': 'Clear the session cookie',
         'GET /api/meta': 'This document',
       },
       roadmap: [
-        {
-          day: 2,
-          area: 'auth',
-          endpoints: [
-            'POST /api/auth/register',
-            'POST /api/auth/login',
-            'POST /api/auth/logout',
-            'GET /api/auth/me',
-          ],
-        },
         { day: 3, area: 'authorization', endpoints: ['role-based middleware for ADMIN / STUDENT'] },
         { day: 5, area: 'quizzes', endpoints: ['CRUD + publish/unpublish'] },
         { day: 6, area: 'questions', endpoints: ['CRUD + options'] },

@@ -20,6 +20,15 @@ export function errorBody(code: string, message: string, details?: unknown) {
   return { error: { code, message, ...(details === undefined ? {} : { details }) } };
 }
 
+/** Parse a JSON body, turning a malformed payload into a 400 instead of a 500. */
+export async function readJsonBody(c: Context): Promise<unknown> {
+  try {
+    return await c.req.json();
+  } catch {
+    throw new ApiError(400, 'INVALID_JSON', 'The request body must be valid JSON.');
+  }
+}
+
 export function notFoundHandler(c: Context) {
   return c.json(errorBody('NOT_FOUND', `No route matches ${c.req.method} ${c.req.path}`), 404);
 }

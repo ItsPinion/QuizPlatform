@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server';
 import { getDatabaseConfig } from '@quiz/db';
 
 import { app } from './app';
+import { resolveJwtSecret } from './lib/auth';
 import { env } from './lib/env';
 
 /**
@@ -20,6 +21,18 @@ try {
   console.warn('  ⚠ Turso Cloud credentials are missing.');
   console.warn(error instanceof Error ? error.message.split('\n')[0] : error);
   console.warn('  Copy .env.example to .env and fill in your Turso URL and token.');
+}
+
+/**
+ * Fail fast in production when sessions cannot be signed securely. Locally this
+ * just returns the development secret (and warns), so `bun dev` stays one step.
+ */
+try {
+  resolveJwtSecret();
+} catch (error) {
+  console.error('✖ Authentication is misconfigured:');
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
 }
 
 serve({ fetch: app.fetch, port: env.API_PORT, hostname: '0.0.0.0' }, (info) => {

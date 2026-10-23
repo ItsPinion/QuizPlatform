@@ -208,14 +208,17 @@ quizplatform/
 ├─ apps/
 │  ├─ api/                     Hono API (port 3001)
 │  │  ├─ src/app.ts            chained routes → exported AppType
+│  │  ├─ src/routes/auth.ts    register / login / logout / me
 │  │  ├─ src/routes/health.ts  liveness + database readiness (Drizzle $count)
 │  │  ├─ src/routes/meta.ts    API index / roadmap
+│  │  ├─ src/middleware/       requireAuth + requireRole guards
+│  │  ├─ src/lib/auth.ts       JWT signing, session cookie, claim mapping
 │  │  ├─ src/__tests__/        Vitest suite + test-database setup
 │  │  └─ src/lib/              env parsing, error envelope
 │  └─ web/                     Next.js app (port 3000)
-│     ├─ src/app/              layout, landing page, globals.css
-│     ├─ src/components/ui/    shadcn/ui primitives (button, card, badge)
-│     ├─ src/components/       layout sections + live status panel
+│     ├─ src/app/              layout, landing page, /login, /register
+│     ├─ src/components/       header, session nav, auth forms, status panels
+│     ├─ src/components/ui/    shadcn/ui primitives (button, card, badge, input, label)
 │     ├─ src/lib/api.ts        hc<AppType> RPC client
 │     └─ next.config.ts        /api/* rewrite + workspace transpilation
 ├─ packages/
@@ -226,7 +229,7 @@ quizplatform/
 │  │  ├─ src/seed.ts           rich demo dataset
 │  │  ├─ src/__tests__/        schema + seed integrity tests
 │  │  └─ migrations/           drizzle-kit generated SQL (checked in)
-│  ├─ shared/                  Zod enums, contracts, scrypt helpers
+│  ├─ shared/                  Zod enums, auth contracts, scrypt helpers
 │  └─ test-utils/              package-manager-agnostic test runner helper
 ├─ turbo.json                  task graph + caching
 ├─ package.json                 workspaces + trustedDependencies (Bun)
@@ -295,10 +298,12 @@ bun run test                    # all workspaces through Turbo
 bun run test --filter=@quiz/db  # one package
 ```
 
-88 tests cover the scaffolding end to end:
+142 tests cover the scaffolding and authentication end to end:
 
-**`@quiz/shared`** (8) — scrypt record format, unique salts, correct/wrong passwords, unicode
-normalisation, fail-closed behaviour on corrupt hashes, and the seed credential contract.
+**`@quiz/shared`** (24) — scrypt record format, unique salts, correct/wrong passwords, unicode
+normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
+auth contracts (trimming, lowercased emails, stripped unknown keys, the exact password policy,
+session constants).
 
 **`@quiz/db`** (58) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
 and the uniqueness/lookup indexes; column defaults; millisecond timestamp precision; unique email,
@@ -310,9 +315,18 @@ integrity (quiz/question/option counts, one correct option each, attempt percent
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
 
-**`@quiz/api`** (22) — service banner, health payload shape, request IDs, security headers, CORS
+**`@quiz/api`** (60) — service banner, health payload shape, request IDs, security headers, CORS
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
 the database is unreachable, `/api/meta` roadmap, and the 404 error envelope.
+
+Authentication adds: registration (hash stored, cookie issued, email normalised, role escalation
+ignored, duplicate → 409, weak password → 422, malformed JSON → 400), login against the seeded
+admin and student plus wrong-password/unknown-email parity, inactive accounts, `/me` with cookie and
+Bearer, tampered/expired/foreign-signed tokens, deleted and deactivated users, logout clearing the
+cookie, and the `requireRole` guard (allow, 403, 401).
+
+Session tests sign their own JWTs with the same helpers the API uses, so expiry and forgery paths
+are exercised for real rather than mocked.
 
 Tests never touch the cloud database: each suite creates a throwaway `file:` database in a temp
 directory using the real toolchain (`drizzle-kit migrate` followed by the seed script), so the same
@@ -320,14 +334,18 @@ SQL that ships is what gets verified. The Turso-only rule applies to the running
 
 ---
 
-## API surface (Day 1)
+## API surface (Day 2)
 
-| Method | Path             | Description                                       |
-| ------ | ---------------- | ------------------------------------------------- |
-| GET    | `/api`           | Service banner                                    |
-| GET    | `/api/health`    | Liveness: version, runtime, uptime                |
-| GET    | `/api/health/db` | Readiness: target, latency, live row counts       |
-| GET    | `/api/meta`      | API index + the spec's remaining endpoint roadmap |
+| Method | Path                 | Description                                        |
+| ------ | -------------------- | -------------------------------------------------- |
+| GET    | `/api`               | Service banner                                     |
+| GET    | `/api/health`        | Liveness: version, runtime, uptime                 |
+| GET    | `/api/health/db`     | Readiness: target, latency, live row counts        |
+| GET    | `/api/meta`          | API index + the spec's remaining endpoint roadmap  |
+| POST   | `/api/auth/register` | Create a STUDENT account, sign in, set the cookie  |
+| POST   | `/api/auth/login`    | Exchange email + password for a session cookie     |
+| POST   | `/api/auth/logout`   | Clear the session cookie (idempotent)              |
+| GET    | `/api/auth/me`       | Current user + session expiry (requires a session) |
 
 Responses use a consistent error envelope:
 
@@ -340,17 +358,59 @@ pretty-printed JSON outside production, and a Zod-backed env schema that fails f
 
 ---
 
+## Authentication (Day 2)
+
+The API issues a **signed JWT in an httpOnly cookie** — no token ever touches JavaScript, and no
+session table has to be read on every request.
+
+| Concern          | Choice                                                                                   |
+| ---------------- | ---------------------------------------------------------------------------------------- |
+| Password storage | scrypt (`N=16384, r=8, p=1`, 64-byte key, random 16-byte salt)                           |
+| Token            | HS256 JWT: `sub`, `email`, `role`, `iat`, `exp`                                          |
+| Transport        | `quiz_session` cookie — `HttpOnly`, `SameSite=Lax`, `Secure` in production, 7-day expiry |
+| Also accepted    | `Authorization: Bearer <jwt>` (curl, tests, future native clients)                       |
+| Signing key      | `JWT_SECRET`; production refuses to boot without it                                      |
+
+**Flow.** `POST /api/auth/register` hashes the password, forces `role = STUDENT` (a `role` field in
+the payload is ignored, never trusted), inserts the user and returns `201` with the cookie already
+set. `POST /api/auth/login` verifies the hash, refuses `INACTIVE` accounts with `403`, and sets the
+cookie. `GET /api/auth/me` re-reads the user row behind the token, so a deleted or deactivated
+account loses access immediately instead of when its token expires. `POST /api/auth/logout` clears
+the cookie on the same path.
+
+**Error codes.**
+
+| Status | Code                  | Meaning                                              |
+| ------ | --------------------- | ---------------------------------------------------- |
+| 400    | `INVALID_JSON`        | Body is not valid JSON                               |
+| 401    | `UNAUTHENTICATED`     | No cookie / Bearer token on a protected route        |
+| 401    | `INVALID_SESSION`     | Signature bad, expired, or the user is gone          |
+| 401    | `INVALID_CREDENTIALS` | Wrong email **or** password — deliberately identical |
+| 403    | `ACCOUNT_INACTIVE`    | Correct password, but the account is disabled        |
+| 409    | `EMAIL_TAKEN`         | Email already registered                             |
+| 422    | `VALIDATION_ERROR`    | Zod issues in `details`                              |
+
+Unknown emails still run a decoy scrypt verification, so login timing does not reveal which
+addresses exist. In the browser, `/login` and `/register` post through the Next.js `/api/*` rewrite,
+keeping the cookie first-party; the header swaps to the signed-in user, their role and a sign-out
+button.
+
+Guards live in `apps/api/src/middleware/auth.ts`: `requireAuth` (session → user row) and
+`requireRole('ADMIN')`, which Day 3's protected routes compose rather than re-implementing checks.
+
+---
+
 ## Environment variables
 
-| Variable             | Required | Default                 | Used by                   |
-| -------------------- | -------- | ----------------------- | ------------------------- |
-| `TURSO_DATABASE_URL` | yes      | —                       | db, api, drizzle-kit      |
-| `TURSO_AUTH_TOKEN`   | yes      | —                       | db, api, drizzle-kit      |
-| `DATABASE_URL`       | no       | —                       | alias for the URL above   |
-| `API_PORT`           | no       | `3001`                  | api                       |
-| `API_INTERNAL_URL`   | no       | `http://localhost:3001` | web rewrite target        |
-| `WEB_ORIGIN`         | no       | `http://localhost:3000` | API CORS origin           |
-| `JWT_SECRET`         | Day 2    | —                       | reserved for auth cookies |
+| Variable             | Required | Default                 | Used by                 |
+| -------------------- | -------- | ----------------------- | ----------------------- |
+| `TURSO_DATABASE_URL` | yes      | —                       | db, api, drizzle-kit    |
+| `TURSO_AUTH_TOKEN`   | yes      | —                       | db, api, drizzle-kit    |
+| `DATABASE_URL`       | no       | —                       | alias for the URL above |
+| `API_PORT`           | no       | `3001`                  | api                     |
+| `API_INTERNAL_URL`   | no       | `http://localhost:3001` | web rewrite target      |
+| `WEB_ORIGIN`         | no       | `http://localhost:3000` | API CORS origin         |
+| `JWT_SECRET`         | in prod  | dev fallback + warning  | session JWT signing     |
 
 ---
 
@@ -358,21 +418,24 @@ pretty-printed JSON outside production, and a Zod-backed env schema that fails f
 
 Day 1 (done): monorepo, API, Drizzle schema, migrations, seed, env config, tests.
 
-| Day | Milestone                                                      |
-| --- | -------------------------------------------------------------- |
-| 2   | Authentication — register, login, logout, hashing, JWT cookies |
-| 3   | Role-based authorization — admin/student guards                |
-| 4   | Admin dashboard — stats, user management                       |
-| 5   | Quiz management — CRUD + publish/unpublish                     |
-| 6   | Categories & questions — CRUD, options, correct answers        |
-| 7   | Student quiz UI — listing, details, navigation, timer          |
-| 8   | Submission & scoring — server-side grading, expiry enforcement |
-| 9   | Results & answer review, attempt history                       |
-| 10  | Student dashboard & performance charts                         |
-| 11  | Admin analytics                                                |
-| 12  | Leaderboard                                                    |
-| 13  | Testing & security hardening                                   |
-| 14  | Deployment & docs                                              |
+Day 2 (done): register, login, logout, `/me`, scrypt hashing, httpOnly JWT cookies, login/register
+pages, session-aware header, `requireAuth` / `requireRole` guards.
+
+| Day | Milestone                                                         |
+| --- | ----------------------------------------------------------------- |
+| 2   | ✅ Authentication — register, login, logout, hashing, JWT cookies |
+| 3   | Role-based authorization — admin/student guards                   |
+| 4   | Admin dashboard — stats, user management                          |
+| 5   | Quiz management — CRUD + publish/unpublish                        |
+| 6   | Categories & questions — CRUD, options, correct answers           |
+| 7   | Student quiz UI — listing, details, navigation, timer             |
+| 8   | Submission & scoring — server-side grading, expiry enforcement    |
+| 9   | Results & answer review, attempt history                          |
+| 10  | Student dashboard & performance charts                            |
+| 11  | Admin analytics                                                   |
+| 12  | Leaderboard                                                       |
+| 13  | Testing & security hardening                                      |
+| 14  | Deployment & docs                                                 |
 
 ---
 

@@ -1,6 +1,7 @@
 import { ArrowUpRight, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
+import { SessionNav } from '@/components/session-nav';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -23,9 +24,9 @@ export function SiteHeader() {
         </Link>
 
         <nav className="flex items-center gap-2">
-          <Badge variant="outline" className="hidden gap-1.5 sm:inline-flex">
+          <Badge variant="outline" className="hidden gap-1.5 lg:inline-flex">
             <Sparkles className="text-primary" />
-            Day 1 · scaffold complete
+            Day 2 · auth live
           </Badge>
           <a
             href="/api/health"
@@ -36,6 +37,8 @@ export function SiteHeader() {
             API health
             <ArrowUpRight />
           </a>
+          <span className="bg-border hidden h-6 w-px sm:block" aria-hidden="true" />
+          <SessionNav />
         </nav>
       </div>
     </header>

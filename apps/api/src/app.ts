@@ -7,6 +7,8 @@ import { secureHeaders } from 'hono/secure-headers';
 
 import { APP_VERSION, allowedOrigins, env } from './lib/env';
 import { errorHandler, notFoundHandler } from './lib/errors';
+import type { AppEnv } from './lib/types';
+import { authRoutes } from './routes/auth';
 import { healthRoutes } from './routes/health';
 import { metaRoutes } from './routes/meta';
 
@@ -16,9 +18,12 @@ import { metaRoutes } from './routes/meta';
  * Every route is chained here so Hono can infer the full route schema and
  * export it as `AppType` for the end-to-end typed RPC client in the web app.
  */
-const apiRoutes = new Hono().route('/health', healthRoutes).route('/meta', metaRoutes);
+const apiRoutes = new Hono<AppEnv>()
+  .route('/health', healthRoutes)
+  .route('/meta', metaRoutes)
+  .route('/auth', authRoutes);
 
-export const app = new Hono()
+export const app = new Hono<AppEnv>()
   .use(requestId())
   .use(async (c, next) => {
     await next();
@@ -56,7 +61,15 @@ export const app = new Hono()
         name: 'quiz-api',
         version: APP_VERSION,
         message: 'Quiz Platform API is running.',
-        endpoints: ['/api/health', '/api/health/db', '/api/meta'],
+        endpoints: [
+          '/api/health',
+          '/api/health/db',
+          '/api/meta',
+          '/api/auth/register',
+          '/api/auth/login',
+          '/api/auth/logout',
+          '/api/auth/me',
+        ],
       },
       200,
     ),

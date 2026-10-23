@@ -30,7 +30,7 @@ const weekTwo: Day[] = [
 ];
 
 function DayRow({ item }: { item: Day }) {
-  const done = item.day === 1;
+  const done = item.day <= 2;
 
   return (
     <div

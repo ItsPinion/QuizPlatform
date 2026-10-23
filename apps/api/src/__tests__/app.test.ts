@@ -119,11 +119,21 @@ describe('GET /api/meta', () => {
     expect(res.status).toBe(200);
     expect(body.version).toBe('0.1.0');
     expect(Object.keys(body.docs)).toEqual(
-      expect.arrayContaining(['GET /api/health', 'GET /api/health/db', 'GET /api/meta']),
+      expect.arrayContaining([
+        'GET /api/health',
+        'GET /api/health/db',
+        'GET /api/meta',
+        'POST /api/auth/register',
+        'POST /api/auth/login',
+        'POST /api/auth/logout',
+        'GET /api/auth/me',
+      ]),
     );
-    expect(body.roadmap.map((entry) => entry.area)).toEqual(
-      expect.arrayContaining(['auth', 'quizzes', 'attempts', 'leaderboard']),
-    );
+
+    const areas = body.roadmap.map((entry) => entry.area);
+    expect(areas).toEqual(expect.arrayContaining(['quizzes', 'attempts', 'leaderboard']));
+    // Day 2 shipped, so auth must no longer be listed as upcoming work.
+    expect(areas).not.toContain('auth');
   });
 });
 
