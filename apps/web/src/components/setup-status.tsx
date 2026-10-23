@@ -10,8 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { client } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
+interface LoadError {
+  code: string;
+  message: string;
+  hint?: string;
+}
+
 type Loadable<T> =
-  { state: 'loading' } | { state: 'ready'; data: T } | { state: 'error'; message: string };
+  { state: 'loading' } | { state: 'ready'; data: T } | { state: 'error'; error: LoadError };
 
 const DB_COUNT_LABELS: { key: keyof DatabaseStatus['counts']; label: string }[] = [
   { key: 'users', label: 'Users' },
@@ -27,18 +33,41 @@ async function loadHealth(): Promise<Health> {
   return (await res.json()) as Health;
 }
 
+interface ErrorEnvelope {
+  error?: { code?: string; message?: string; details?: { hint?: string; reason?: string } };
+}
+
 async function loadDatabase(): Promise<DatabaseStatus> {
   const res = await client.api.health.db.$get();
   const body = await res.json();
 
   if (!res.ok) {
-    const message =
-      (body as { error?: { message?: string } }).error?.message ??
-      `Database check failed with status ${res.status}`;
-    throw new Error(message);
+    const error = (body as ErrorEnvelope).error;
+    throw new Error(
+      JSON.stringify({
+        code: error?.code ?? 'DATABASE_ERROR',
+        message: error?.message ?? `Database check failed with status ${res.status}`,
+        hint: error?.details?.hint,
+      } satisfies LoadError),
+    );
   }
 
   return body as DatabaseStatus;
+}
+
+/** Errors are tagged as JSON so the card can show the actionable hint. */
+function toLoadError(reason: unknown): LoadError {
+  if (reason instanceof Error) {
+    try {
+      const parsed = JSON.parse(reason.message) as LoadError;
+      if (parsed && typeof parsed.code === 'string') return parsed;
+    } catch {
+      // not a tagged error — fall through
+    }
+    return { code: 'NETWORK_ERROR', message: reason.message };
+  }
+
+  return { code: 'UNKNOWN_ERROR', message: 'Unknown error' };
 }
 
 function StatusDot({ tone }: { tone: 'loading' | 'ready' | 'error' }) {
@@ -102,13 +131,13 @@ export function SetupStatus() {
     setHealth(
       healthResult.status === 'fulfilled'
         ? { state: 'ready', data: healthResult.value }
-        : { state: 'error', message: humanize(healthResult.reason) },
+        : { state: 'error', error: toLoadError(healthResult.reason) },
     );
 
     setDatabase(
       databaseResult.status === 'fulfilled'
         ? { state: 'ready', data: databaseResult.value }
-        : { state: 'error', message: humanize(databaseResult.reason) },
+        : { state: 'error', error: toLoadError(databaseResult.reason) },
     );
 
     setCheckedAt(new Date());
@@ -159,7 +188,7 @@ export function SetupStatus() {
             {health.state === 'loading' ? <Skeleton /> : null}
 
             {health.state === 'error' ? (
-              <ErrorNote message={health.message}>
+              <ErrorNote message={health.error.message}>
                 Start the API with <code className="font-mono">bun dev</code> and reload.
               </ErrorNote>
             ) : null}
@@ -186,10 +215,16 @@ export function SetupStatus() {
               <Badge variant={database.data.target === 'turso' ? 'success' : 'warning'}>
                 {database.data.target === 'turso' ? 'Turso Cloud' : 'file: URL'}
               </Badge>
-            ) : (
-              <Badge variant={badgeVariant(database.state)}>
-                {database.state === 'error' ? 'Failed' : 'Checking…'}
+            ) : database.state === 'error' ? (
+              <Badge
+                variant={
+                  database.error.code === 'DATABASE_SCHEMA_MISSING' ? 'warning' : 'destructive'
+                }
+              >
+                {database.error.code === 'DATABASE_SCHEMA_MISSING' ? 'No schema' : 'Failed'}
               </Badge>
+            ) : (
+              <Badge variant="outline">Checking…</Badge>
             )}
           </div>
 
@@ -197,9 +232,19 @@ export function SetupStatus() {
             {database.state === 'loading' ? <Skeleton /> : null}
 
             {database.state === 'error' ? (
-              <ErrorNote message={database.message}>
-                Run <code className="font-mono">bun run db:migrate</code> to create the schema, or
-                check your <code className="font-mono">DATABASE_URL</code>.
+              <ErrorNote message={database.error.message} hint={database.error.hint}>
+                {database.error.code === 'DATABASE_SCHEMA_MISSING' ? (
+                  <>
+                    Apply the migrations with <code className="font-mono">bun run db:migrate</code>,
+                    then reload.
+                  </>
+                ) : (
+                  <>
+                    Check <code className="font-mono">TURSO_DATABASE_URL</code> and{' '}
+                    <code className="font-mono">TURSO_AUTH_TOKEN</code> in{' '}
+                    <code className="font-mono">.env</code>.
+                  </>
+                )}
               </ErrorNote>
             ) : null}
 
@@ -250,7 +295,15 @@ function badgeVariant(state: 'loading' | 'ready' | 'error') {
   return 'outline' as const;
 }
 
-function ErrorNote({ message, children }: { message: string; children: React.ReactNode }) {
+function ErrorNote({
+  message,
+  hint,
+  children,
+}: {
+  message: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="border-destructive/30 bg-destructive/5 rounded-md border p-3 text-[12px]">
       <div className="text-destructive flex items-start gap-2">
@@ -262,9 +315,4 @@ function ErrorNote({ message, children }: { message: string; children: React.Rea
       </p>
     </div>
   );
-}
-
-function humanize(reason: unknown): string {
-  if (reason instanceof Error) return reason.message;
-  return 'Unknown error';
 }

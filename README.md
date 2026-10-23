@@ -378,11 +378,19 @@ Day 1 (done): monorepo, API, Drizzle schema, migrations, seed, env config, tests
 
 ## Troubleshooting
 
-**`/api/health/db` returns 503** — the API is up but the database is unreachable. The response's
-`details.reason` carries the underlying driver error (`fetch failed → ECONNRESET`, missing
-credentials, …).
+**`/api/health/db` returns 503** — read the `error.code` and `details.reason`:
 
-**`no such table: users`** — migrations were not applied. Run `bun run db:migrate`, then `bun run db:seed`.
+| Code                      | Meaning                                                            | Fix                                   |
+| ------------------------- | ------------------------------------------------------------------ | ------------------------------------- |
+| `DATABASE_NOT_CONFIGURED` | No `TURSO_DATABASE_URL`, or a `libsql://` URL without a token      | Fill in `.env`                        |
+| `DATABASE_SCHEMA_MISSING` | Credentials and connectivity are fine, but the tables do not exist | `bun run db:migrate` (then `db:seed`) |
+| `DATABASE_UNAVAILABLE`    | The network or driver failed (`fetch failed → ECONNRESET`, …)      | Check connectivity / credentials      |
+
+The reason is also printed in the API server log, e.g.
+`[db] readiness check failed against libsql://…: … → SQLITE_ERROR: no such table: users`.
+
+**`no such table: users`** — migrations were not applied to _that_ database. Run
+`bun run db:migrate`, then `bun run db:seed`. `bun run db:generate` does not create tables.
 
 **`Please provide required params for 'turso' dialect`** — `TURSO_AUTH_TOKEN` is missing for a
 `libsql://` URL.

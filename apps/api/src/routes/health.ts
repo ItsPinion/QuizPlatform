@@ -2,30 +2,11 @@ import { db, getDatabaseConfig, schema } from '@quiz/db';
 import type { DatabaseStatus, Health } from '@quiz/shared';
 import { Hono } from 'hono';
 
+import { classifyDatabaseError, describeError } from '../lib/db-errors';
 import { APP_VERSION } from '../lib/env';
 import { errorBody } from '../lib/errors';
 
 const startedAt = Date.now();
-
-/** Flatten Drizzle's wrapped driver error into one actionable line. */
-function describeError(error: unknown): string {
-  const parts: string[] = [];
-  let current: unknown = error;
-
-  while (current instanceof Error) {
-    const candidate = current.message.split('\n')[0]?.trim();
-    if (candidate && !parts.includes(candidate)) parts.push(candidate);
-
-    const cause = (current as { cause?: unknown }).cause;
-    if (cause && typeof cause === 'object' && 'code' in cause && candidate === 'fetch failed') {
-      parts.push(String((cause as { code?: unknown }).code));
-    }
-
-    current = cause;
-  }
-
-  return parts.join(' → ') || 'Unknown database error';
-}
 
 export const healthRoutes = new Hono()
   /** Liveness probe — no database access. */
@@ -78,6 +59,29 @@ export const healthRoutes = new Hono()
 
       return c.json(body, 200);
     } catch (error) {
+      const reason = describeError(error);
+      const failure = classifyDatabaseError(error);
+
+      // Make the cause visible in the server log too, not just the HTTP body.
+      console.error(`[db] readiness check failed against ${config.urlHint}: ${reason}`);
+
+      if (failure === 'schema-missing') {
+        return c.json(
+          {
+            ...errorBody(
+              'DATABASE_SCHEMA_MISSING',
+              'Turso Cloud is reachable, but the database has no schema yet.',
+              {
+                hint: 'Apply the Drizzle migrations with `bun run db:migrate`, then optionally `bun run db:seed`.',
+                reason,
+              },
+            ),
+            ...(process.env.NODE_ENV === 'production' ? {} : { target: config.target }),
+          },
+          503,
+        );
+      }
+
       return c.json(
         {
           ...errorBody(
@@ -85,7 +89,7 @@ export const healthRoutes = new Hono()
             'The API is running but cannot reach the database.',
             {
               hint: 'Check TURSO_DATABASE_URL and TURSO_AUTH_TOKEN, then run `bun run db:migrate`.',
-              reason: describeError(error),
+              reason,
             },
           ),
           ...(process.env.NODE_ENV === 'production' ? {} : { target: config.target }),

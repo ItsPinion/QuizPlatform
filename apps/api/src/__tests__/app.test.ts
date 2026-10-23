@@ -1,7 +1,12 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import type { DatabaseStatus, Health } from '@quiz/shared';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { app } from '../app';
+import { classifyDatabaseError, describeError } from '../lib/db-errors';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -118,6 +123,57 @@ describe('GET /api/meta', () => {
     );
     expect(body.roadmap.map((entry) => entry.area)).toEqual(
       expect.arrayContaining(['auth', 'quizzes', 'attempts', 'leaderboard']),
+    );
+  });
+});
+
+describe('database readiness failures', () => {
+  it('reports a reachable-but-unmigrated database as DATABASE_SCHEMA_MISSING', async () => {
+    // An empty SQLite file behaves exactly like a fresh Turso database: the
+    // connection succeeds and the first query fails with "no such table".
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'quiz-empty-'));
+    const emptyDb = `file:${path.join(dir, 'empty.db')}`;
+    const previous = process.env.TURSO_DATABASE_URL;
+
+    process.env.TURSO_DATABASE_URL = emptyDb;
+    process.env.TURSO_AUTH_TOKEN = '';
+
+    try {
+      const { res, body } = await getJson<{
+        error: { code: string; message: string; details: { hint: string; reason: string } };
+        target?: string;
+      }>('/api/health/db');
+
+      expect(res.status).toBe(503);
+      expect(body.error.code).toBe('DATABASE_SCHEMA_MISSING');
+      expect(body.error.message).toContain('no schema');
+      expect(body.error.details.hint).toContain('bun run db:migrate');
+      expect(body.error.details.reason).toMatch(/no such table/i);
+      expect(body.target).toBe('file');
+    } finally {
+      process.env.TURSO_DATABASE_URL = previous ?? '';
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('classifies driver errors into actionable codes', () => {
+    expect(classifyDatabaseError(new Error('SQLITE_ERROR: no such table: users'))).toBe(
+      'schema-missing',
+    );
+    expect(classifyDatabaseError(new Error('no such column: quizzes.slug'))).toBe('schema-missing');
+    expect(classifyDatabaseError(new Error('fetch failed'))).toBe('unavailable');
+    expect(classifyDatabaseError(new Error('SERVER_ERROR: Server returned HTTP status 400'))).toBe(
+      'unavailable',
+    );
+  });
+
+  it('flattens nested driver errors into one line', () => {
+    const error = new Error('Failed query: select count(*) from "users"', {
+      cause: new Error('SQLITE_ERROR: no such table: users'),
+    });
+
+    expect(describeError(error)).toBe(
+      'Failed query: select count(*) from "users" → SQLITE_ERROR: no such table: users',
     );
   });
 });

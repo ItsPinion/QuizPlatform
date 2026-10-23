@@ -14,7 +14,7 @@ interface DbGlobal {
 const globalForDb = globalThis as unknown as { __quizDb?: DbGlobal };
 
 function buildDatabase(): Database {
-  const { url, authToken } = resolveDatabaseConfig();
+  const { url, authToken, target } = resolveDatabaseConfig();
 
   // Mirrors the official Drizzle + Turso setup: drizzle creates and owns the
   // libSQL client for us, so there is no hand-written driver glue.
@@ -27,11 +27,14 @@ function buildDatabase(): Database {
     casing: 'snake_case',
   });
 
-  // Turso enables foreign keys by default; local SQLite files need the pragma
-  // so cascade/restrict behaviour matches between environments.
-  void instance.$client.execute('PRAGMA foreign_keys = ON').catch((error: unknown) => {
-    console.warn('[db] could not enable foreign_keys pragma:', error);
-  });
+  // Turso Cloud enforces foreign keys already and rejects `PRAGMA foreign_keys`
+  // over the Hrana HTTP protocol (HTTP 400), so only local files need it — this
+  // keeps cascade/restrict behaviour identical in both environments.
+  if (target === 'file') {
+    void instance.$client.execute('PRAGMA foreign_keys = ON').catch((error: unknown) => {
+      console.warn('[db] could not enable foreign_keys pragma:', error);
+    });
+  }
 
   return instance;
 }
