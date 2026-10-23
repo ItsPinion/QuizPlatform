@@ -64,7 +64,7 @@ describe('GET /api/health/db', () => {
 
     expect(res.status).toBe(200);
     expect(body.connected).toBe(true);
-    expect(body.target).toBe('local-file');
+    expect(body.target).toBe('file');
     expect(body.latencyMs).toBeTypeOf('number');
     expect(body.counts).toEqual({
       users: 4,

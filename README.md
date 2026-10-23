@@ -92,18 +92,12 @@ Configuration is layered, highest precedence first:
 2. `.env.local` — machine-specific overrides, gitignored
 3. `.env` — shared configuration, gitignored
 
-Check what the tooling would connect to at any time:
+#### Turso Cloud is the database
 
-```bash
-pnpm db:status
-```
-
-Without a Turso URL the database layer falls back to `.data/quizplatform.db` (gitignored) so the app
-runs offline with the same schema, migrations and scripts.
-
-#### Using Turso Cloud
-
-Following the official Drizzle guide, [Get Started with Drizzle and Turso Cloud](https://orm.drizzle.team/docs/get-started/turso-new):
+The app always talks to **Turso Cloud**, following the official Drizzle guide
+[Get Started with Drizzle and Turso Cloud](https://orm.drizzle.team/docs/get-started/turso-new).
+There is no local fallback: if the credentials are missing the API exits with setup instructions
+instead of silently switching databases.
 
 ```bash
 turso db create quizplatform
@@ -116,19 +110,26 @@ TURSO_DATABASE_URL="libsql://quizplatform-<org>.turso.io"
 TURSO_AUTH_TOKEN="eyJhbGciOi..."
 ```
 
-`DATABASE_URL` is accepted as an alias for `TURSO_DATABASE_URL`. Tokens and URLs live only in
-gitignored files; `.env.example` is the tracked template.
+`DATABASE_URL` is accepted as an alias for `TURSO_DATABASE_URL`. Credentials live only in gitignored
+files; `.env.example` is the tracked template. `TURSO_AUTH_TOKEN` is mandatory for a `libsql://` URL
+and the config validates that before connecting.
+
+Check what the tooling will connect to at any time:
+
+```bash
+pnpm db:status
+```
 
 ### 3. Create the schema and seed data
 
 Drizzle Kit owns the schema workflow — there is no hand-written migration runner:
 
 ```bash
-pnpm db:migrate     # drizzle-kit migrate  → apply packages/db/migrations
+pnpm db:migrate     # drizzle-kit migrate → apply packages/db/migrations to Turso Cloud
 pnpm db:seed        # load demo users, categories, quizzes, questions, attempts
 ```
 
-The same two commands work against the local file and Turso Cloud.
+Both commands run against the Turso Cloud database configured in `.env`.
 
 ### 4. Run everything
 
@@ -208,7 +209,7 @@ quizplatform/
 │  ├─ db/                      Drizzle schema, migrations, seed
 │  │  ├─ src/schema.ts         7 tables + relations
 │  │  ├─ src/index.ts          drizzle({ connection }) client
-│  │  ├─ src/env.ts            resolves Turso URL vs local file
+│  │  ├─ src/env.ts            Turso Cloud URL + token resolution
 │  │  ├─ src/seed.ts           rich demo dataset
 │  │  ├─ src/status.ts         db:status diagnostic (Drizzle queries)
 │  │  ├─ src/__tests__/        schema + seed integrity tests
@@ -297,8 +298,9 @@ history for the Day 10–12 dashboards).
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
 the database is unreachable, `/api/meta` roadmap, and the 404 error envelope.
 
-API tests run against a throwaway database created by the real toolchain (`drizzle-kit migrate`
-followed by the seed script), so they exercise the same SQL that ships.
+Tests never touch the cloud database: each suite creates a throwaway `file:` database in a temp
+directory using the real toolchain (`drizzle-kit migrate` followed by the seed script), so the same
+SQL that ships is what gets verified. The Turso-only rule applies to the running application.
 
 ---
 
@@ -326,9 +328,9 @@ pretty-printed JSON outside production, and a Zod-backed env schema that fails f
 
 | Variable             | Required | Default                 | Used by                   |
 | -------------------- | -------- | ----------------------- | ------------------------- |
-| `TURSO_DATABASE_URL` | prod     | local fallback file     | db, api, drizzle-kit      |
-| `DATABASE_URL`       | —        | —                       | alias for the above       |
-| `TURSO_AUTH_TOKEN`   | Turso    | —                       | db, api, drizzle-kit      |
+| `TURSO_DATABASE_URL` | yes      | —                       | db, api, drizzle-kit      |
+| `TURSO_AUTH_TOKEN`   | yes      | —                       | db, api, drizzle-kit      |
+| `DATABASE_URL`       | no       | —                       | alias for the URL above   |
 | `API_PORT`           | no       | `3001`                  | api                       |
 | `API_INTERNAL_URL`   | no       | `http://localhost:3001` | web rewrite target        |
 | `WEB_ORIGIN`         | no       | `http://localhost:3000` | API CORS origin           |
@@ -368,11 +370,12 @@ Day 1 (done): monorepo, API, Drizzle schema, migrations, seed, env config, tests
 **`Please provide required params for 'turso' dialect`** — `TURSO_AUTH_TOKEN` is missing for a
 `libsql://` URL.
 
-**`TURSO_DATABASE_URL is required in production`** — the local file fallback is dev-only by design.
+**`TURSO_DATABASE_URL is not set`** — the API refuses to start without Turso credentials; copy
+`.env.example` to `.env` and fill in the URL and token from the Turso dashboard.
 
-**`pnpm db:status` says `fetch failed`** — the machine cannot reach Turso. Turso requires HTTPS to
-`*.turso.io` on port 443; restricted/sandboxed networks often block it. Run migrations from a network
-that can reach Turso, or point the URL at a local file for offline work.
+**`pnpm db:status` says `fetch failed` / `ECONNRESET`** — the machine cannot reach Turso. Turso needs
+HTTPS to `*.turso.io` on port 443, and restricted networks (including this project's sandbox) reset
+those connections. Run `pnpm db:migrate && pnpm db:seed` from a machine with normal internet access.
 
 **Preview host blocks the request** — `next.config.ts` lists `*.e2b.app` in `allowedDevOrigins`. Add
 your own preview domain there if it differs.

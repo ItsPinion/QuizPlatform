@@ -7,6 +7,26 @@ import { errorBody } from '../lib/errors';
 
 const startedAt = Date.now();
 
+/** Flatten Drizzle's wrapped driver error into one actionable line. */
+function describeError(error: unknown): string {
+  const parts: string[] = [];
+  let current: unknown = error;
+
+  while (current instanceof Error) {
+    const candidate = current.message.split('\n')[0]?.trim();
+    if (candidate && !parts.includes(candidate)) parts.push(candidate);
+
+    const cause = (current as { cause?: unknown }).cause;
+    if (cause && typeof cause === 'object' && 'code' in cause && candidate === 'fetch failed') {
+      parts.push(String((cause as { code?: unknown }).code));
+    }
+
+    current = cause;
+  }
+
+  return parts.join(' → ') || 'Unknown database error';
+}
+
 export const healthRoutes = new Hono()
   /** Liveness probe — no database access. */
   .get('/', (c) => {
@@ -45,7 +65,7 @@ export const healthRoutes = new Hono()
 
       return c.json(body, 200);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown database error';
+      const message = describeError(error);
 
       return c.json(
         {
@@ -53,10 +73,7 @@ export const healthRoutes = new Hono()
             'DATABASE_UNAVAILABLE',
             'The API is running but cannot reach the database.',
             {
-              hint:
-                config.target === 'turso'
-                  ? 'Check TURSO_DATABASE_URL and TURSO_AUTH_TOKEN, then run `pnpm db:migrate`.'
-                  : 'Run `pnpm db:migrate` to create the local database.',
+              hint: 'Check TURSO_DATABASE_URL and TURSO_AUTH_TOKEN, then run `pnpm db:migrate`.',
               reason: message,
             },
           ),

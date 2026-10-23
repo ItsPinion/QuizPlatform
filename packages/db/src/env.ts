@@ -7,10 +7,7 @@ import path from 'node:path';
  */
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
-export const LOCAL_DB_PATH = path.join(REPO_ROOT, '.data', 'quizplatform.db');
-export const LOCAL_DB_URL = `file:${LOCAL_DB_PATH}`;
-
-export type DatabaseTarget = 'turso' | 'local-file' | 'unknown';
+export type DatabaseTarget = 'turso' | 'file';
 
 export interface ResolvedDatabaseConfig {
   url: string;
@@ -18,7 +15,6 @@ export interface ResolvedDatabaseConfig {
   target: DatabaseTarget;
   /** Safe, credential-free description for logs and the health endpoint. */
   urlHint: string;
-  isFallback: boolean;
 }
 
 function looksRemote(url: string): boolean {
@@ -26,42 +22,52 @@ function looksRemote(url: string): boolean {
 }
 
 /**
- * Resolve the database connection from the environment.
+ * Resolve the Turso Cloud connection from the environment.
  *
- * - `TURSO_DATABASE_URL` (the name used by Drizzle's Turso guide) is preferred;
- *   `DATABASE_URL` is accepted as an alias.
- * - The URL may be a Turso `libsql://…` target or a local `file:` database.
- * - `TURSO_AUTH_TOKEN` is required for remote Turso databases.
- * - With neither variable set, development falls back to a local SQLite file so
- *   the app boots before Turso credentials are configured.
+ * The application always talks to Turso Cloud:
+ *   TURSO_DATABASE_URL="libsql://<db>-<org>.turso.io"
+ *   TURSO_AUTH_TOKEN="..."
+ *
+ * `DATABASE_URL` is accepted as an alias for convenience. A `file:` URL is only
+ * honoured when it is passed explicitly (the automated tests do this to build a
+ * throwaway database) — there is no implicit local fallback.
+ *
+ * Reference: https://orm.drizzle.team/docs/get-started/turso-new
  */
 export function resolveDatabaseConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): ResolvedDatabaseConfig {
   const rawUrl = (env.TURSO_DATABASE_URL ?? env.DATABASE_URL)?.trim();
 
-  if (rawUrl) {
-    const target: DatabaseTarget = looksRemote(rawUrl) ? 'turso' : 'local-file';
-    return {
-      url: rawUrl,
-      ...(env.TURSO_AUTH_TOKEN?.trim() ? { authToken: env.TURSO_AUTH_TOKEN.trim() } : {}),
-      target,
-      urlHint: target === 'turso' ? redactUrl(rawUrl) : path.basename(rawUrl),
-      isFallback: false,
-    };
+  if (!rawUrl) {
+    throw new Error(
+      [
+        'TURSO_DATABASE_URL is not set.',
+        '',
+        'Create a Turso Cloud database and configure it:',
+        '  turso db create quizplatform',
+        '  turso db show quizplatform --url       # libsql://<db>-<org>.turso.io',
+        '  turso db tokens create quizplatform    # TURSO_AUTH_TOKEN',
+        '',
+        'Then put both values in .env and run: pnpm db:migrate && pnpm db:seed',
+      ].join('\n'),
+    );
   }
 
-  if (env.NODE_ENV === 'production') {
+  const target: DatabaseTarget = looksRemote(rawUrl) ? 'turso' : 'file';
+  const authToken = env.TURSO_AUTH_TOKEN?.trim();
+
+  if (target === 'turso' && !authToken) {
     throw new Error(
-      'TURSO_DATABASE_URL is required in production (Turso libsql:// URL, or DATABASE_URL as an alias).',
+      'TURSO_AUTH_TOKEN is not set. Turso Cloud requires a token: turso db tokens create quizplatform',
     );
   }
 
   return {
-    url: LOCAL_DB_URL,
-    target: 'local-file',
-    urlHint: '.data/quizplatform.db (local fallback)',
-    isFallback: true,
+    url: rawUrl,
+    ...(authToken ? { authToken } : {}),
+    target,
+    urlHint: target === 'turso' ? redactUrl(rawUrl) : path.basename(rawUrl),
   };
 }
 

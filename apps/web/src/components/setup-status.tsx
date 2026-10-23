@@ -184,7 +184,7 @@ export function SetupStatus() {
             </div>
             {database.state === 'ready' ? (
               <Badge variant={database.data.target === 'turso' ? 'success' : 'warning'}>
-                {database.data.target === 'turso' ? 'Turso remote' : 'Local fallback'}
+                {database.data.target === 'turso' ? 'Turso Cloud' : 'file: URL'}
               </Badge>
             ) : (
               <Badge variant={badgeVariant(database.state)}>

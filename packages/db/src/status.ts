@@ -37,7 +37,6 @@ async function main() {
   console.log(`  target      ${config.target}`);
   console.log(`  url         ${config.urlHint}`);
   console.log(`  auth token  ${config.authToken ? 'present' : 'not set'}`);
-  console.log(`  fallback    ${config.isFallback ? 'yes (no Turso URL configured)' : 'no'}`);
   console.log('');
 
   const started = performance.now();
@@ -74,7 +73,7 @@ async function main() {
     console.error('');
 
     if (/no such table/i.test(message)) {
-      console.error('  The database is reachable but has no schema yet.');
+      console.error('  Turso Cloud is reachable but the database has no schema yet.');
       console.error('  Apply the Drizzle migrations:  pnpm db:migrate');
       console.error('  Then load demo data:            pnpm db:seed');
     } else {

@@ -9,8 +9,8 @@ loadEnvFiles();
  * Drizzle Kit configuration — same shape as the official Turso Cloud guide:
  * https://orm.drizzle.team/docs/get-started/turso-new
  *
- *   dialect: 'turso'  → remote Turso / libSQL (needs url + authToken)
- *   dialect: 'sqlite' → local `file:` database used for offline development
+ *   dialect: 'turso'  → Turso Cloud (the application's database)
+ *   dialect: 'sqlite' → an explicit `file:` URL, used by the automated tests
  *
  * All schema changes go through Drizzle Kit:
  *   pnpm db:generate   drizzle-kit generate

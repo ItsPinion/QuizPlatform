@@ -29,7 +29,7 @@ const TERMINAL_LINES: { prompt?: boolean; text: string; tone?: 'muted' | 'accent
   { text: '' },
   { text: 'web  ▸ http://localhost:3000', tone: 'accent' },
   { text: 'api  ▸ http://localhost:3001', tone: 'accent' },
-  { text: 'db   ▸ Turso (libsql) · local fallback', tone: 'muted' },
+  { text: 'db   ▸ Turso Cloud (libsql)', tone: 'muted' },
   { text: 'rpc  ▸ hc<AppType> · 0 codegen', tone: 'ok' },
 ];
 
@@ -217,7 +217,8 @@ export default function HomePage() {
               <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-[11px]">
                 TURSO_AUTH_TOKEN
               </code>
-              — migrations and seed work identically on both targets.
+              — Drizzle Kit applies migrations and the seed script loads demo data straight into the
+              cloud database.
             </p>
           </div>
         </section>

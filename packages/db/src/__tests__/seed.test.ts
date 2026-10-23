@@ -105,7 +105,7 @@ describe('database CLI scripts', () => {
     const result = runScript('src/status.ts');
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('local-file');
+    expect(result.stdout).toContain('file');
     expect(result.stdout).toContain('connected');
   });
 

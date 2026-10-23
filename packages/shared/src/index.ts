@@ -53,7 +53,7 @@ export type Health = z.infer<typeof healthSchema>;
 
 export const databaseStatusSchema = z.object({
   connected: z.boolean(),
-  target: z.enum(['turso', 'local-file', 'unknown']),
+  target: z.enum(['turso', 'file']),
   urlHint: z.string(),
   latencyMs: z.number().nullable(),
   counts: z.object({
