@@ -3,8 +3,8 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test       # 683 unit + integration tests across the four workspaces
-bun run test:e2e   # 67 checks against a real HTTP server (own process, own port)
+bun run test       # 737 unit + integration tests across the four workspaces
+bun run test:e2e   # 69 checks against a real HTTP server (own process, own port)
 ```
 
 Neither touches Turso. Every suite builds a throwaway `file:` database in `.data/` with the project's
@@ -16,12 +16,12 @@ tests.
 
 ## What runs where
 
-| Workspace      | Tests | Focus                                                                                    |
-| -------------- | ----- | ---------------------------------------------------------------------------------------- |
-| `@quiz/shared` | 214   | auth + content contracts, attempt clocks, the grader, dashboard and analytics helpers    |
-| `@quiz/db`     | 62    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring |
-| `@quiz/api`    | 248   | health/readiness, auth, guards, content, taking, grading, reviewing, stats and analytics |
-| `@quiz/web`    | 159   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics helpers  |
+| Workspace      | Tests | Focus                                                                                        |
+| -------------- | ----- | -------------------------------------------------------------------------------------------- |
+| `@quiz/shared` | 238   | auth + content contracts, attempt clocks, the grader, dashboard, analytics and ranking       |
+| `@quiz/db`     | 62    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring     |
+| `@quiz/api`    | 260   | health/readiness, auth, guards, content, taking, grading, reviewing, stats, analytics, board |
+| `@quiz/web`    | 177   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers |
 
 Run one workspace at a time when you are iterating:
 
@@ -272,6 +272,33 @@ bun run test --filter=@quiz/web
   outcome labels and tones, popularity captions (singular included), clamped score bars, pass-rate
   captions and the timeline's screen-reader summary.
 
+### Leaderboard coverage (Day 12)
+
+- **Against the database** — every entry's average, best score, attempts, quizzes completed, passed,
+  failed and pass rate is compared with that student's own graded rows, so the board cannot drift
+  from the attempts table; the payload is also asserted to contain no email address.
+- **Ordering and ranges** — the board is sorted by the chosen metric (and its tie-breakers), ranks
+  never run backwards, every percentage and rate is within range, and `passed + failed = attempts`.
+- **Ties** — a controlled fixture (one throwaway category and quiz, two new students sitting it at
+  88%) yields ranks `1, 2` shared and `3` for the next student, with an 18-point gap, proving the
+  competition rule rather than just "no equal neighbours".
+- **The metrics** — `best` and `completed` each re-sort the board, and their values agree with the
+  underlying attempts.
+- **The periods** — a freshly graded attempt appears in `week` and `month`; an attempt dated outside
+  the window contributes to `all` only, so the rolling boundary is exercised on both sides.
+- **Scopes and refusals** — a category board equals the per-category aggregates and echoes
+  `scope.categoryName`; an unknown `categoryId` is `404 CATEGORY_NOT_FOUND`; `?metric=streak`,
+  `?period=year`, `?limit=0|51` and a malformed `categoryId` are `422`.
+- **The caller** — `currentUser` is returned with `isCurrentUser: true` and a rank consistent with
+  the visible slice, `401` anonymously for both roles allowed.
+- **The helpers** (`@quiz/shared`) — metric values, sorting per metric with tie-breakers, competition
+  ranks and gaps in percentage points _and_ quizzes, `buildLeaderboard` (current-user marking, pass
+  rates, an empty board), rolling period starts, `topPercentOf` and the query/payload schemas.
+- **Presentation** (`@quiz/web`) — filter parsing with fallbacks, query building, href round-trips
+  that preserve the other controls, metric/period/scope labels, ordinals (`11th`, `21st`), rank tones,
+  gap wording (`Tied`, `5 pts behind`, `1 quiz behind`), the current-user caption and the board's
+  screen-reader summary.
+
 ---
 
 ## End-to-end smoke run
@@ -356,8 +383,13 @@ then asserts:
     adding up, the timeline total matching `inWindow`, and quiz/category rows summing to the attempts
 65. the window is validated and guarded → `422` for `days=365`, `403` for the student, `401`
     anonymously, and `days=90` returns ninety buckets
-66. logout → 200 with `Max-Age=0`
-67. unknown route → 404 `NOT_FOUND`
+66. `GET /api/leaderboard` → 200, default metric/period/overall scope, entries sorted with monotonic
+    ranks, `passed + failed = attempts`, `best ≥ average`, participants matching the row count, the
+    caller present, and no email anywhere in the body
+67. the leaderboard's controls → `metric=completed&period=week` sorted by quizzes, the category scope
+    echoing its name, `422` for `?metric=streak`, `404` for an unknown category, `401` anonymously
+68. logout → 200 with `Max-Age=0`
+69. unknown route → 404 `NOT_FOUND`
 
 It prints a pass/fail table, exits non-zero on failure, and removes the database afterwards.
 
@@ -491,6 +523,18 @@ QUIZ_WOULD_HAVE_NO_QUESTIONS`; unpublish and the delete goes through.
       averages all move.
 - [ ] Sign in as a student and open `/admin/analytics` → redirected; `curl` the endpoint with the
       student cookie → `403`.
+- [ ] `/student/leaderboard` opens from the student nav: the podium, your position card and the
+      ranked table all render.
+- [ ] Switch **Best** and **Completed** → the order changes and the metric column follows the chip;
+      a reload keeps the choice in the URL.
+- [ ] Switch **This week** → only recently graded papers count and the participant count drops (or the
+      board empties with its empty state). Compare with `/api/leaderboard?period=week`.
+- [ ] Pick a category → the header, the table title and the API scope all name it; **All categories**
+      restores the overall board.
+- [ ] Check the tie rule: two equal values share a rank and the next row skips a number; the gap column
+      reads `Tied` for the pair and `—` for the leader.
+- [ ] Open the board as a student with no graded attempt → the card invites a quiz instead of printing
+      a rank, and they are absent from the table.
 
 ---
 

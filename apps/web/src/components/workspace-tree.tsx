@@ -7,7 +7,7 @@ const tree = `quizplatform/
 │  ├─ web/            Next.js 16 · App Router · Tailwind v4
 │  │  ├─ src/app/              landing, /login, /register, /admin, /student
 │  │  ├─ src/app/admin/        layout · overview · users · quizzes · categories
-│  │  ├─ src/app/student/      dashboard · quizzes · attempt/[id] · review · results
+│  │  ├─ src/app/student/      dashboard · quizzes · attempt/[id] · review · results · leaderboard
 │  │  ├─ src/lib/session.ts    server-side session lookup (cookie → API)
 │  │  ├─ src/lib/api-server.ts cookie-forwarding RPC client for pages
 │  │  ├─ src/lib/guards.ts     role decision for /admin and /student
@@ -32,6 +32,7 @@ const tree = `quizplatform/
 │     ├─ src/lib/reviews.ts           answer review + paged attempt history
 │     ├─ src/lib/student-dashboard.ts aggregates: totals, trend, categories, activity
 │     ├─ src/lib/admin-analytics.ts   platform aggregates: timeline, ratios, popularity
+│     ├─ src/lib/leaderboard.ts       ranked board: metrics, periods, ties, caller's row
 │     ├─ src/routes/admin-quizzes.ts  /api/admin/quizzes (mounted under the guard)
 │     ├─ src/lib/auth.ts       JWT signing + session cookies
 │     └─ src/lib/              env, jsonBody validator, error envelope
@@ -121,6 +122,14 @@ const highlights = [
   {
     path: 'apps/api/src/lib/admin-analytics.ts',
     note: 'platform-wide aggregates + a cross-user expiry sweep',
+  },
+  {
+    path: 'packages/shared/src/leaderboard.ts',
+    note: 'competition ranking, ties, gaps, rolling periods',
+  },
+  {
+    path: 'apps/api/src/lib/leaderboard.ts',
+    note: 'one aggregate query per board, ranks computed in TS',
   },
   { path: 'apps/web/src/lib/api.ts', note: 'hc<AppType>() — zero codegen RPC' },
   { path: 'packages/db/src/schema.ts', note: 'users → attempts → answers relations' },

@@ -14,7 +14,8 @@
     "./submission": "./src/submission.ts",
     "./review": "./src/review.ts",
     "./dashboard": "./src/dashboard.ts",
-    "./analytics": "./src/analytics.ts"
+    "./analytics": "./src/analytics.ts",
+    "./leaderboard": "./src/leaderboard.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

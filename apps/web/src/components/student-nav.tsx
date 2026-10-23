@@ -1,6 +1,6 @@
 'use client';
 
-import { Gauge, LayoutDashboard, ListChecks, type LucideIcon } from 'lucide-react';
+import { Gauge, LayoutDashboard, ListChecks, Trophy, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -20,6 +20,7 @@ const ITEMS: NavItem[] = [
   { href: '/student', label: 'Overview', icon: LayoutDashboard },
   { href: '/student/quizzes', label: 'Quizzes', icon: ListChecks, prefix: true },
   { href: '/student/results', label: 'Results', icon: Gauge, prefix: true },
+  { href: '/student/leaderboard', label: 'Leaderboard', icon: Trophy },
 ];
 
 /**

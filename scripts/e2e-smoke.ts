@@ -1784,6 +1784,129 @@ try {
     return '422 for days=365 · 403 student · 401 anonymous · 90 buckets';
   });
 
+  /* ------------------------------- Day 12 -------------------------------- */
+
+  await check('GET /api/leaderboard ranks the students who finished a quiz', async () => {
+    const res = await fetch(`${baseUrl}/api/leaderboard`, { headers: { cookie: studentCookie } });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as {
+      metric: string;
+      period: string;
+      scope: { type: string; categoryId: string | null };
+      entries: {
+        rank: number;
+        userId: string;
+        name: string;
+        averagePercentage: number;
+        bestPercentage: number;
+        attempts: number;
+        quizzesCompleted: number;
+        passed: number;
+        failed: number;
+        isCurrentUser: boolean;
+        gapToNext: number;
+      }[];
+      currentUser: { rank: number; userId: string } | null;
+      totals: { participants: number; attempts: number; quizzes: number };
+    };
+
+    if (body.metric !== 'average' || body.period !== 'all') throw new Error('unexpected defaults');
+    if (body.scope.type !== 'overall' || body.scope.categoryId !== null) {
+      throw new Error('the default scope should be overall');
+    }
+    if (body.entries.length === 0) throw new Error('expected at least one ranked student');
+    if (body.totals.participants !== body.entries.length) throw new Error('participant mismatch');
+
+    for (let index = 0; index < body.entries.length; index += 1) {
+      const entry = body.entries[index]!;
+      if (entry.passed + entry.failed !== entry.attempts)
+        throw new Error('attempt counts disagree');
+      if (entry.bestPercentage < entry.averagePercentage) throw new Error('best below average');
+
+      const previous = body.entries[index - 1];
+      if (previous) {
+        if (previous.averagePercentage < entry.averagePercentage) {
+          throw new Error('the board is not sorted by average');
+        }
+        if (entry.rank < previous.rank) throw new Error('ranks must not go backwards');
+      }
+    }
+
+    // The e2e account has a graded attempt by now, so it is on the board.
+    if (!body.currentUser) throw new Error('the caller should have a row');
+    if (!body.entries.some((entry) => entry.isCurrentUser) && body.totals.participants <= 20) {
+      throw new Error('the caller should be visible when the board is smaller than the page');
+    }
+
+    if (JSON.stringify(body).includes('@quiz.dev'))
+      throw new Error('an email leaked into the board');
+
+    return `200 · ${body.totals.participants} ranked · leader ${body.entries[0]?.averagePercentage}%`;
+  });
+
+  await check('the leaderboard honours metrics, periods, categories and the guards', async () => {
+    const completed = await fetch(`${baseUrl}/api/leaderboard?metric=completed&period=week`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(completed, 200);
+
+    const completedBody = (await completed.json()) as {
+      metric: string;
+      period: string;
+      entries: { quizzesCompleted: number }[];
+    };
+
+    if (completedBody.metric !== 'completed' || completedBody.period !== 'week') {
+      throw new Error('the metric/period echo is wrong');
+    }
+
+    for (let index = 1; index < completedBody.entries.length; index += 1) {
+      if (
+        (completedBody.entries[index - 1]?.quizzesCompleted ?? 0) <
+        (completedBody.entries[index]?.quizzesCompleted ?? 0)
+      ) {
+        throw new Error('the completed board is not sorted');
+      }
+    }
+
+    const categories = (await (
+      await fetch(`${baseUrl}/api/student/categories`, { headers: { cookie: studentCookie } })
+    ).json()) as { categories: { id: string; name: string }[] };
+
+    const categoryId = categories.categories[0]?.id;
+    if (!categoryId) throw new Error('expected seeded categories');
+
+    const scoped = await fetch(`${baseUrl}/api/leaderboard?categoryId=${categoryId}`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(scoped, 200);
+
+    const scopedBody = (await scoped.json()) as {
+      scope: { type: string; categoryName: string | null };
+    };
+
+    if (scopedBody.scope.type !== 'category' || !scopedBody.scope.categoryName) {
+      throw new Error('the category scope was not applied');
+    }
+
+    const invalid = await fetch(`${baseUrl}/api/leaderboard?metric=streak`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(invalid, 422);
+
+    const unknownCategory = await fetch(
+      `${baseUrl}/api/leaderboard?categoryId=00000000-0000-4000-8000-000000000000`,
+      { headers: { cookie: studentCookie } },
+    );
+    expectStatus(unknownCategory, 404);
+
+    const anonymous = await fetch(`${baseUrl}/api/leaderboard`);
+    expectStatus(anonymous, 401);
+
+    return `200 · completed/week · category ${scopedBody.scope.categoryName} · 422 · 404 · 401`;
+  });
+
   await check('POST /api/auth/logout clears the cookie', async () => {
     const res = await fetch(`${baseUrl}/api/auth/logout`, {
       method: 'POST',

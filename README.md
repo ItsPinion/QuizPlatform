@@ -3,7 +3,7 @@
 Quiz Management & Online Assessment Platform — a Turborepo monorepo with a **Next.js** web app,
 a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 
-> **Status: Day 11 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
+> **Status: Day 12 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
 > authentication (register / login / logout / `/me`, scrypt hashes, httpOnly JWT cookies), role-scoped
 > API namespaces, guarded `/admin` + `/student` areas, an admin console with dashboard statistics,
 > user management, quiz management with a guarded publish/unpublish lifecycle, category CRUD,
@@ -12,8 +12,11 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 > a per-question answer review with the key and the explanations, plus a filterable attempt history,
 > a student dashboard (the spec's six statistics, a score trend, category averages and a
 > fourteen-day activity chart) and an admin analytics screen: attempts and registrations over time,
-> the pass/fail split, and the most popular quizzes and categories over a selectable window.
-> 683 automated tests and a 67-check end-to-end smoke run. The leaderboard is next.
+> the pass/fail split, and the most popular quizzes and categories over a selectable window, then
+> the leaderboard: overall and per-category boards ranked by average score, best score or quizzes
+> completed, over all time, this month or this week, with competition ranking and the caller's own
+> position always resolved.
+> 737 automated tests and a 69-check end-to-end smoke run. Testing & security hardening is next.
 
 ---
 
@@ -235,6 +238,7 @@ quizplatform/
 │  │  ├─ src/routes/meta.ts    API index / roadmap
 │  │  ├─ src/middleware/       requireAuth + requireRole guards
 │  │  ├─ src/lib/admin-stats.ts  dashboard aggregates (one query per section)
+│  │  ├─ src/lib/leaderboard.ts  one aggregate per board, ranks in TS
 │  │  ├─ src/lib/admin-users.ts  directory query + guarded role/status writes
 │  │  ├─ src/lib/admin-quizzes.ts  quiz CRUD, derived slugs, lifecycle rules
 │  │  ├─ src/lib/auth.ts       JWT signing, session cookie, claim mapping
@@ -243,13 +247,14 @@ quizplatform/
 │  └─ web/                     Next.js app (port 3000)
 │     ├─ src/app/              landing, /login, /register, /admin, /student
 │     ├─ src/app/admin/        layout · overview · analytics · users · quizzes
-│     ├─ src/app/student/      dashboard · quizzes · attempt/[id] · results · review
+│     ├─ src/app/student/      dashboard · quizzes · attempt/[id] · results · review · leaderboard
 │     ├─ src/lib/session.ts    server-side session lookup (cookie → API)
 │     ├─ src/lib/api-server.ts cookie-forwarding RPC client for admin pages
 │     ├─ src/lib/guards.ts     role decision used by the protected pages
 │     ├─ src/lib/admin-params.ts  filter ⇄ URL mapping for the user directory
 │     ├─ src/lib/dashboard-params.ts  labels, deltas and bar widths for the dashboard
 │     ├─ src/lib/analytics-params.ts  window parsing, change copy, caption helpers
+│     ├─ src/lib/leaderboard-params.ts  metric/period filters, ranks, gaps, hrefs
 │     ├─ src/components/score-trend-chart.tsx  server-rendered SVG trend line
 │     ├─ src/components/activity-chart.tsx     fourteen-day CSS bar chart
 │     ├─ src/components/category-breakdown.tsx per-category averages
@@ -257,6 +262,8 @@ quizplatform/
 │     ├─ src/components/pass-fail-chart.tsx    the stacked pass/fail split
 │     ├─ src/components/quiz-performance-chart.tsx  popular quizzes + average scores
 │     ├─ src/components/category-popularity.tsx     popular categories
+│     ├─ src/components/leaderboard-board.tsx       the ranked table
+│     ├─ src/components/leaderboard-podium.tsx      the top three
 │     ├─ src/lib/quiz-params.ts   quiz filters, badge tones, lifecycle hints
 │     ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
 │     ├─ src/components/       header, session nav, auth forms, status panels
@@ -271,7 +278,7 @@ quizplatform/
 │  │  ├─ src/seed.ts           rich demo dataset
 │  │  ├─ src/__tests__/        schema + seed integrity tests
 │  │  └─ migrations/           drizzle-kit generated SQL (checked in)
-│  ├─ shared/                  Zod enums and every contract: auth, admin, quiz, question, attempts, dashboard, analytics
+│  ├─ shared/                  Zod enums and every contract: auth, admin, quiz, question, attempts, dashboard, analytics, leaderboard
 │  └─ test-utils/              package-manager-agnostic test runner helper
 ├─ docs/
 │  ├─ admin-dashboard.md       stats definitions, directory API, console rules
@@ -282,6 +289,7 @@ quizplatform/
 │  ├─ results-and-review.md      the key release rule, verdicts, history, screens
 │  ├─ student-dashboard.md       statistic definitions, aggregates, chart geometry, screens
 │  ├─ admin-analytics.md         windows, definitions, queries, the cross-user sweep, charts
+│  ├─ leaderboard.md            metrics, periods, ranking rules, the screen, tests
 │  ├─ authorization.md         role model, guards, redirect rules, failure modes
 │  └─ testing.md               test inventory, manual QA, security trade-offs
 ├─ scripts/
@@ -353,14 +361,14 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 683 tests, all workspaces through Turbo
+bun run test                    # 737 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
-bun run test:e2e                # 67 checks against a live server + throwaway DB
+bun run test:e2e                # 69 checks against a live server + throwaway DB
 ```
 
-**683 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
+**737 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
 
-**`@quiz/shared`** (214) — scrypt record format, unique salts, correct/wrong passwords, unicode
+**`@quiz/shared`** (238) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
 auth contracts (trimming, lowercased emails, stripped unknown keys, the exact password policy,
 session constants), plus the Day 4 admin contracts: query coercion and defaults, the
@@ -451,13 +459,24 @@ shared package adds 32 — window parsing, zero-filled buckets, window totals, r
 100 with expired attempts kept apart, bar/series scaling and both schemas — and the web package 16
 window and caption helpers.
 
+Day 12 adds 12 API tests: the overall board checked against every student's own aggregates, sorted
+and ranged, with no email in the payload; the caller's row and rank resolved beyond the visible slice;
+the best and completed boards; a controlled tie fixture (two 88s share rank 1, the next row is rank 3
+with an 18-point gap); the category scope and its `404`; rolling week and month windows bounded on
+`completed_at`; in-progress attempts invisible to the board; a new graded attempt ranked immediately;
+the validation matrix; and both roles admitted, anonymous refused. The shared package adds 24 — metric
+values, sorting by each metric with its tie-breakers, competition ranks and gaps in both units,
+`buildLeaderboard` (current-user marking, pass rates, an empty board), rolling period starts,
+`topPercentOf` and the query/payload schemas — and the web package 18 filter, label, ordinal,
+gap-wording and caption helpers.
+
 Day 4 adds 30 API tests: statistics arithmetic that agrees with the database, the pass-rate range,
 the newest-five strips, live reflection of a new account, directory filters (role, status, name and
 email search, empty values, unknown roles), pagination, both sorts, 422s for bad queries, detail
 lookups, 404/422 handling, promotion/demotion, deactivation lockout and restoration, `SELF_LOCKOUT`
 for self-demotion and self-deactivation, and 401/403 on every admin route.
 
-**`@quiz/web`** (159) — the error-envelope narrowing every auth form relies on (API error codes,
+**`@quiz/web`** (177) — the error-envelope narrowing every auth form relies on (API error codes,
 Zod issue extraction, fallbacks for malformed bodies, network-error mapping), the Day 3 page guard
 rules, the Day 4 directory parameters, the Day 5 quiz helpers, the Day 6 question-form helpers, and
 the Day 7–9 student helpers: catalogue filter parsing with `toStudentQuery`/`quizzesHref` round-trips
@@ -472,7 +491,7 @@ screen-reader summary).
 
 Beyond Vitest, `bun run test:e2e` boots the real API process against a throwaway database and walks
 the whole auth flow, the admin console, content authoring, quiz taking, grading and review over HTTP
-(67 checks, including cookie flags, a tampered-cookie replay, both role denials, dashboard aggregates,
+(69 checks, including cookie flags, a tampered-cookie replay, both role denials, dashboard aggregates,
 filtered user listing, a promote/demote round trip, `SELF_LOCKOUT`, a deactivation lockout, quiz
 creation, slug stability across a rename, the publish rules, the delete rules, category
 create/rename/delete, question authoring, reordering, `PUT` with retained option ids, the
@@ -481,7 +500,8 @@ answer round-trip, a cross-student 404, submitting and grading over HTTP, an ide
 locked write after grading, the catalogue reflecting the stored score, the released answer key, the
 `409` guarding a live attempt, the history and its filters, a cross-student review `404`, the dashboard statistics over HTTP, the
 dashboard's 401/403 and cross-student scoping, the platform analytics payload with its invariants, and
-the analytics window validation plus both refusals). See
+the analytics window validation plus both refusals, the leaderboard's ordering and count
+invariants, no email leak, metric/period/category handling and its `422`/`404`/`401`). See
 [`docs/testing.md`](docs/testing.md) for the full inventory, a manual QA checklist and the known
 security trade-offs.
 
@@ -495,7 +515,7 @@ The Turso-only rule applies to the running application, not to tests.
 
 ---
 
-## API surface (Day 11)
+## API surface (Day 12)
 
 | Method | Path                                            | Description                                         |
 | ------ | ----------------------------------------------- | --------------------------------------------------- |
@@ -537,6 +557,7 @@ The Turso-only rule applies to the running application, not to tests.
 | GET    | `/api/student/attempts/:id`                     | Questions, saved answers, remaining time            |
 | PUT    | `/api/student/attempts/:id/answers/:questionId` | Save or clear one answer                            |
 | GET    | `/api/student/dashboard`                        | Statistics, trend, categories, activity, recent     |
+| GET    | `/api/leaderboard`                              | Ranked students by metric, period and category      |
 | GET    | `/api/student/attempts`                         | Paged attempt history with scores and counts        |
 | GET    | `/api/student/attempts/:id/review`              | The answer key, only once the attempt is finished   |
 | POST   | `/api/student/attempts/:id/submit`              | Grade the paper — manual or at the deadline         |
@@ -1012,6 +1033,43 @@ Full detail is in [`docs/admin-analytics.md`](docs/admin-analytics.md).
 
 ---
 
+## Leaderboard (Day 12)
+
+```
+GET /api/leaderboard?metric=average|best|completed&period=all|month|week&categoryId=…
+```
+
+One endpoint answers every board the spec asks for: overall and per-category, ranked by average score,
+best score or quizzes completed, over all time, the last 30 days or the last 7.
+
+The ranking rules are the product, so they live in one pure function in `@quiz/shared`:
+
+| Rule          | Behaviour                                                                                    |
+| ------------- | -------------------------------------------------------------------------------------------- |
+| Who ranks     | Graded attempts only (`PASSED`/`FAILED`) — a live paper has no score                         |
+| Order         | Chosen metric, then average, then best score, then quizzes completed, then name              |
+| Ties          | Competition ranking — `1, 2, 2, 4`; equal values share a rank and the next place skips ahead |
+| Gap           | Metric points (or quizzes) behind the row above; `0` for the leader and for tied rows        |
+| Periods       | Rolling windows on `completed_at`, so "this week" means the last 7 days on any day           |
+| Your position | `currentUser` is resolved against the whole board, not the visible page                      |
+
+The query is strict (`422` for `?metric=streak`, `?period=year`, `?limit=0|500`) while the page's
+parser falls back to the defaults, so a hand-edited URL always renders something sensible.
+
+On screen, `/student/leaderboard` (a live item in the student nav) shows:
+
+- metric chips (average / best / completed), period chips (all time / this month / this week) and a
+  category row built from the same catalogue call the quiz list uses — all links, all in the URL;
+- **your position** — rank, metric value, finished attempts, quizzes completed and pass rate, with
+  `2nd of 4 · top 50%` as the caption and an invitation to take a quiz when the caller has none;
+- a **podium** for the top three and the full ranked table beneath it, the caller's row tinted and
+  badged **You**;
+- a short "how ranking works" card that states the rules without a doc link.
+
+Full detail is in [`docs/leaderboard.md`](docs/leaderboard.md).
+
+---
+
 ## Environment variables
 
 | Variable             | Required | Default                 | Used by                 |
@@ -1062,6 +1120,12 @@ change the time taken; lazy expiry on every student read; the attempt row stores
 `answers.is_correct` is stamped for the review; the attempt screen becomes a result card. 523 Vitest
 tests and a 58-check end-to-end smoke run.
 
+Day 12 (done): the leaderboard. `GET /api/leaderboard` ranks students by average score, best score or
+quizzes completed — overall or per category, all time, monthly or weekly — with competition ranking,
+metric-unit gaps and the caller's own position resolved even off-page. `/student/leaderboard` renders
+the board server-side with the filters in the URL. 737 Vitest tests and a 69-check end-to-end smoke
+run.
+
 Day 11 (done): admin analytics. `GET /api/admin/analytics` answers the spec's admin charts — attempts
 over time, registrations, the pass/fail split, and the most popular quizzes and categories — over a
 7/14/30/90-day window, alongside the student, quiz and attempt statistics. The endpoint settles
@@ -1099,8 +1163,8 @@ and a 25-check end-to-end smoke run.
 | 9   | ✅ Results & answer review, attempt history                       |
 | 10  | ✅ Student dashboard & performance statistics                     |
 | 11  | ✅ Admin analytics — charts, windows, pass/fail                   |
-| 12  | Leaderboard — next                                                |
-| 13  | Testing & security hardening                                      |
+| 12  | ✅ Leaderboard — metrics, periods, categories, ranks              |
+| 13  | Testing & security hardening — next                               |
 | 14  | Deployment & docs                                                 |
 
 ---
