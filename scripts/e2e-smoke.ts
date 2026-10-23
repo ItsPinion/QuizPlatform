@@ -488,6 +488,69 @@ try {
     return `200 · ${body.categories.length} categories`;
   });
 
+  await check('typed category matches case-insensitively (no duplicates)', async () => {
+    const before = (await (
+      await fetch(`${baseUrl}/api/admin/categories`, { headers: { cookie: adminCookie } })
+    ).json()) as { categories: { id: string; name: string }[] };
+
+    const existing = before.categories[0];
+    if (!existing) throw new Error('expected seeded categories');
+
+    const res = await fetch(`${baseUrl}/api/admin/categories`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({ name: `  ${existing.name.toUpperCase()}  ` }),
+    });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as { category: { id: string }; created: boolean };
+    if (body.created !== false) throw new Error('an existing name must not create a row');
+    if (body.category.id !== existing.id) throw new Error('matched the wrong category');
+
+    const after = (await (
+      await fetch(`${baseUrl}/api/admin/categories`, { headers: { cookie: adminCookie } })
+    ).json()) as { categories: unknown[] };
+    if (after.categories.length !== before.categories.length) {
+      throw new Error('the category count moved');
+    }
+
+    return `200 · reused "${existing.name}" (created: false)`;
+  });
+
+  await check('POST /api/admin/quizzes accepts a category name', async () => {
+    const categories = (await (
+      await fetch(`${baseUrl}/api/admin/categories`, { headers: { cookie: adminCookie } })
+    ).json()) as { categories: { id: string; name: string }[] };
+
+    const target = categories.categories[0];
+    if (!target) throw new Error('expected seeded categories');
+
+    const res = await fetch(`${baseUrl}/api/admin/quizzes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({
+        title: 'E2E Category Name Quiz',
+        categoryName: target.name.toLowerCase(),
+        durationMinutes: 10,
+        passingScore: 40,
+      }),
+    });
+    expectStatus(res, 201);
+
+    const body = (await res.json()) as {
+      quiz: { id: string; categoryId: string; categoryName: string };
+    };
+    if (body.quiz.categoryId !== target.id) throw new Error('category name did not resolve');
+
+    const cleanup = await fetch(`${baseUrl}/api/admin/quizzes/${body.quiz.id}`, {
+      method: 'DELETE',
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(cleanup, 200);
+
+    return `201 · resolved "${body.quiz.categoryName}" by name, then deleted`;
+  });
+
   await check('GET /api/admin/quizzes returns aggregates', async () => {
     const res = await fetch(`${baseUrl}/api/admin/quizzes?pageSize=5`, {
       headers: { cookie: adminCookie },
@@ -654,6 +717,13 @@ try {
       body: JSON.stringify({ title: 'Nope', categoryId: 'nope' }),
     });
     expectStatus(create, 403);
+
+    const category = await fetch(`${baseUrl}/api/admin/categories`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: studentCookie },
+      body: JSON.stringify({ name: 'Student Category' }),
+    });
+    expectStatus(category, 403);
 
     return '403 · FORBIDDEN';
   });

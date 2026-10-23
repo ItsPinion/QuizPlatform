@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { CategoryCombobox } from '@/components/category-combobox';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,7 +38,7 @@ export function QuizForm({ categories, quiz }: Props) {
   const [form, setForm] = useState({
     title: quiz?.title ?? '',
     description: quiz?.description ?? '',
-    categoryId: quiz?.categoryId ?? categories[0]?.id ?? '',
+    categoryName: quiz?.categoryName ?? '',
     difficulty: (quiz?.difficulty ?? 'MEDIUM') as AdminQuiz['difficulty'],
     durationMinutes: String(quiz?.durationMinutes ?? 20),
     passingScore: String(quiz?.passingScore ?? 60),
@@ -58,7 +59,9 @@ export function QuizForm({ categories, quiz }: Props) {
     const payload = {
       title: form.title,
       description: form.description.trim() === '' ? null : form.description,
-      categoryId: form.categoryId,
+      // Send the name, not an id: the API resolves it case-insensitively and
+      // creates the category only if it really is new.
+      categoryName: form.categoryName,
       difficulty: form.difficulty,
       durationMinutes: Number(form.durationMinutes),
       passingScore: Number(form.passingScore),
@@ -137,20 +140,13 @@ export function QuizForm({ categories, quiz }: Props) {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="categoryId">Category</Label>
-          <select
-            id="categoryId"
-            value={form.categoryId}
-            onChange={(event) => update('categoryId', event.target.value)}
-            className={SELECT_CLASS}
-            required
-          >
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+          <Label htmlFor="categoryName">Category</Label>
+          <CategoryCombobox
+            id="categoryName"
+            categories={categories}
+            value={form.categoryName}
+            onChange={(value) => update('categoryName', value)}
+          />
         </div>
 
         <div className="space-y-1.5">

@@ -10,6 +10,7 @@ import {
   parseQuizFilters,
   publishBlocker,
   quizzesHref,
+  rankCategories,
   statusTone,
   toQuizQuery,
   type QuizFilters,
@@ -173,5 +174,41 @@ describe('lifecycle hints', () => {
     expect(deleteBlocker(0)).toBeNull();
     expect(deleteBlocker(1)).toBe('1 attempt — unpublish instead');
     expect(deleteBlocker(4)).toBe('4 attempts — unpublish instead');
+  });
+});
+
+describe('rankCategories', () => {
+  const categories = [
+    { name: 'Java' },
+    { name: 'JavaScript' },
+    { name: 'React' },
+    { name: 'Node.js' },
+    { name: 'Advanced JavaScript' },
+  ];
+
+  it('returns the list unchanged for an empty query', () => {
+    expect(rankCategories('', categories)).toEqual(categories);
+  });
+
+  it('puts an exact match first, whatever the casing', () => {
+    expect(rankCategories('javascript', categories)[0]?.name).toBe('JavaScript');
+  });
+
+  it('ranks prefix matches above substring matches', () => {
+    const names = rankCategories('java', categories).map((category) => category.name);
+    expect(names).toEqual(['Java', 'JavaScript', 'Advanced JavaScript']);
+  });
+
+  it('drops categories that do not match at all', () => {
+    expect(rankCategories('xyz', categories)).toEqual([]);
+  });
+
+  it('is case- and whitespace-insensitive', () => {
+    expect(rankCategories('  JAVASCRIPT ', categories)[0]?.name).toBe('JavaScript');
+  });
+
+  it('honours the limit', () => {
+    expect(rankCategories('', categories, 2)).toHaveLength(2);
+    expect(rankCategories('a', categories, 1)).toHaveLength(1);
   });
 });

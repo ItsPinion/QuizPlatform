@@ -172,6 +172,48 @@ describe('schema', () => {
     );
   });
 
+  it('makes category names unique regardless of casing', async () => {
+    expect(await catalog('index')).toContain('categories_name_lower_unique');
+
+    const [existing] = await db
+      .select()
+      .from(schema.categories)
+      .where(eq(schema.categories.id, ids.category));
+
+    await expect(
+      db.insert(schema.categories).values({
+        id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        name: (existing?.name ?? 'general').toUpperCase(),
+        slug: 'case-collision',
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('still stores the name exactly as typed', async () => {
+    await db.insert(schema.categories).values({
+      id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      name: 'Case Probe',
+      slug: 'case-probe',
+    });
+
+    const rows = await db.all<{ name: string }>(
+      sql`select name from categories where slug = 'case-probe'`,
+    );
+
+    expect(rows[0]?.name).toBe('Case Probe');
+
+    await expect(
+      db.insert(schema.categories).values({
+        id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+        name: 'case probe',
+        slug: 'case-probe-lower',
+      }),
+    ).rejects.toThrow();
+
+    // Leave the fixture exactly as we found it: other tests count categories.
+    await db.delete(schema.categories).where(eq(schema.categories.slug, 'case-probe'));
+  });
+
   it('applies column defaults', async () => {
     const [user] = await db.select().from(schema.users).where(eq(schema.users.id, ids.user));
     const [quiz] = await db.select().from(schema.quizzes).where(eq(schema.quizzes.id, ids.quiz));

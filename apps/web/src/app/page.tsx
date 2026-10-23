@@ -279,7 +279,7 @@ export default function HomePage() {
             <SectionHeading
               eyebrow="Day 5 · quiz management"
               title="Create it, shape it, decide when it goes live"
-              description="Full CRUD for quizzes behind the same ADMIN guard as the rest of the console — with two rules that keep the platform honest: nothing publishes without questions, and nothing with student history gets deleted."
+              description="Full CRUD for quizzes behind the same ADMIN guard as the rest of the console, with categories you can pick from a searchable list or type on the spot — and two rules that keep the platform honest: nothing publishes without questions, and nothing with student history gets deleted."
             />
             <div className="mt-8">
               <QuizManagement />

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `categories_name_lower_unique` ON `categories` (lower("name"));

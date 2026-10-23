@@ -85,6 +85,43 @@ const titleField = z
 
 const categoryField = z.string().uuid('Choose a category');
 
+/**
+ * Categories are matched case-insensitively and created on the fly.
+ *
+ * The name is stored as the admin typed it ("Data Structures"), but comparison —
+ * in the combobox and in the API — goes through `normalizeCategoryName`, so
+ * "data structures", "Data  Structures" and "Data Structures" are one category.
+ */
+export const categoryNameSchema = z
+  .string()
+  .trim()
+  .min(2, 'Category name must be at least 2 characters')
+  .max(80, 'Category name must be at most 80 characters')
+  // Store one space where the admin typed three: the display name is the name.
+  .transform((value) => value.replace(/\s+/g, ' '));
+
+export function normalizeCategoryName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/**
+ * Find the category a typed name refers to, ignoring case and extra whitespace.
+ * Used by the API before creating anything, and by the combobox to decide
+ * whether it should offer "create" or "use existing".
+ */
+export function findCategoryByName<T extends { name: string }>(
+  name: string,
+  categories: readonly T[],
+): T | undefined {
+  const needle = normalizeCategoryName(name);
+  if (!needle) return undefined;
+
+  return categories.find((category) => normalizeCategoryName(category.name) === needle);
+}
+
+export const createCategorySchema = z.object({ name: categoryNameSchema });
+export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
+
 const durationField = z.coerce
   .number()
   .int('Use whole minutes')
@@ -105,16 +142,34 @@ const maxAttemptsField = z.coerce
 
 const descriptionField = optionalText(2000, 'Description must be at most 2000 characters');
 
-export const quizContentSchema = z.object({
-  title: titleField,
-  description: descriptionField,
-  categoryId: categoryField,
-  difficulty: difficultySchema.default('MEDIUM'),
-  durationMinutes: durationField.default(20),
-  passingScore: passingScoreField.default(60),
-  maxAttempts: maxAttemptsField.default(2),
-  thumbnailUrl: optionalThumbnail,
-});
+/**
+ * A quiz belongs to exactly one category, named one of two ways:
+ *
+ * - `categoryId` — the caller picked an existing category;
+ * - `categoryName` — the admin typed a name. The API resolves it
+ *   case-insensitively and creates the category only if it is genuinely new, in
+ *   the same request. Nothing is created for a quiz that never gets saved.
+ */
+export const quizContentSchema = z
+  .object({
+    title: titleField,
+    description: descriptionField,
+    categoryId: categoryField.optional(),
+    categoryName: categoryNameSchema.optional(),
+    difficulty: difficultySchema.default('MEDIUM'),
+    durationMinutes: durationField.default(20),
+    passingScore: passingScoreField.default(60),
+    maxAttempts: maxAttemptsField.default(2),
+    thumbnailUrl: optionalThumbnail,
+  })
+  .refine((value) => !(value.categoryId && value.categoryName), {
+    message: 'Send either categoryId or categoryName, not both',
+    path: ['categoryName'],
+  })
+  .refine((value) => Boolean(value.categoryId ?? value.categoryName), {
+    message: 'Choose a category or type a new one',
+    path: ['categoryName'],
+  });
 
 export const createQuizSchema = quizContentSchema;
 /** Output type — what the API hands to the query layer. */
@@ -135,6 +190,7 @@ export const updateQuizSchema = z
     title: titleField.optional(),
     description: descriptionField.optional(),
     categoryId: categoryField.optional(),
+    categoryName: categoryNameSchema.optional(),
     difficulty: difficultySchema.optional(),
     durationMinutes: durationField.optional(),
     passingScore: passingScoreField.optional(),
@@ -143,6 +199,10 @@ export const updateQuizSchema = z
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: 'Provide at least one field to update',
+  })
+  .refine((value) => !(value.categoryId && value.categoryName), {
+    message: 'Send either categoryId or categoryName, not both',
+    path: ['categoryName'],
   });
 export type UpdateQuizInput = z.infer<typeof updateQuizSchema>;
 export type UpdateQuizFormValues = z.input<typeof updateQuizSchema>;

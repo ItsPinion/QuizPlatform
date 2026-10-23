@@ -4,6 +4,8 @@ import {
   canDelete,
   canPublish,
   createQuizSchema,
+  findCategoryByName,
+  normalizeCategoryName,
   quizListQuerySchema,
   slugify,
   uniqueSlug,
@@ -206,5 +208,78 @@ describe('lifecycle rules', () => {
   it('refuses deletion once a student has attempted the quiz', () => {
     expect(canDelete({ attemptCount: 0 })).toBe(true);
     expect(canDelete({ attemptCount: 2 })).toBe(false);
+  });
+});
+
+describe('category names', () => {
+  const categories = [
+    { id: '1', name: 'JavaScript' },
+    { id: '2', name: 'Data Structures' },
+  ];
+
+  it('normalizes case and repeated whitespace', () => {
+    expect(normalizeCategoryName('  Data   Structures ')).toBe('data structures');
+    expect(normalizeCategoryName('JAVASCRIPT')).toBe('javascript');
+    expect(normalizeCategoryName('   ')).toBe('');
+  });
+
+  it('finds an existing category whatever the casing or spacing', () => {
+    expect(findCategoryByName('javascript', categories)?.id).toBe('1');
+    expect(findCategoryByName('  Data   structures ', categories)?.id).toBe('2');
+    expect(findCategoryByName('JAVASCRIPT', categories)?.id).toBe('1');
+  });
+
+  it('returns undefined for a name that is genuinely new', () => {
+    expect(findCategoryByName('React', categories)).toBeUndefined();
+    expect(findCategoryByName('Java', categories)).toBeUndefined();
+    expect(findCategoryByName('', categories)).toBeUndefined();
+  });
+});
+
+describe('category choice on a quiz', () => {
+  const base = { title: 'Category choice', difficulty: 'EASY' as const };
+
+  it('accepts an existing category by id', () => {
+    expect(createQuizSchema.safeParse({ ...base, categoryId: CATEGORY_ID }).success).toBe(true);
+  });
+
+  it('accepts a typed name and leaves creation to the API', () => {
+    const parsed = createQuizSchema.parse({ ...base, categoryName: '  Machine   Learning ' });
+    expect(parsed.categoryName).toBe('Machine Learning');
+  });
+
+  it('rejects a payload with neither', () => {
+    const result = createQuizSchema.safeParse(base);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.message)).toContain(
+        'Choose a category or type a new one',
+      );
+    }
+  });
+
+  it('rejects a payload with both', () => {
+    const result = createQuizSchema.safeParse({
+      ...base,
+      categoryId: CATEGORY_ID,
+      categoryName: 'X',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('lets an update change the category by name', () => {
+    expect(updateQuizSchema.parse({ categoryName: 'React' })).toEqual({ categoryName: 'React' });
+  });
+
+  it('lets an update omit the category entirely', () => {
+    expect(updateQuizSchema.parse({ title: 'No category change' })).toEqual({
+      title: 'No category change',
+    });
+  });
+
+  it('rejects an update that sends both forms', () => {
+    expect(
+      updateQuizSchema.safeParse({ categoryId: CATEGORY_ID, categoryName: 'React' }).success,
+    ).toBe(false);
   });
 });

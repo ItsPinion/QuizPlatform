@@ -6,6 +6,7 @@ import {
   FileText,
   Lock,
   ShieldCheck,
+  Tags,
   Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -52,7 +53,12 @@ const CAPABILITIES = [
   {
     icon: FileText,
     title: 'Content, not identifiers',
-    body: 'The client sends a title and settings; the server derives the slug and keeps it stable, so renaming a quiz never breaks a link someone already holds.',
+    body: 'The client sends a title and a category name, never ids: the server derives the slug, keeps it stable across renames, and resolves the category case-insensitively — creating it only when it is genuinely new.',
+  },
+  {
+    icon: Tags,
+    title: 'Categories are data',
+    body: 'The category field is a typeahead, not a fixed list. Type "javascript" and the server reuses JavaScript; type something nobody has used and it is created for you — compared lowercased, backed by a unique lower(name) index.',
   },
   {
     icon: CircleCheck,
@@ -142,11 +148,15 @@ export function QuizManagement() {
               <Trash2 className="text-destructive size-3.5" />
               <span className="font-mono">DELETE /:id</span> → 409 with attempts
             </p>
+            <p className="flex items-center gap-1.5">
+              <Tags className="text-primary size-3.5" />
+              <span className="font-mono">categoryName: &quot;rust&quot;</span> → found or created
+            </p>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         {CAPABILITIES.map((item) => (
           <div key={item.title} className="border-border/70 bg-background/40 rounded-xl border p-4">
             <item.icon className="text-primary size-4" />

@@ -10,7 +10,7 @@ import type {
   QuizListResponse,
   UpdateQuizInput,
 } from '@quiz/shared/quiz';
-import { uniqueSlug } from '@quiz/shared/quiz';
+import { findCategoryByName, uniqueSlug } from '@quiz/shared/quiz';
 import { db, schema } from '@quiz/db';
 
 import { ApiError } from './errors';
@@ -163,6 +163,139 @@ async function requireQuiz(id: string): Promise<AdminQuiz> {
   return quiz;
 }
 
+/** Trim and collapse internal whitespace, preserving the admin's casing. */
+function cleanCategoryName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ');
+}
+
+async function categoryRows(): Promise<{ id: string; name: string; slug: string }[]> {
+  return db
+    .select({ id: categories.id, name: categories.name, slug: categories.slug })
+    .from(categories);
+}
+
+/** True when the driver reports one of the category unique indexes rejecting a write. */
+function isUniqueViolation(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /unique constraint failed|sqlite_constraint_unique/i.test(message);
+}
+
+/**
+ * Resolve the category a quiz should belong to.
+ *
+ * `categoryId` is used as-is (after an existence check). `categoryName` is
+ * matched case-insensitively against the existing categories, and only created
+ * when nothing matches — so "javascript" binds to "JavaScript" instead of
+ * producing a second category. Creation happens in the same request as the
+ * quiz, so abandoning the form leaves nothing behind.
+ */
+async function resolveCategoryId(input: {
+  categoryId?: string;
+  categoryName?: string;
+}): Promise<string> {
+  if (input.categoryId) {
+    await assertCategoryExists(input.categoryId);
+    return input.categoryId;
+  }
+
+  const name = cleanCategoryName(input.categoryName ?? '');
+  if (!name) {
+    throw new ApiError(422, 'CATEGORY_REQUIRED', 'Choose a category or type a new one.');
+  }
+
+  const rows = await categoryRows();
+  const existing = findCategoryByName(name, rows);
+  if (existing) return existing.id;
+
+  const id = randomUUID();
+
+  try {
+    await db.insert(categories).values({
+      id,
+      name,
+      slug: uniqueSlug(
+        name,
+        rows.map((row) => row.slug),
+      ),
+    });
+  } catch (error) {
+    // Two requests may resolve the same new name at once; the case-insensitive
+    // unique index makes one of them lose, and that loser just adopts the winner.
+    if (!isUniqueViolation(error)) throw error;
+
+    const [winner] = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(eq(categories.name, name))
+      .limit(1);
+
+    if (winner) return winner.id;
+    throw error;
+  }
+
+  return id;
+}
+
+/**
+ * Create a category from the console, or return the one that already matches.
+ *
+ * Idempotent by name: "react" against an existing "React" is a 200 with that
+ * category and `created: false`, never a duplicate.
+ */
+export async function createCategory(
+  name: string,
+): Promise<{ category: CategoryOption; created: boolean }> {
+  const clean = cleanCategoryName(name);
+  const rows = await categoryRows();
+  const existing = findCategoryByName(clean, rows);
+
+  if (existing) {
+    const [row] = await db
+      .select({ value: count() })
+      .from(quizzes)
+      .where(eq(quizzes.categoryId, existing.id));
+
+    return {
+      category: { ...existing, quizCount: Number(row?.value ?? 0) },
+      created: false,
+    };
+  }
+
+  const id = randomUUID();
+
+  try {
+    await db.insert(categories).values({
+      id,
+      name: clean,
+      slug: uniqueSlug(
+        clean,
+        rows.map((row) => row.slug),
+      ),
+    });
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+
+    const races = await categoryRows();
+    const winner = findCategoryByName(clean, races);
+    if (!winner) throw error;
+
+    return { category: { ...winner, quizCount: 0 }, created: false };
+  }
+
+  return {
+    category: {
+      id,
+      name: clean,
+      slug: uniqueSlug(
+        clean,
+        rows.map((row) => row.slug),
+      ),
+      quizCount: 0,
+    },
+    created: true,
+  };
+}
+
 /** A quiz must point at a real category; the foreign key alone would surface as a 500. */
 async function assertCategoryExists(categoryId: string): Promise<void> {
   const [row] = await db
@@ -182,7 +315,7 @@ async function takenSlugs(excludeId?: string): Promise<string[]> {
 }
 
 export async function createQuiz(input: CreateQuizInput): Promise<AdminQuiz> {
-  await assertCategoryExists(input.categoryId);
+  const categoryId = await resolveCategoryId(input);
 
   const slug = uniqueSlug(input.title, await takenSlugs());
   const id = randomUUID();
@@ -192,7 +325,7 @@ export async function createQuiz(input: CreateQuizInput): Promise<AdminQuiz> {
     title: input.title,
     slug,
     description: input.description ?? null,
-    categoryId: input.categoryId,
+    categoryId,
     difficulty: input.difficulty,
     durationMinutes: input.durationMinutes,
     passingScore: input.passingScore,
@@ -209,16 +342,16 @@ export async function createQuiz(input: CreateQuizInput): Promise<AdminQuiz> {
 export async function updateQuiz(id: string, input: UpdateQuizInput): Promise<AdminQuiz> {
   const existing = await requireQuiz(id);
 
-  if (input.categoryId && input.categoryId !== existing.categoryId) {
-    await assertCategoryExists(input.categoryId);
-  }
-
   const patch: Record<string, unknown> = {};
+
+  if (input.categoryId || input.categoryName) {
+    const categoryId = await resolveCategoryId(input);
+    if (categoryId !== existing.categoryId) patch.categoryId = categoryId;
+  }
 
   for (const key of [
     'title',
     'description',
-    'categoryId',
     'difficulty',
     'durationMinutes',
     'passingScore',

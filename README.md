@@ -7,7 +7,8 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 > authentication (register / login / logout / `/me`, scrypt hashes, httpOnly JWT cookies), role-scoped
 > API namespaces, guarded `/admin` + `/student` areas, an admin console with dashboard statistics and
 > user management, and full quiz management — CRUD plus a guarded publish/unpublish lifecycle.
-> 338 automated tests and a 34-check end-to-end smoke run. Categories and questions are next.
+> 364 automated tests and a 36-check end-to-end smoke run. Quiz categories are created on the
+> fly from the form — no fixed list to edit — and questions are next.
 
 ---
 
@@ -278,7 +279,7 @@ Seven tables, defined in `packages/db/src/schema.ts`:
 | Table        | Purpose                                                                                             |
 | ------------ | --------------------------------------------------------------------------------------------------- |
 | `users`      | Both roles (`ADMIN`, `STUDENT`), status, scrypt password hash                                       |
-| `categories` | Quiz categories (unique name + slug)                                                                |
+| `categories` | Quiz categories — unique name, unique slug, and a `lower(name)` index so "Rust" and "rust" collide  |
 | `quizzes`    | Metadata, category FK, duration, passing score, max attempts, `DRAFT` / `PUBLISHED` / `UNPUBLISHED` |
 | `questions`  | Belongs to a quiz, marks, difficulty, explanation, display position                                 |
 | `options`    | Belongs to a question, `is_correct` flag, display position                                          |
@@ -296,6 +297,9 @@ Design notes:
 - `answers.is_correct` is nullable while an attempt is `IN_PROGRESS`; the backend grades on submit.
 - Quiz-scoped child rows cascade on delete; `quizzes.category_id` is `restrict` so a category with
   quizzes cannot be silently removed.
+- `categories.name` is stored exactly as typed but indexed twice: `unique(slug)`, `unique(name)` and
+  `unique(lower(name))`. The last one is what makes the typeahead's case-insensitive "find or
+  create" safe against two admins submitting the same new name at once.
 
 ---
 
@@ -363,11 +367,18 @@ plus wrong-password/unknown-email parity, inactive accounts, `/me` with cookie a
 tampered/expired/foreign-signed tokens, deleted and deactivated users, logout clearing the cookie,
 and the `requireRole` guard (allow, 403, 401).
 
-Day 5 adds 36 API tests: the directory (search, status/difficulty/category filters, both sorts,
+Day 5 adds 44 API tests: the directory (search, status/difficulty/category filters, both sorts,
 pagination, cleared filters, 422s), joined aggregates that do not fan out, creation with derived and
 de-duplicated slugs, the full validation matrix, partial updates that keep their other columns and
 their slug, the publish/unpublish lifecycle including both 409s and idempotent republishing, deletion
 with cascade for untouched quizzes and `QUIZ_HAS_ATTEMPTS` for attempted ones.
+
+Category resolution adds eight more: a typed name that matches an existing category reuses it in any
+casing ("javascript" → "JavaScript"), an unknown name is created and used in the same request, a new
+name that differs only by internal whitespace collapses to the existing row, `POST
+/api/admin/categories` answers `201 created` then `200 created: false` on the repeat, sending both
+`categoryId` and `categoryName` is rejected, sending neither is rejected, an unknown `categoryId` is
+still `422 CATEGORY_NOT_FOUND`, and `PATCH` can move a quiz to a brand-new category by name alone.
 
 Day 4 adds 30 API tests: statistics arithmetic that agrees with the database, the pass-rate range,
 the newest-five strips, live reflection of a new account, directory filters (role, status, name and
@@ -416,7 +427,8 @@ The Turso-only rule applies to the running application, not to tests.
 | GET    | `/api/admin/users`                 | Paged, filtered, sorted user directory              |
 | GET    | `/api/admin/users/:id`             | One user with attempt statistics                    |
 | PATCH  | `/api/admin/users/:id`             | Change a role and/or status                         |
-| GET    | `/api/admin/categories`            | Category list + quiz counts (read-only until Day 6) |
+| GET    | `/api/admin/categories`            | Category list + quiz counts (feeds the typeahead)   |
+| POST   | `/api/admin/categories`            | Find-or-create a category by name (201 / 200)       |
 | GET    | `/api/admin/quizzes`               | Paged, filtered, sorted quiz directory              |
 | POST   | `/api/admin/quizzes`               | Create a quiz — always starts as `DRAFT`            |
 | GET    | `/api/admin/quizzes/:id`           | One quiz with question and attempt counts           |

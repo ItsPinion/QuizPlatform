@@ -93,9 +93,19 @@ bun run test --filter=@quiz/web
   409, republishing works, and all of it is 403 for a student.
 - **Deletion** — cascades questions for an untouched quiz, refuses with `QUIZ_HAS_ATTEMPTS` when
   attempts exist (and leaves the quiz in place), 404 for unknown ids.
+- **Category resolution** — the same typed name in a different casing reuses the existing row (a
+  new-category test asserts the returned `categoryId` is the seeded id, not a fresh one); an unknown
+  name is created and used within the same `POST`; internal whitespace is collapsed before the
+  comparison, so `"Data   Engineering"` matches `"Data Engineering"`; `POST /api/admin/categories`
+  is `201 created` then `200 created: false`; both forms in one body → 422; neither → 422; an unknown
+  `categoryId` still → `422 CATEGORY_NOT_FOUND`; and `PATCH { categoryName }` moves a quiz to a
+  brand-new category without touching anything else.
 - **Contracts** — `slugify` (case, punctuation, accents, length cap), `uniqueSlug` (suffixes, `quiz`
-  fallback, `Set` input), create defaults, update-without-defaults, list query defaults, and the
-  `canPublish` / `canDelete` helpers.
+  fallback, `Set` input), create defaults, update-without-defaults, list query defaults, the
+  `canPublish` / `canDelete` helpers, `categoryNameSchema` (trim, 2–80 chars, whitespace collapse),
+  `normalizeCategoryName` and `findCategoryByName` (case-insensitive, whitespace-insensitive).
+- **Web helpers** — `rankCategories` puts an exact match first regardless of casing, ranks prefix
+  matches above substring matches, drops non-matches, and honours the limit.
 
 ---
 
@@ -131,16 +141,19 @@ then asserts:
 22. deactivation → the victim's next request is 403 `ACCOUNT_INACTIVE`, and reactivation restores it
 23. `/api/admin/users` → 403 for the student
 24. `/api/admin/categories` → 200 with the seeded categories
-25. `/api/admin/quizzes` → 200 with joined aggregates
-26. create a quiz → 201, `DRAFT`, slug derived from the title
-27. `PATCH` it → 200, title and duration updated, slug unchanged
-28. publish it → 409 `QUIZ_HAS_NO_QUESTIONS`
-29. a seeded draft publishes and then unpublishes
-30. deleting an attempted quiz → 409 `QUIZ_HAS_ATTEMPTS`
-31. deleting the created quiz → 200, then `GET` → 404
-32. quiz management → 403 for the student
-33. logout → 200 with `Max-Age=0`
-34. unknown route → 404 `NOT_FOUND`
+25. `POST /api/admin/categories` with an existing name in SHOUTING case → 200 `created: false`, same
+    id, and the category count does not move
+26. create a quiz with `categoryName` (lowercased) → 201, resolved to that category's id, then deleted
+27. `/api/admin/quizzes` → 200 with joined aggregates
+28. create a quiz → 201, `DRAFT`, slug derived from the title
+29. `PATCH` it → 200, title and duration updated, slug unchanged
+30. publish it → 409 `QUIZ_HAS_NO_QUESTIONS`
+31. a seeded draft publishes and then unpublishes
+32. deleting an attempted quiz → 409 `QUIZ_HAS_ATTEMPTS`
+33. deleting the created quiz → 200, then `GET` → 404
+34. quiz management and category creation → 403 for the student
+35. logout → 200 with `Max-Age=0`
+36. unknown route → 404 `NOT_FOUND`
 
 It prints a pass/fail table, exits non-zero on failure, and removes the database afterwards.
 
@@ -189,6 +202,12 @@ Useful after changing auth, the proxy, or the cookie. Start with `bun dev`, then
 - [ ] Try to delete a quiz that has attempts → the button is disabled and says why; `curl` the same
       `DELETE` and get `409 QUIZ_HAS_ATTEMPTS`.
 - [ ] Delete a freshly created quiz → it disappears and the API then answers `404`.
+- [ ] In the create form, type `java` into **Category** → suggestions appear with quiz counts; pick
+      `JavaScript` and the hint says _Existing category_.
+- [ ] Type a name nobody has used, e.g. `Rust 2026` → the hint says _will be created_; save, reopen the
+      create form and type `rust 2026` → it now suggests that category instead of offering to create it.
+- [ ] Wide spacing (`Data   Engineering`) resolves to the existing `Data Engineering` rather than
+      making a duplicate, and `/admin/categories` (via `curl`) still lists one row per name.
 
 ---
 

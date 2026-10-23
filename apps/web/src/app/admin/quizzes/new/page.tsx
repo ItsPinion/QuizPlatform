@@ -65,13 +65,6 @@ export default async function NewQuizPage() {
                 <code className="bg-muted rounded px-1">/api/health/db</code>.
               </p>
             </div>
-          ) : categories.length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="text-sm font-medium">No categories yet.</p>
-              <p className="text-muted-foreground mt-1 text-[12.5px]">
-                Category management arrives in Day 6; the seed creates ten of them.
-              </p>
-            </div>
           ) : (
             <QuizForm categories={categories} />
           )}

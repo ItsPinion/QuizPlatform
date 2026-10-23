@@ -54,6 +54,9 @@ export const categories = sqliteTable(
   },
   (table) => [
     uniqueIndex('categories_name_unique').on(table.name),
+    // Names are compared case-insensitively ("react" and "React" are one
+    // category), so the database enforces that, not just the application.
+    uniqueIndex('categories_name_lower_unique').on(sql`lower(${table.name})`),
     uniqueIndex('categories_slug_unique').on(table.slug),
   ],
 );

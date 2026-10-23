@@ -7,12 +7,12 @@ import {
   userListResponseSchema,
 } from '@quiz/shared/admin';
 import { PERMISSIONS, type AccessDescriptor } from '@quiz/shared/auth';
-import { categoryListResponseSchema } from '@quiz/shared/quiz';
+import { categoryListResponseSchema, createCategorySchema } from '@quiz/shared/quiz';
 import { Hono } from 'hono';
 
 import { buildDashboardStats } from '../lib/admin-stats';
 import { getUserById, listUsers, updateUser } from '../lib/admin-users';
-import { listCategories } from '../lib/admin-quizzes';
+import { createCategory, listCategories } from '../lib/admin-quizzes';
 import { adminQuizRoutes } from './admin-quizzes';
 import { ApiError, jsonBody } from '../lib/errors';
 import type { AppEnv } from '../lib/types';
@@ -90,13 +90,21 @@ export const adminRoutes = new Hono<AppEnv>()
   })
 
   /* ------------------------------- quizzes -------------------------------- */
-  /**
-   * Read-only for now: Day 6 adds create/update/delete for categories, and the
-   * quiz form needs the list to populate its select today.
-   */
+  /** Full category list with quiz counts, for the console's category picker. */
   .get('/categories', async (c) => {
     const categories = await listCategories();
     return c.json(categoryListResponseSchema.parse({ categories }), 200);
+  })
+
+  /**
+   * Create-or-pick: naming an existing category (any casing) returns it with
+   * `created: false`, so the console can offer "type a name" without ever
+   * producing "React" and "react" side by side.
+   */
+  .post('/categories', jsonBody(createCategorySchema), async (c) => {
+    const { category, created } = await createCategory(c.req.valid('json').name);
+
+    return c.json({ category, created }, created ? 201 : 200);
   })
 
   .route('/quizzes', adminQuizRoutes)

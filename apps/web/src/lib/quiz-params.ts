@@ -1,4 +1,5 @@
 import type { QuizSort } from '@quiz/shared/quiz';
+import { normalizeCategoryName } from '@quiz/shared/quiz';
 
 export type SearchParamsInput = Record<string, string | string[] | undefined>;
 
@@ -139,4 +140,33 @@ export function deleteBlocker(attemptCount: number): string | null {
   return attemptCount > 0
     ? `${attemptCount} attempt${attemptCount === 1 ? '' : 's'} — unpublish instead`
     : null;
+}
+
+/**
+ * Order categories for the combobox: an exact (case-insensitive) match first,
+ * then prefix matches, then "contains", and everything else when the box is
+ * empty. Ties fall back to the database order, which is alphabetical.
+ */
+export function rankCategories<T extends { name: string }>(
+  query: string,
+  categories: readonly T[],
+  limit = 8,
+): T[] {
+  const needle = normalizeCategoryName(query);
+
+  if (!needle) return categories.slice(0, limit);
+
+  const scored: { category: T; rank: number }[] = [];
+
+  for (const category of categories) {
+    const name = normalizeCategoryName(category.name);
+
+    if (name === needle) scored.push({ category, rank: 0 });
+    else if (name.startsWith(needle)) scored.push({ category, rank: 1 });
+    else if (name.includes(needle)) scored.push({ category, rank: 2 });
+  }
+
+  scored.sort((a, b) => a.rank - b.rank || a.category.name.localeCompare(b.category.name));
+
+  return scored.slice(0, limit).map((entry) => entry.category);
 }

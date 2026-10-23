@@ -9,10 +9,15 @@ import { app } from '../app';
 
 /** Everything this suite creates is removed again, so the seed stays pristine. */
 const createdQuizIds: string[] = [];
+const createdCategoryIds: string[] = [];
 
 afterAll(async () => {
+  // Quizzes first: `categories` is protected by `onDelete: restrict`.
   for (const id of createdQuizIds) {
     await db.delete(schema.quizzes).where(eq(schema.quizzes.id, id));
+  }
+  for (const id of createdCategoryIds) {
+    await db.delete(schema.categories).where(eq(schema.categories.id, id));
   }
 });
 
@@ -55,13 +60,20 @@ interface CreateBody {
   thumbnailUrl?: string | null;
 }
 
-async function createQuiz(cookie: string, body: Partial<CreateBody> = {}): Promise<AdminQuiz> {
+async function createQuiz(
+  cookie: string,
+  body: Partial<Omit<CreateBody, 'categoryId'>> = {},
+  /** Defaults to an existing seeded category; pass `{ categoryName }` to exercise creation. */
+  category?: { categoryId: string } | { categoryName: string },
+): Promise<AdminQuiz> {
+  const choice = category ?? { categoryId: await firstCategoryId() };
+
   const res = await app.request('/api/admin/quizzes', {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
     body: JSON.stringify({
       title: `Test Quiz ${randomUUID().slice(0, 8)}`,
-      categoryId: await firstCategoryId(),
+      ...choice,
       ...body,
     }),
   });
@@ -644,5 +656,163 @@ describe('quiz namespace hygiene', () => {
     };
     expect(meta.docs['GET /api/admin/quizzes']).toBeTruthy();
     expect(meta.roadmap.map((entry) => entry.day)).not.toContain(5);
+  });
+});
+
+describe('category resolution', () => {
+  async function categoryNames(): Promise<{ id: string; name: string; slug: string }[]> {
+    const rows = await db
+      .select({
+        id: schema.categories.id,
+        name: schema.categories.name,
+        slug: schema.categories.slug,
+      })
+      .from(schema.categories);
+    return rows;
+  }
+
+  it('creates a genuinely new category and binds the quiz to it', async () => {
+    const cookie = await adminCookie();
+    const name = `Machine Learning ${randomUUID().slice(0, 6)}`;
+
+    const quiz = await createQuiz(
+      cookie,
+      { title: `ML Quiz ${randomUUID().slice(0, 6)}` },
+      {
+        categoryName: name,
+      },
+    );
+
+    const rows = await categoryNames();
+    const created = rows.find((row) => row.name === name);
+
+    expect(created).toBeTruthy();
+    createdCategoryIds.push(created!.id);
+    expect(created!.slug).toBe(name.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+    expect(quiz.categoryId).toBe(created!.id);
+    expect(quiz.categoryName).toBe(name);
+  });
+
+  it('reuses an existing category whatever the casing', async () => {
+    const cookie = await adminCookie();
+    const rows = await categoryNames();
+    const javascript = rows.find((row) => row.name === 'JavaScript');
+    expect(javascript).toBeTruthy();
+
+    const quiz = await createQuiz(cookie, {}, { categoryName: '  javascript ' });
+
+    expect(quiz.categoryId).toBe(javascript!.id);
+    expect(quiz.categoryName).toBe('JavaScript');
+
+    // And no second "javascript" appeared.
+    const after = await categoryNames();
+    expect(after.filter((row) => row.name.toLowerCase() === 'javascript')).toHaveLength(1);
+  });
+
+  it('collapses internal whitespace when creating', async () => {
+    const cookie = await adminCookie();
+    const suffix = randomUUID().slice(0, 5);
+    const quiz = await createQuiz(
+      cookie,
+      {},
+      {
+        categoryName: `Data   Engineering   ${suffix}`,
+      },
+    );
+
+    expect(quiz.categoryName).toBe(`Data Engineering ${suffix}`);
+    createdCategoryIds.push(quiz.categoryId);
+  });
+
+  it('rejects a quiz with neither categoryId nor categoryName', async () => {
+    const res = await app.request('/api/admin/quizzes', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: await adminCookie() },
+      body: JSON.stringify({ title: 'No category at all' }),
+    });
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { error: { details: { message: string }[] } };
+    expect(JSON.stringify(body.error.details)).toContain('Choose a category');
+  });
+
+  it('rejects a quiz that sends both forms', async () => {
+    const res = await app.request('/api/admin/quizzes', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: await adminCookie() },
+      body: JSON.stringify({
+        title: 'Both categories',
+        categoryId: await firstCategoryId(),
+        categoryName: 'React',
+      }),
+    });
+
+    expect(res.status).toBe(422);
+  });
+
+  it('can move an existing quiz to a new category by name', async () => {
+    const cookie = await adminCookie();
+    const quiz = await createQuiz(cookie);
+    const name = `Systems ${randomUUID().slice(0, 6)}`;
+
+    const res = await app.request(`/api/admin/quizzes/${quiz.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ categoryName: name }),
+    });
+
+    expect(res.status).toBe(200);
+    const updated = ((await res.json()) as { quiz: AdminQuiz }).quiz;
+
+    expect(updated.categoryName).toBe(name);
+    expect(updated.categoryId).not.toBe(quiz.categoryId);
+    createdCategoryIds.push(updated.categoryId);
+  });
+
+  it('POST /api/admin/categories creates once, then returns the existing row', async () => {
+    const cookie = await adminCookie();
+    const name = `Networking ${randomUUID().slice(0, 6)}`;
+
+    const first = await app.request('/api/admin/categories', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ name }),
+    });
+
+    expect(first.status).toBe(201);
+    const created = (await first.json()) as { category: { id: string }; created: boolean };
+    createdCategoryIds.push(created.category.id);
+    expect(created.created).toBe(true);
+
+    const second = await app.request('/api/admin/categories', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ name: `  ${name.toUpperCase()}  ` }),
+    });
+
+    expect(second.status).toBe(200);
+    const existing = (await second.json()) as { category: { id: string }; created: boolean };
+    expect(existing.created).toBe(false);
+    expect(existing.category.id).toBe(created.category.id);
+  });
+
+  it('POST /api/admin/categories validates the name and the caller', async () => {
+    const cookie = await adminCookie();
+
+    for (const name of ['', 'x', 'y'.repeat(81)]) {
+      const res = await app.request('/api/admin/categories', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ name }),
+      });
+      expect(res.status).toBe(422);
+    }
+
+    const forbidden = await app.request('/api/admin/categories', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: await studentCookie() },
+      body: JSON.stringify({ name: 'Student category' }),
+    });
+    expect(forbidden.status).toBe(403);
   });
 });
