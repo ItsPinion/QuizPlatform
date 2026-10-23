@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 import { RegisterForm } from '@/components/register-form';
 import { SiteHeader } from '@/components/site-header';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 
 export const metadata: Metadata = {
   title: 'Create an account — QuizPlatform',
@@ -19,7 +19,9 @@ export default function RegisterPage() {
         <div className="w-full max-w-md">
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl">Create your account</CardTitle>
+              <h1 className="text-xl leading-none font-semibold tracking-tight">
+                Create your account
+              </h1>
               <CardDescription>
                 Student accounts can take quizzes and track results. Administrator accounts are
                 created by an owner.

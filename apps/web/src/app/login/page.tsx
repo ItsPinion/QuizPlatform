@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { LoginForm } from '@/components/login-form';
 import { SiteHeader } from '@/components/site-header';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { safeNextPath } from '@/lib/redirect';
 
 export const metadata: Metadata = {
@@ -33,7 +33,7 @@ export default async function LoginPage({
         <div className="w-full max-w-md">
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl">Welcome back</CardTitle>
+              <h1 className="text-xl leading-none font-semibold tracking-tight">Welcome back</h1>
               <CardDescription>
                 Sign in to keep your attempts, results and progress.
               </CardDescription>
