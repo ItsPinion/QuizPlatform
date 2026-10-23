@@ -110,7 +110,7 @@ async function main() {
   if (existing.length > 0) {
     if (!FORCE) {
       console.log(
-        '✔ Database already contains users — skipping seed. Re-run with `pnpm db:seed -- --force` to reset.',
+        '✔ Database already contains users — skipping seed. Re-run with `bun run db:seed -- --force` to reset.',
       );
       return;
     }

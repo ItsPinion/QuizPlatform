@@ -177,6 +177,14 @@ Schema changes live in `packages/db/src/schema.ts`; migrations are generated, ne
 snapshots. Every other database command requires a valid `TURSO_DATABASE_URL` and
 `TURSO_AUTH_TOKEN` and fails with setup instructions if they are missing.
 
+`db:push` is intentionally interactive: drizzle-kit lists the DDL it is about to run and asks for
+confirmation, because a push can drop data. In CI/non-TTY contexts run
+`cd packages/db && bunx drizzle-kit push --force` instead.
+
+Extra arguments are forwarded to the underlying script, e.g. `bun run db:seed --force`. The scripts
+call `bun run --filter`, so if you switch package managers, update the five `db:*` entries in the
+root `package.json` as well.
+
 The client follows the documented pattern — Drizzle creates and owns the libSQL connection:
 
 ```ts
@@ -287,16 +295,17 @@ bun run test                    # all workspaces through Turbo
 bun run test --filter=@quiz/db  # one package
 ```
 
-40 tests cover the scaffolding end to end:
+42 tests cover the scaffolding end to end:
 
 **`@quiz/shared`** (8) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, and the seed credential contract.
 
-**`@quiz/db`** (20) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
+**`@quiz/db`** (22) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
 and the uniqueness/lookup indexes; column defaults; millisecond timestamp precision; unique email,
 slug and per-attempt answer constraints; quiz → questions/options/attempts/answers cascade;
 category-with-quizzes protected by `restrict`; user deletion cascading while nulling the quiz author;
-CLI behaviour for `migrate`, `seed`, skip-if-populated and `--force`; and seeded-data
+CLI behaviour for `migrate`, `seed`, skip-if-populated and `--force`; root-script wiring (arg
+forwarding and credential-free `generate`); and seeded-data
 integrity (quiz/question/option counts, one correct option each, attempt percentages consistent with
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
@@ -395,3 +404,7 @@ your own preview domain there if it differs.
 
 **Port already in use** — stop the other process or set `API_PORT` in `.env` and point
 `API_INTERNAL_URL` at the new port.
+
+**Browser console: “module factory is not available” / stale chunk errors** — chunks on disk changed
+under a running dev server (usually after reinstalling dependencies). Stop the server, delete
+`apps/web/.next`, restart, and hard-reload the page.

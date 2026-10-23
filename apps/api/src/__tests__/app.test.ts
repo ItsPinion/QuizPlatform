@@ -95,6 +95,7 @@ describe('GET /api/health/db', () => {
       expect(body.error.code).toBe('DATABASE_UNAVAILABLE');
       expect(body.error.message).toContain('cannot reach the database');
       expect(body.error.details.hint).toContain('TURSO_DATABASE_URL');
+      expect(body.error.details.hint).toContain('bun run db:migrate');
     } finally {
       process.env.TURSO_DATABASE_URL = '';
       delete process.env.TURSO_AUTH_TOKEN;

@@ -160,7 +160,7 @@ export function SetupStatus() {
 
             {health.state === 'error' ? (
               <ErrorNote message={health.message}>
-                Start the API with <code className="font-mono">pnpm dev</code> and reload.
+                Start the API with <code className="font-mono">bun dev</code> and reload.
               </ErrorNote>
             ) : null}
 
@@ -198,7 +198,7 @@ export function SetupStatus() {
 
             {database.state === 'error' ? (
               <ErrorNote message={database.message}>
-                Run <code className="font-mono">pnpm db:migrate</code> to create the schema, or
+                Run <code className="font-mono">bun run db:migrate</code> to create the schema, or
                 check your <code className="font-mono">DATABASE_URL</code>.
               </ErrorNote>
             ) : null}

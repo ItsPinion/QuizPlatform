@@ -21,11 +21,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { cn } from '@/lib/utils';
 
 const TERMINAL_LINES: { prompt?: boolean; text: string; tone?: 'muted' | 'accent' | 'ok' }[] = [
-  { prompt: true, text: 'pnpm install' },
-  { prompt: true, text: 'pnpm db:generate' },
-  { prompt: true, text: 'pnpm db:migrate' },
-  { prompt: true, text: 'pnpm db:seed' },
-  { prompt: true, text: 'pnpm dev' },
+  { prompt: true, text: 'bun install' },
+  { prompt: true, text: 'bun run db:generate' },
+  { prompt: true, text: 'bun run db:migrate' },
+  { prompt: true, text: 'bun run db:seed' },
+  { prompt: true, text: 'bun dev' },
   { text: '' },
   { text: 'web  ▸ http://localhost:3000', tone: 'accent' },
   { text: 'api  ▸ http://localhost:3001', tone: 'accent' },

@@ -27,7 +27,7 @@ let db: ReturnType<typeof createDb>;
 
 /**
  * Applies the checked-in Drizzle migrations to a throwaway database, proving the
- * migration folder replays from scratch (the same files `pnpm db:migrate` uses).
+ * migration folder replays from scratch (the same files `bun run db:migrate` uses).
  */
 beforeAll(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'quiz-schema-'));

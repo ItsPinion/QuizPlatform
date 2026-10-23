@@ -84,7 +84,7 @@ export const healthRoutes = new Hono()
             'DATABASE_UNAVAILABLE',
             'The API is running but cannot reach the database.',
             {
-              hint: 'Check TURSO_DATABASE_URL and TURSO_AUTH_TOKEN, then run `pnpm db:migrate`.',
+              hint: 'Check TURSO_DATABASE_URL and TURSO_AUTH_TOKEN, then run `bun run db:migrate`.',
               reason: describeError(error),
             },
           ),

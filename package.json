@@ -28,11 +28,11 @@
     "typecheck": "turbo run typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "db:generate": "turbo run db:generate --filter=@quiz/db",
-    "db:migrate": "turbo run db:migrate --filter=@quiz/db",
-    "db:push": "turbo run db:push --filter=@quiz/db",
-    "db:studio": "turbo run db:studio --filter=@quiz/db",
-    "db:seed": "turbo run db:seed --filter=@quiz/db"
+    "db:generate": "bun run --filter @quiz/db db:generate",
+    "db:migrate": "bun run --filter @quiz/db db:migrate",
+    "db:push": "bun run --filter @quiz/db db:push",
+    "db:studio": "bun run --filter @quiz/db db:studio",
+    "db:seed": "bun run --filter @quiz/db db:seed"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

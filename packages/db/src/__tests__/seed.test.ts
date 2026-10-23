@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,7 +8,7 @@ import { drizzle } from 'drizzle-orm/libsql';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import * as schema from '../schema';
-import { runBin } from '@quiz/test-utils/run-bin';
+import { REPO_ROOT, detectPackageManager, runBin } from '@quiz/test-utils/run-bin';
 
 const DB_PACKAGE_DIR = path.resolve(__dirname, '../..');
 
@@ -123,6 +124,48 @@ describe('database CLI scripts', () => {
     expect(seed.status).toBe(0);
     expect(seed.stdout).toContain('Resetting existing data');
     expect(rows).toMatchObject({ users: 4, quizzes: 10, attempts: 14 });
+  });
+});
+
+describe('root scripts (package-manager wiring)', () => {
+  const pm = detectPackageManager();
+
+  /** Runs a root `db:*` script the way a user would, from the repo root. */
+  function runRootScript(script: string, args: string[] = []) {
+    const result = spawnSync(pm, ['run', script, ...args], {
+      cwd: REPO_ROOT,
+      env: { ...process.env, ...testEnv() },
+      encoding: 'utf8',
+    });
+
+    return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
+  }
+
+  it('forwards `--force` to the seed script', () => {
+    // Regression: routing db:* through `turbo run` made Turbo consume
+    // `--force` as its own cache flag, so the seed never reset the database.
+    const result = runRootScript('db:seed', ['--force']);
+
+    expect(result.stdout).toContain('Resetting existing data');
+    expect(result.stdout).toContain('Seed complete');
+  });
+
+  it('generates migrations without any database credentials', () => {
+    // `drizzle-kit generate` only diffs the schema; it must not require a URL.
+    const result = spawnSync(pm, ['run', 'db:generate'], {
+      cwd: REPO_ROOT,
+      env: {
+        ...process.env,
+        TURSO_DATABASE_URL: '',
+        DATABASE_URL: '',
+        TURSO_AUTH_TOKEN: '',
+      },
+      encoding: 'utf8',
+    });
+
+    const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+    expect(output).toMatch(/No schema changes|migration file/);
+    expect(output).not.toContain('TURSO_DATABASE_URL is not set');
   });
 });
 

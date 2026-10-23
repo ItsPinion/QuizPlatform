@@ -5,30 +5,32 @@ import { Card, CardContent } from '@/components/ui/card';
 const tree = `quizplatform/
 ├─ apps/
 │  ├─ web/            Next.js 16 · App Router · Tailwind v4
-│  │  ├─ src/app/     layout, landing page, globals.css
-│  │  ├─ src/components/ui/   shadcn/ui primitives
-│  │  └─ next.config.ts       /api/* → Hono rewrite
+│  │  ├─ src/app/              landing page, layout, globals.css
+│  │  ├─ src/components/ui/    shadcn/ui primitives
+│  │  └─ next.config.ts        /api/* → Hono rewrite
 │  └─ api/            Hono 4 · @hono/node-server
-│     ├─ src/app.ts           chained routes → AppType
-│     ├─ src/routes/          health · meta
-│     └─ src/lib/             env, error envelope
+│     ├─ src/app.ts            chained routes → AppType
+│     ├─ src/routes/           health · meta
+│     └─ src/lib/              env, error envelope
 ├─ packages/
 │  ├─ db/             Drizzle ORM · libSQL / Turso
-│  │  ├─ src/schema.ts        7 tables + relations
-│  │  ├─ src/migrate.ts       migration runner
-│  │  ├─ src/seed.ts          rich demo dataset
-│  │  └─ migrations/          checked-in SQL
-│  └─ shared/         Zod enums, API contracts, scrypt hashing
+│  │  ├─ src/schema.ts         7 tables + relations
+│  │  ├─ src/seed.ts           rich demo dataset
+│  │  ├─ src/__tests__/        schema + seed integrity
+│  │  └─ migrations/           drizzle-kit SQL (checked in)
+│  ├─ shared/         Zod enums, API contracts, scrypt hashing
+│  └─ test-utils/     package-manager-agnostic test helpers
 ├─ turbo.json         task graph + cache
-├─ pnpm-workspace.yaml
+├─ package.json       Bun workspaces + scripts
+├─ bun.lock           committed lockfile
 └─ .env.example       Turso credentials template`;
 
 const highlights = [
-  { path: 'turbo.json', note: 'build / dev / typecheck pipelines with caching' },
+  { path: 'turbo.json', note: 'build / dev / test / typecheck pipelines with caching' },
   { path: 'apps/api/src/app.ts', note: 'every route chained so `AppType` is complete' },
   { path: 'apps/web/src/lib/api.ts', note: 'hc<AppType>() — zero codegen RPC' },
   { path: 'packages/db/src/schema.ts', note: 'users → attempts → answers relations' },
-  { path: '.env.example', note: 'DATABASE_URL + TURSO_AUTH_TOKEN, never committed' },
+  { path: '.env.example', note: 'Turso URL + token template, never committed' },
 ];
 
 export function WorkspaceTree() {

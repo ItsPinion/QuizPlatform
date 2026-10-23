@@ -19,7 +19,7 @@ const stack: StackItem[] = [
     name: 'Turborepo',
     role: 'Monorepo orchestration',
     description:
-      'pnpm workspaces with cached build, lint and typecheck pipelines. One `pnpm dev` boots both apps.',
+      'Bun workspaces with cached build, lint and typecheck pipelines. One `bun dev` boots both apps.',
     meta: 'turbo.json · apps/* · packages/*',
     accent: 'from-violet-500/25',
   },
