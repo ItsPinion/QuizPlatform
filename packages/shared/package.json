@@ -11,7 +11,8 @@
     "./quiz": "./src/quiz.ts",
     "./question": "./src/question.ts",
     "./attempt": "./src/attempt.ts",
-    "./submission": "./src/submission.ts"
+    "./submission": "./src/submission.ts",
+    "./review": "./src/review.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

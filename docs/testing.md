@@ -3,8 +3,8 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test       # 523 unit + integration tests across the four workspaces
-bun run test:e2e   # 58 checks against a real HTTP server (own process, own port)
+bun run test       # 563 unit + integration tests across the four workspaces
+bun run test:e2e   # 63 checks against a real HTTP server (own process, own port)
 ```
 
 Neither touches Turso. Every suite builds a throwaway `file:` database in `.data/` with the project's
@@ -18,10 +18,10 @@ tests.
 
 | Workspace      | Tests | Focus                                                                                    |
 | -------------- | ----- | ---------------------------------------------------------------------------------------- |
-| `@quiz/shared` | 140   | scrypt + auth contracts, admin/quiz/question schemas, attempt clocks, the grader         |
+| `@quiz/shared` | 153   | auth + content contracts, attempt clocks, the grader, review and history schemas         |
 | `@quiz/db`     | 60    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring |
-| `@quiz/api`    | 213   | health/readiness, auth flows, guards, stats/users/quizzes, taking and grading attempts   |
-| `@quiz/web`    | 110   | error envelopes, page guards, directory/quiz/student parameter and result helpers        |
+| `@quiz/api`    | 224   | health/readiness, auth, guards, content, taking, grading and reviewing attempts          |
+| `@quiz/web`    | 126   | error envelopes, page guards, directory/quiz/student/review parameter helpers            |
 
 Run one workspace at a time when you are iterating:
 
@@ -195,6 +195,31 @@ bun run test --filter=@quiz/web
   `8 of 10 marks` line, the auto-submit note appearing only when relevant, the time-taken clock and
   the one-sentence summary.
 
+### Results & review coverage (Day 9)
+
+- **Verdicts** (`@quiz/shared`) — correct / incorrect / unanswered split, "no key means no correct",
+  marks earned only for correct answers, the tally adding up to the paper, filter matching, the
+  review and history schemas (including a review that must carry `completedAt`), query defaults,
+  coercion and caps, and every status label.
+- **A full review over HTTP** — a hand-built paper with one right, one wrong and the rest blank
+  returns the expected counts, exactly one correct option per question, the picked option flagged,
+  and explanations from the seed.
+- **The stored score agrees** — the per-question `earnedMarks` sum to `result.score`, and
+  `counts.correct` equals `result.correctAnswers`.
+- **The key stays hidden live** — reviewing a running attempt is `409 ATTEMPT_NOT_ACTIVE`, and the
+  refusal body contains no `isCorrect`.
+- **Ownership** — another student's review is `404`, an unknown attempt is `404`, an admin gets
+  `403`, a malformed id is `422`.
+- **History** — only the caller's rows, newest first, `inProgress`/`passed` flags consistent with the
+  status, totals agreeing with the database, status and quiz filters, score sorting, pagination with
+  correct `hasNext`/`hasPrev`, and the sweep settling a timed-out attempt before it is listed (which
+  then becomes reviewable).
+- **History validation** — `page=0`, `pageSize=51`, `sort=random`, `status=EXPIRED`, `quizId=nope`
+  all `422`; admin `403`; anonymous `401`.
+- **The view helpers** (`@quiz/web`) — review and history filter parsing, href round-trips that never
+  emit a value the parser would drop, verdict labels and badge tones, question numbering and marks
+  copy, the "what you picked" sentence, filter options with counts, and the timestamp formatter.
+
 ---
 
 ## End-to-end smoke run
@@ -263,8 +288,15 @@ then asserts:
 54. the graded attempt reports its result, `expired: false`, a further write → 409 `ATTEMPT_NOT_ACTIVE`
 55. the catalogue reflects it → no `inProgressAttemptId`, `bestPercentage` equals the stored score
 56. another student submitting that attempt → 404 `ATTEMPT_NOT_FOUND`
-57. logout → 200 with `Max-Age=0`
-58. unknown route → 404 `NOT_FOUND`
+57. the answer review → 200, whole paper, verdicts that add up and agree with the stored score, one
+    correct option per question, explanations present
+58. reviewing a live attempt → 409 `ATTEMPT_NOT_ACTIVE` with no `isCorrect` in the body
+59. the attempt history → 200 with the graded paper, `inProgress: false`, the same percentage, and
+    lifetime totals
+60. filtering the history by `status=PASSED` → 200 with only passed rows
+61. another student reading that review → 404 `ATTEMPT_NOT_FOUND`
+62. logout → 200 with `Max-Age=0`
+63. unknown route → 404 `NOT_FOUND`
 
 It prints a pass/fail table, exits non-zero on failure, and removes the database afterwards.
 
@@ -361,6 +393,19 @@ QUIZ_WOULD_HAVE_NO_QUESTIONS`; unpublish and the delete goes through.
       is being submitted, and the result card appears without a click.
 - [ ] Block the network (DevTools → Offline) right before `00:00` → the alert keeps a **Retry**
       action, and retrying after going back online shows the result.
+- [ ] Finished an attempt? The result card now has **Review answers** → every question with your
+      pick, the correct one, and the explanation.
+- [ ] On the review screen, the filter chips count down as expected; picking **Incorrect** shows
+      only the misses and keeps their original numbering; a filtered view survives a reload because
+      the filter is in the URL.
+- [ ] Open a review of an attempt that is still running (paste the id of a live attempt) → the page
+      says the attempt is still running, and `curl` the same URL for `409 ATTEMPT_NOT_ACTIVE`.
+- [ ] `/student/results` lists your attempts newest first; the **Passed** / **Failed** /
+      **In progress** chips narrow the list without losing the sort, and the totals stay the same
+      because they cover the whole history.
+- [ ] Sort by **Best score** → the percentages descend; a running attempt links to **Resume**, a
+      finished one to **Review** and **Score**.
+- [ ] Page through the history → the ends disable, and the page number is in the URL.
 
 ---
 

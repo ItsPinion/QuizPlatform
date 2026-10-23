@@ -3,7 +3,7 @@ import { CircleCheck, CircleX, Clock, ListChecks, Timer, Trophy } from 'lucide-r
 import Link from 'next/link';
 
 import { Badge } from '@/components/ui/badge';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   autoSubmitNote,
@@ -19,8 +19,8 @@ import { cn } from '@/lib/utils';
 interface Props {
   result: AttemptResult;
   quizTitle: string;
-  /** Where "Detailed review" will live from Day 9; hidden while it does not exist. */
-  showReviewLink?: boolean;
+  /** The per-question review, once the attempt is finished. */
+  reviewHref?: string | null;
 }
 
 /**
@@ -31,7 +31,7 @@ interface Props {
  * review (correct answers and explanations) is the Day 9 screen; this card is
  * the verdict, the counts and the time.
  */
-export function AttemptResultCard({ result, quizTitle, showReviewLink = false }: Props) {
+export function AttemptResultCard({ result, quizTitle, reviewHref = null }: Props) {
   const tone = resultTone(result.passed);
   const note = autoSubmitNote(result.autoSubmitted);
 
@@ -111,10 +111,14 @@ export function AttemptResultCard({ result, quizTitle, showReviewLink = false }:
               Take another quiz
             </Link>
 
-            {showReviewLink ? (
-              <Button variant="outline" size="sm" disabled title="Answer review arrives in Day 9">
-                Detailed review
-              </Button>
+            {reviewHref ? (
+              <Link
+                href={reviewHref}
+                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+              >
+                <ListChecks />
+                Review answers
+              </Link>
             ) : null}
 
             <span className="text-muted-foreground ml-auto text-[11px]">

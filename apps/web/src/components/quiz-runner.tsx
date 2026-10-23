@@ -202,7 +202,13 @@ export function QuizRunner({ initial }: Props) {
   }
 
   if (result) {
-    return <AttemptResultCard result={result} quizTitle={initial.quiz.title} />;
+    return (
+      <AttemptResultCard
+        result={result}
+        quizTitle={initial.quiz.title}
+        reviewHref={`/student/attempt/${initial.attempt.id}/review`}
+      />
+    );
   }
 
   const question = questions[current];

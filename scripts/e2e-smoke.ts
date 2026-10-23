@@ -1376,6 +1376,193 @@ try {
     return '404 · ATTEMPT_NOT_FOUND';
   });
 
+  /* ------------------------------- Day 9 --------------------------------- */
+
+  await check('GET /api/student/attempts/:id/review shows the key', async () => {
+    const res = await fetch(`${baseUrl}/api/student/attempts/${attemptId}/review`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as {
+      questions: {
+        verdict: string;
+        selectedOptionId: string | null;
+        correctOptionId: string | null;
+        explanation: string | null;
+        earnedMarks: number;
+        marks: number;
+        options: { id: string; isCorrect: boolean; selected: boolean }[];
+      }[];
+      counts: { all: number; correct: number; incorrect: number; unanswered: number };
+      result: { score: number; correctAnswers: number };
+      attempt: { autoSubmitted: boolean; completedAt: string };
+    };
+
+    if (body.questions.length !== studentQuestionCount) {
+      throw new Error('the review should cover the whole paper');
+    }
+    if (body.counts.all !== body.questions.length)
+      throw new Error('counts disagree with the paper');
+    if (body.counts.correct + body.counts.incorrect + body.counts.unanswered !== body.counts.all) {
+      throw new Error('the three verdicts do not add up');
+    }
+    if (body.counts.correct !== body.result.correctAnswers) {
+      throw new Error('review verdicts disagree with the stored score');
+    }
+    if (
+      !body.questions.every((question) => question.options.filter((o) => o.isCorrect).length === 1)
+    ) {
+      throw new Error('every question should have exactly one correct option');
+    }
+
+    const earned = body.questions.reduce((sum, question) => sum + question.earnedMarks, 0);
+    if (earned !== body.result.score) throw new Error('earned marks disagree with the score');
+
+    if (!body.questions.some((question) => question.explanation)) {
+      throw new Error('the seeded questions should carry explanations');
+    }
+    if (
+      body.questions.some(
+        (question) => question.verdict === 'CORRECT' && !question.selectedOptionId,
+      )
+    ) {
+      throw new Error('a correct verdict needs a selection');
+    }
+
+    return `200 · ${body.counts.correct}/${body.counts.all} correct · key released`;
+  });
+
+  await check('a running attempt refuses to reveal the key', async () => {
+    const start = await fetch(`${baseUrl}/api/student/quizzes/${studentQuizId}/start`, {
+      method: 'POST',
+      headers: { cookie: studentCookie },
+    });
+
+    // Every attempt is spent, so the only path left is the 409 for the quiz.
+    const body = (await start.json()) as { attemptId?: string; error?: { code: string } };
+
+    if (body.attemptId) {
+      const res = await fetch(`${baseUrl}/api/student/attempts/${body.attemptId}/review`, {
+        headers: { cookie: studentCookie },
+      });
+      expectStatus(res, 409);
+
+      const raw = await res.text();
+      if (/isCorrect/.test(raw)) throw new Error('the refusal leaked the key');
+
+      return '409 · ATTEMPT_NOT_ACTIVE';
+    }
+
+    if (body.error?.code !== 'ATTEMPTS_EXHAUSTED') {
+      throw new Error(`unexpected start response ${JSON.stringify(body)}`);
+    }
+
+    // The quiz has no attempts left: verify the guard on a fresh one instead.
+    const quizzes = (await (
+      await fetch(`${baseUrl}/api/student/quizzes?pageSize=24`, {
+        headers: { cookie: studentCookie },
+      })
+    ).json()) as { quizzes: { id: string; attemptsRemaining: number }[] };
+
+    const open = quizzes.quizzes.find((quiz) => quiz.attemptsRemaining > 0);
+    if (!open) throw new Error('expected a quiz with attempts left');
+
+    const fresh = await fetch(`${baseUrl}/api/student/quizzes/${open.id}/start`, {
+      method: 'POST',
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(fresh, 201);
+
+    const { attemptId: freshId } = (await fresh.json()) as { attemptId: string };
+    const res = await fetch(`${baseUrl}/api/student/attempts/${freshId}/review`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(res, 409);
+
+    const raw = await res.text();
+    if (/isCorrect/.test(raw)) throw new Error('the refusal leaked the key');
+
+    return '409 · ATTEMPT_NOT_ACTIVE';
+  });
+
+  await check('the attempt history lists the graded paper', async () => {
+    const res = await fetch(`${baseUrl}/api/student/attempts?pageSize=50`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as {
+      attempts: {
+        id: string;
+        status: string;
+        percentage: number;
+        passed: boolean;
+        inProgress: boolean;
+        completedAt: string | null;
+      }[];
+      pagination: { total: number };
+      totals: { attempts: number; passed: number; bestPercentage: number | null };
+    };
+
+    const row = body.attempts.find((attempt) => attempt.id === attemptId);
+    if (!row) throw new Error('the graded attempt is missing from the history');
+    if (row.inProgress) throw new Error('a graded attempt must not read as in progress');
+    if (row.passed !== (row.status === 'PASSED')) throw new Error('passed disagrees with status');
+    if (row.percentage !== submittedPercentage) throw new Error('history percentage changed');
+    if (!row.completedAt) throw new Error('a finished attempt needs completedAt');
+    if (body.totals.attempts < body.pagination.total) {
+      throw new Error('totals should cover at least the filtered page total');
+    }
+
+    return `200 · ${body.pagination.total} attempts · best ${body.totals.bestPercentage}%`;
+  });
+
+  await check('the history filters by status', async () => {
+    const res = await fetch(`${baseUrl}/api/student/attempts?status=PASSED&pageSize=50`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as {
+      attempts: { status: string }[];
+      filters: { status: string };
+    };
+    if (body.filters.status !== 'PASSED') throw new Error('the filter was not echoed');
+    if (body.attempts.some((attempt) => attempt.status !== 'PASSED')) {
+      throw new Error('a filtered page returned another status');
+    }
+
+    return `200 · ${body.attempts.length} passed`;
+  });
+
+  await check('another student cannot read this review', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'priya@quiz.dev', password: 'Password123' }),
+    });
+    expectStatus(res, 200);
+
+    const cookie = res.headers
+      .getSetCookie()
+      .find((value) => value.startsWith('quiz_session='))
+      ?.split(';')[0];
+
+    if (!cookie) throw new Error('login did not issue a cookie');
+
+    const review = await fetch(`${baseUrl}/api/student/attempts/${attemptId}/review`, {
+      headers: { cookie },
+    });
+    expectStatus(review, 404);
+
+    const body = (await review.json()) as { error: { code: string } };
+    if (body.error.code !== 'ATTEMPT_NOT_FOUND')
+      throw new Error(`unexpected code ${body.error.code}`);
+
+    return '404 · ATTEMPT_NOT_FOUND';
+  });
+
   await check('POST /api/auth/logout clears the cookie', async () => {
     const res = await fetch(`${baseUrl}/api/auth/logout`, {
       method: 'POST',

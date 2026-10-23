@@ -22,6 +22,7 @@ import { QuestionManagement } from '@/components/question-management';
 import { QuizManagement } from '@/components/quiz-management';
 import { Roadmap } from '@/components/roadmap';
 import { SectionHeading } from '@/components/section-heading';
+import { AnswerReviewPreview } from '@/components/answer-review-preview';
 import { StudentQuizInterface } from '@/components/student-quiz-interface';
 import { SubmissionScoring } from '@/components/submission-scoring';
 import { SetupStatus } from '@/components/setup-status';
@@ -94,7 +95,7 @@ export default function HomePage() {
             <div>
               <Badge className="border-primary/30 bg-primary/10 gap-2 py-1">
                 <span className="bg-primary size-1.5 rounded-full" />
-                Milestone · Day 8 of 14 complete
+                Milestone · Day 9 of 14 complete
               </Badge>
 
               <h1 className="mt-6 text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-[3.4rem]">
@@ -110,8 +111,9 @@ export default function HomePage() {
                 Turso. Sign-in is real — scrypt hashes, httpOnly JWT cookies — the admin and student
                 areas are separated by role guards on both sides, the admin console reports live
                 statistics, quizzes can be created, edited, published and retired — and students can
-                take them: a server-timed attempt with saved answers and question navigation, then a
-                submission that is graded on the server into marks, counts and a pass/fail verdict.
+                take them: a server-timed attempt, a server-graded submission, and now a result you
+                can actually learn from — every answer reviewed against the key, with explanations
+                and a full attempt history.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -342,6 +344,20 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* ------------------------------- review ----------------------------- */}
+        <section id="review" className="border-border/60 w-full border-y">
+          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
+            <SectionHeading
+              eyebrow="Day 9 · results & review"
+              title="The paper comes back, question by question"
+              description="A finished attempt opens up: what was asked, what you picked, what was right, and why. The answer key exists only after submission, and the attempt history lists every paper with its score, its counts and its time."
+            />
+            <div className="mt-8">
+              <AnswerReviewPreview />
+            </div>
+          </div>
+        </section>
+
         {/* ----------------------------- workspace ---------------------------- */}
         <section id="workspace" className="border-border/60 bg-card/20 w-full border-y">
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
@@ -361,8 +377,8 @@ export default function HomePage() {
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
             <SectionHeading
               eyebrow="Two-week plan"
-              title="Eight days shipped, six to go"
-              description="The spec's build schedule, tracked in the repo. Day 8 closes the attempt loop: submitting — by hand or by the clock — returns a server-graded score, counts, a percentage and a pass/fail verdict."
+              title="Nine days shipped, five to go"
+              description="The spec's build schedule, tracked in the repo. Day 9 turns a score into feedback: a per-question review with the key and the explanations, plus a filterable history of every attempt."
             />
             <div className="mt-8">
               <Roadmap />
@@ -372,7 +388,7 @@ export default function HomePage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <LayoutDashboard className="text-primary size-4" />
-                  Shipped in Days 2–8
+                  Shipped in Days 2–9
                 </CardTitle>
                 <CardDescription>
                   Everything below is covered by the test suite and live on this deployment.
@@ -448,6 +464,14 @@ export default function HomePage() {
                   </div>
                   Manual or automatic submission, one idempotent grader, and a stored result: marks,
                   counts, percentage, pass/fail and time taken.
+                </div>
+                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
+                  <div className="text-foreground flex items-center gap-1.5 font-medium">
+                    <ListChecks className="text-success size-3.5" />
+                    Results &amp; review
+                  </div>
+                  The answer key and explanations, unlocked only after submission, plus an attempt
+                  history you can filter by status and sort by score.
                 </div>
               </CardContent>
             </Card>

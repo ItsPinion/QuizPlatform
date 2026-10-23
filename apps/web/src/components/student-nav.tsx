@@ -19,7 +19,7 @@ interface NavItem {
 const ITEMS: NavItem[] = [
   { href: '/student', label: 'Overview', icon: LayoutDashboard },
   { href: '/student/quizzes', label: 'Quizzes', icon: ListChecks, prefix: true },
-  { href: '/student/results', label: 'Results', icon: Gauge, day: 9 },
+  { href: '/student/results', label: 'Results', icon: Gauge, prefix: true },
 ];
 
 /**

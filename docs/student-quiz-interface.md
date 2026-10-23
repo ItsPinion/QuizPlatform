@@ -183,12 +183,16 @@ The taker (`components/quiz-runner.tsx`) has:
 Answers survive a refresh because the page is server-rendered from the API on every load —
 there is no client cache to lose.
 
-### Where Day 8 takes over
+### Where Day 8 and Day 9 take over
 
 **Submit quiz** and the countdown both post to `POST /api/student/attempts/:id/submit`; the
 attempt screen swaps to a result card once a result exists, and a finished attempt loads
 straight into that card. The grading rules, the lazy expiry sweep and the result payload are in
 [`submission-and-scoring.md`](submission-and-scoring.md).
+
+From that card, **Review answers** opens `/student/attempt/:id/review` — the paper with the key,
+the three-way verdicts and the explanations — and `/student/results` lists every attempt. Both are
+documented in [`results-and-review.md`](results-and-review.md).
 
 ---
 
@@ -202,8 +206,8 @@ straight into that card. The grading rules, the lazy expiry sweep and the result
 | E2E    | `scripts/e2e-smoke.ts`                           | 8 Day-7 checks over real HTTP: published-only list, draft 404, start + resume, no `isCorrect` in the payload, answer round-trip, cross-student 404, admin 403                                                                                                                                             |
 
 ```bash
-bun run test        # 523 Vitest tests
-bun run test:e2e    # 58 checks against a live API + throwaway database
+bun run test        # 563 Vitest tests
+bun run test:e2e    # 63 checks against a live API + throwaway database
 ```
 
 ---

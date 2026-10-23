@@ -8,6 +8,11 @@ import {
   studentQuizListQuerySchema,
   studentQuizListResponseSchema,
 } from '@quiz/shared/attempt';
+import {
+  attemptHistoryQuerySchema,
+  attemptHistoryResponseSchema,
+  attemptReviewSchema,
+} from '@quiz/shared/review';
 import { submitAttemptResponseSchema } from '@quiz/shared/submission';
 import { Hono } from 'hono';
 
@@ -22,6 +27,7 @@ import {
   saveAnswer,
   startAttempt,
 } from '../lib/student-quizzes';
+import { getAttemptReview, listAttemptHistory } from '../lib/reviews';
 import { submitAttempt } from '../lib/submissions';
 import type { AppEnv } from '../lib/types';
 
@@ -47,6 +53,10 @@ function queryObject(url: string): Record<string, string> {
  * Day 8 adds `POST /attempts/:id/submit`: the same call serves a student's
  * click and an attempt whose clock ran out, is idempotent, and is the only
  * place a score is ever computed.
+ *
+ * Day 9 adds the read side of a finished attempt: `GET /attempts` (history) and
+ * `GET /attempts/:id/review`, the one payload that carries the answer key — and
+ * only once the attempt is finished.
  */
 export const studentQuizRoutes = new Hono<AppEnv>()
   /** Only categories with at least one published quiz — the catalogue filter. */
@@ -79,6 +89,17 @@ export const studentQuizRoutes = new Hono<AppEnv>()
     return c.json(startAttemptResponseSchema.parse(await startAttempt(id, user.id)), 201);
   })
 
+  /** Attempt history — every attempt this student has ever started. */
+  .get('/attempts', async (c) => {
+    const user = c.get('user');
+    const query = attemptHistoryQuerySchema.parse(queryObject(c.req.url));
+
+    return c.json(
+      attemptHistoryResponseSchema.parse(await listAttemptHistory(query, user.id)),
+      200,
+    );
+  })
+
   .get('/attempts/:id', async (c) => {
     const user = c.get('user');
     const id = idSchema.parse(c.req.param('id'));
@@ -94,6 +115,20 @@ export const studentQuizRoutes = new Hono<AppEnv>()
     const result = await saveAnswer(attemptId, questionId, c.req.valid('json').optionId, user.id);
 
     return c.json(saveAnswerResponseSchema.parse(result), 200);
+  })
+
+  /**
+   * The answer review: what was asked, what was picked, what was right and why.
+   *
+   * Only for a finished attempt — while it is still running this answers
+   * `409 ATTEMPT_NOT_ACTIVE`, because shipping the key mid-quiz would make the
+   * whole graded interface pointless.
+   */
+  .get('/attempts/:id/review', async (c) => {
+    const user = c.get('user');
+    const id = idSchema.parse(c.req.param('id'));
+
+    return c.json(attemptReviewSchema.parse(await getAttemptReview(id, user.id)), 200);
   })
 
   /**
