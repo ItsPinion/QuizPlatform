@@ -1010,6 +1010,200 @@ try {
     return '403 · FORBIDDEN';
   });
 
+  /* ------------------------------- Day 7 --------------------------------- */
+
+  let studentQuizId = '';
+  let attemptId = '';
+  let firstQuestionId = '';
+  let firstOptionId = '';
+
+  await check('GET /api/student/quizzes lists only published quizzes', async () => {
+    const res = await fetch(`${baseUrl}/api/student/quizzes?pageSize=24`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as {
+      quizzes: { id: string; title: string; questionCount: number; attemptsUsed: number }[];
+      pagination: { total: number };
+    };
+
+    if (body.quizzes.length < 5) throw new Error('expected the seeded catalogue');
+    if (body.quizzes.some((quiz) => quiz.questionCount === 0)) {
+      throw new Error('a published quiz should have questions');
+    }
+    if (body.quizzes.some((quiz) => quiz.title === 'Java OOP Concepts')) {
+      throw new Error('a DRAFT quiz must never reach a student');
+    }
+
+    studentQuizId = body.quizzes[0]?.id ?? '';
+
+    return `200 · ${body.pagination.total} published`;
+  });
+
+  await check('a student cannot see drafts by guessing their id', async () => {
+    // The seeded draft was published and unpublished earlier in this run, so
+    // look for anything that is not live rather than assuming its status.
+    const hidden: string[] = [];
+
+    for (const status of ['DRAFT', 'UNPUBLISHED']) {
+      const list = (await (
+        await fetch(`${baseUrl}/api/admin/quizzes?status=${status}`, {
+          headers: { cookie: adminCookie },
+        })
+      ).json()) as { quizzes: { id: string }[] };
+
+      hidden.push(...list.quizzes.map((quiz) => quiz.id));
+    }
+
+    const draftId = hidden[0];
+    if (!draftId) throw new Error('expected a quiz that is not published');
+
+    const res = await fetch(`${baseUrl}/api/student/quizzes/${draftId}`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(res, 404);
+
+    return '404 · QUIZ_NOT_FOUND';
+  });
+
+  await check('POST /api/student/quizzes/:id/start creates one attempt', async () => {
+    const first = await fetch(`${baseUrl}/api/student/quizzes/${studentQuizId}/start`, {
+      method: 'POST',
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(first, 201);
+
+    const body = (await first.json()) as {
+      attemptId: string;
+      resumed: boolean;
+      secondsRemaining: number;
+    };
+
+    if (body.resumed) throw new Error('the first start must not be a resume');
+    if (body.secondsRemaining <= 0) throw new Error('an attempt needs a live deadline');
+
+    attemptId = body.attemptId;
+
+    const second = await fetch(`${baseUrl}/api/student/quizzes/${studentQuizId}/start`, {
+      method: 'POST',
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(second, 201);
+
+    const resumed = (await second.json()) as { attemptId: string; resumed: boolean };
+    if (!resumed.resumed) throw new Error('a second start should resume');
+    if (resumed.attemptId !== attemptId) throw new Error('resuming must not create a new attempt');
+
+    return `201 · resumed the same attempt`;
+  });
+
+  await check('the attempt payload carries no answer key', async () => {
+    const res = await fetch(`${baseUrl}/api/student/attempts/${attemptId}`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(res, 200);
+
+    const raw = await res.text();
+    if (/isCorrect|is_correct|explanation/i.test(raw)) {
+      throw new Error('the attempt payload leaks grading data');
+    }
+
+    const body = JSON.parse(raw) as {
+      questions: { id: string; options: { id: string }[] }[];
+      answers: unknown[];
+      attempt: { secondsRemaining: number; expired: boolean };
+    };
+
+    if (body.attempt.expired) throw new Error('the attempt should still be live');
+    if (body.answers.length !== 0) throw new Error('a fresh attempt has no answers');
+    if (body.questions.length === 0) throw new Error('expected questions');
+
+    firstQuestionId = body.questions[0]?.id ?? '';
+    firstOptionId = body.questions[0]?.options[0]?.id ?? '';
+
+    return `200 · ${body.questions.length} questions · no isCorrect`;
+  });
+
+  await check('saving an answer persists it and reports progress', async () => {
+    const res = await fetch(
+      `${baseUrl}/api/student/attempts/${attemptId}/answers/${firstQuestionId}`,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', cookie: studentCookie },
+        body: JSON.stringify({ optionId: firstOptionId }),
+      },
+    );
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as {
+      answer: { selectedOptionId: string };
+      progress: { answered: number; total: number };
+    };
+
+    if (body.answer.selectedOptionId !== firstOptionId) throw new Error('answer was not saved');
+    if (body.progress.answered !== 1) throw new Error('progress did not count the answer');
+
+    const session = (await (
+      await fetch(`${baseUrl}/api/student/attempts/${attemptId}`, {
+        headers: { cookie: studentCookie },
+      })
+    ).json()) as { answers: { questionId: string; selectedOptionId: string }[] };
+
+    if (session.answers[0]?.selectedOptionId !== firstOptionId) {
+      throw new Error('the saved answer did not round-trip');
+    }
+
+    return `200 · ${body.progress.answered}/${body.progress.total} answered`;
+  });
+
+  await check('another student cannot read or write this attempt', async () => {
+    const ownerCookie = await (async () => {
+      const res = await fetch(`${baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'priya@quiz.dev', password: 'Password123' }),
+      });
+      expectStatus(res, 200);
+
+      const value = res.headers.getSetCookie().find((cookie) => cookie.startsWith('quiz_session='));
+      if (!value) throw new Error('login did not issue a cookie');
+      return value.split(';')[0] as string;
+    })();
+
+    const read = await fetch(`${baseUrl}/api/student/attempts/${attemptId}`, {
+      headers: { cookie: ownerCookie },
+    });
+    expectStatus(read, 404);
+
+    const write = await fetch(
+      `${baseUrl}/api/student/attempts/${attemptId}/answers/${firstQuestionId}`,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', cookie: ownerCookie },
+        body: JSON.stringify({ optionId: null }),
+      },
+    );
+    expectStatus(write, 404);
+
+    return '404 · ATTEMPT_NOT_FOUND';
+  });
+
+  await check('student routes reject an admin', async () => {
+    const list = await fetch(`${baseUrl}/api/student/quizzes`, {
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(list, 403);
+
+    const start = await fetch(`${baseUrl}/api/student/quizzes/${studentQuizId}/start`, {
+      method: 'POST',
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(start, 403);
+
+    return '403 · FORBIDDEN';
+  });
+
   await check('POST /api/auth/logout clears the cookie', async () => {
     const res = await fetch(`${baseUrl}/api/auth/logout`, {
       method: 'POST',

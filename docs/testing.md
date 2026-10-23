@@ -3,8 +3,8 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test       # 430 unit + integration tests across the four workspaces
-bun run test:e2e   # 46 checks against a real HTTP server (own process, own port)
+bun run test       # 489 unit + integration tests across the four workspaces
+bun run test:e2e   # 53 checks against a real HTTP server (own process, own port)
 ```
 
 Neither touches Turso. Every suite builds a throwaway `file:` database in `.data/` with the project's
@@ -138,6 +138,31 @@ bun run test --filter=@quiz/web
 - **Web helpers** — form ↔ payload round-trips, blank-row compaction that keeps the correct answer
   correct, validation messages, `moveItem`, `summarizeQuestions` and the difficulty tones.
 
+### Student quiz coverage (Day 7)
+
+- **Catalogue** — only published quizzes are returned (the draft and unpublished seeds are absent),
+  aggregates agree with the tables, `attemptsRemaining` is derived from the student's own attempts,
+  search/difficulty/category filters work, the title sort is stable, and a page size above the cap is
+  a 422.
+- **Visibility** — a draft and an unpublished quiz both answer `404 QUIZ_NOT_FOUND` to a student;
+  a malformed id is 422; an admin gets 403 and an anonymous caller 401.
+- **Starting** — a first start creates `IN_PROGRESS` with `expiresAt − startedAt` equal to the quiz
+  duration and `totalMarks` snapshotted; a second start returns the _same_ attempt with
+  `resumed: true` and the same deadline; a quiz whose attempts are used answers
+  `409 ATTEMPTS_EXHAUSTED`; an admin cannot start anything.
+- **The attempt payload** — questions arrive ordered with options in position order, `answers` starts
+  empty, and the serialized body matches neither `isCorrect` nor `is_correct` nor `explanation`.
+- **Ownership** — another student's attempt is `404` on read _and_ on write.
+- **Saving answers** — save, replace and clear all round-trip through the session payload, with
+  progress counts; an option from a different question is `422 OPTION_NOT_FOUND`, an unknown question
+  `422 QUESTION_NOT_FOUND`, a malformed option id 422.
+- **Locks** — a finished attempt answers `409 ATTEMPT_NOT_ACTIVE`; moving the deadline into the past
+  makes the session report `expired: true` / `secondsRemaining: 0`, the next write answers
+  `409 ATTEMPT_EXPIRED`, and starting again opens a _new_ attempt rather than resuming the dead one.
+- **Contracts** — `secondsRemaining` (rounding up, never negative, Dates and timestamps),
+  `formatClock`, every `startDecision` branch (draft, empty, exhausted, resume-wins), progress
+  counting that ignores stale answers, timer tones, `saveAnswerSchema` and the list-query defaults.
+
 ---
 
 ## End-to-end smoke run
@@ -193,8 +218,15 @@ then asserts:
 42. deleting both questions → first 200, then 409 `QUIZ_WOULD_HAVE_NO_QUESTIONS`; unpublish → 200
 43. the authored quiz is deleted again → 200
 44. quiz management, category creation and question routes → 403 for the student
-45. logout → 200 with `Max-Age=0`
-46. unknown route → 404 `NOT_FOUND`
+45. `/api/student/quizzes` → 200, every seeded published quiz, no drafts
+46. a hidden (draft or unpublished) quiz → `404 QUIZ_NOT_FOUND` for the student
+47. start an attempt → 201 `resumed: false`; starting again → 201 `resumed: true`, same id
+48. the attempt payload contains no `isCorrect` / `explanation` and starts with no answers
+49. saving an answer → 200 with progress, and it round-trips through the session
+50. another student reading/writing that attempt → 404
+51. student routes → 403 for the admin
+52. logout → 200 with `Max-Age=0`
+53. unknown route → 404 `NOT_FOUND`
 
 It prints a pass/fail table, exits non-zero on failure, and removes the database afterwards.
 
@@ -262,6 +294,19 @@ Useful after changing auth, the proxy, or the cookie. Start with `bun dev`, then
 - [ ] Publish a quiz with one question, then try to delete that question → `409
 QUIZ_WOULD_HAVE_NO_QUESTIONS`; unpublish and the delete goes through.
 - [ ] Use ↑ / ↓ on a question → the numbering updates and survives a reload.
+- [ ] Sign in as `rahul@quiz.dev`, open `/student/quizzes` → only published quizzes; the draft and
+      unpublished seeds are absent even if you paste their ids.
+- [ ] Open a quiz → the rules (questions, marks, duration, pass mark, attempts left) are stated
+      before the start button.
+- [ ] Start it → the attempt opens on question 1 with a live countdown; selecting an option shows
+      "saved", and reloading the page keeps the selection and the remaining time.
+- [ ] Navigate with Previous/Next and the number grid → answered and unanswered questions are
+      distinguishable.
+- [ ] Start the same quiz again from the catalogue → it resumes the same attempt, and the attempt
+      count does not move.
+- [ ] Try to open `/student/attempt/<another student's id>` → 404.
+- [ ] Use up every attempt on a quiz → the detail page reads "No attempts left" and the API answers
+      `409 ATTEMPTS_EXHAUSTED`.
 
 ---
 

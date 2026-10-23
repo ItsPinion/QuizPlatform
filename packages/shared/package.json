@@ -9,7 +9,8 @@
     "./auth": "./src/auth.ts",
     "./admin": "./src/admin.ts",
     "./quiz": "./src/quiz.ts",
-    "./question": "./src/question.ts"
+    "./question": "./src/question.ts",
+    "./attempt": "./src/attempt.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

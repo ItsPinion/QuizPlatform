@@ -1,29 +1,27 @@
 import { PERMISSIONS, type AccessDescriptor } from '@quiz/shared/auth';
 import { Hono } from 'hono';
 
-import { ApiError } from '../lib/errors';
-import type { AppEnv } from '../lib/types';
 import { requireStudent } from '../middleware/auth';
+import type { AppEnv } from '../lib/types';
+import { studentQuizRoutes } from './student-quizzes';
 
 /**
  * Student-only namespace — the counterpart to `/api/admin`.
  *
- * Day 7+ mounts quiz-taking and results routes here; the guard is already in
- * place, so nothing inside can be reached by an admin-only or anonymous caller.
+ * The guard is mounted once on the parent, so every route below inherits it.
+ * Day 7 filled the namespace with the quiz catalogue, attempt start/resume and
+ * answer saving.
  */
-export const studentRoutes = new Hono<AppEnv>();
+export const studentRoutes = new Hono<AppEnv>()
+  .use('*', requireStudent)
 
-studentRoutes.use('*', requireStudent);
+  .get('/access', (c) => {
+    const user = c.get('user');
 
-studentRoutes.get('/access', (c) => {
-  const user = c.get('user');
+    return c.json<AccessDescriptor>(
+      { scope: 'STUDENT', user, permissions: [...PERMISSIONS.STUDENT] },
+      200,
+    );
+  })
 
-  return c.json<AccessDescriptor>(
-    { scope: 'STUDENT', user, permissions: [...PERMISSIONS.STUDENT] },
-    200,
-  );
-});
-
-studentRoutes.all('*', (c) => {
-  throw new ApiError(404, 'NOT_FOUND', `No student route matches ${c.req.method} ${c.req.path}`);
-});
+  .route('/', studentQuizRoutes);

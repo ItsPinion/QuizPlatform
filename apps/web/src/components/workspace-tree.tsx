@@ -7,12 +7,14 @@ const tree = `quizplatform/
 │  ├─ web/            Next.js 16 · App Router · Tailwind v4
 │  │  ├─ src/app/              landing, /login, /register, /admin, /student
 │  │  ├─ src/app/admin/        layout · overview · users · quizzes · categories
+│  │  ├─ src/app/student/      overview · quizzes · quizzes/[id] · attempt/[id]
 │  │  ├─ src/lib/session.ts    server-side session lookup (cookie → API)
 │  │  ├─ src/lib/api-server.ts cookie-forwarding RPC client for pages
 │  │  ├─ src/lib/guards.ts     role decision for /admin and /student
 │  │  ├─ src/lib/admin-params.ts  filters ⇄ ?search=&role=&page=
 │  │  ├─ src/lib/quiz-params.ts   quiz filters, badges, category ranking
 │  │  ├─ src/lib/question-params.ts  option reconciliation + form validation
+│  │  ├─ src/lib/student-params.ts   catalogue filters, timer + start labels
 │  │  ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
 │  │  ├─ src/components/       admin nav, users table, combobox, question editor
 │  │  └─ next.config.ts        /api/* → Hono rewrite
@@ -25,6 +27,7 @@ const tree = `quizplatform/
 │     ├─ src/lib/admin-quizzes.ts CRUD, derived slugs, publish/delete rules
 │     ├─ src/lib/admin-categories.ts  find-or-create, rename, guarded delete
 │     ├─ src/lib/admin-questions.ts   options by id, ordering, delete rules
+│     ├─ src/lib/student-quizzes.ts   catalogue, attempt start/resume, answers
 │     ├─ src/routes/admin-quizzes.ts  /api/admin/quizzes (mounted under the guard)
 │     ├─ src/lib/auth.ts       JWT signing + session cookies
 │     └─ src/lib/              env, jsonBody validator, error envelope
@@ -34,7 +37,7 @@ const tree = `quizplatform/
 │  │  ├─ src/seed.ts           rich demo dataset
 │  │  ├─ src/__tests__/        schema + seed integrity
 │  │  └─ migrations/           drizzle-kit SQL (checked in)
-│  ├─ shared/         Zod enums, auth + admin + quiz + question contracts, hashing
+│  ├─ shared/         Zod enums, auth + admin + quiz + question + attempt contracts
 │  └─ test-utils/     package-manager-agnostic test helpers
 ├─ turbo.json         task graph + cache
 ├─ package.json       Bun workspaces + scripts (pins Bun)
@@ -74,6 +77,14 @@ const highlights = [
   {
     path: 'apps/api/src/lib/admin-questions.ts',
     note: 'options reconciled by id, so past answers keep their rows',
+  },
+  {
+    path: 'packages/shared/src/attempt.ts',
+    note: 'server-clock helpers + the payload with no answer key in it',
+  },
+  {
+    path: 'apps/api/src/lib/student-quizzes.ts',
+    note: 'published-only reads, resume-not-spend, expiry on every write',
   },
   { path: 'apps/web/src/lib/api.ts', note: 'hc<AppType>() — zero codegen RPC' },
   { path: 'packages/db/src/schema.ts', note: 'users → attempts → answers relations' },
