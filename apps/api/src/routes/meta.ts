@@ -11,7 +11,7 @@ export const metaRoutes = new Hono().get('/', (c) =>
     {
       name: 'Quiz Platform API',
       version: APP_VERSION,
-      status: 'in progress',
+      status: 'feature complete',
       docs: {
         'GET /api/health': 'Liveness probe',
         'GET /api/health/db': 'Database readiness probe with row counts',
@@ -57,10 +57,15 @@ export const metaRoutes = new Hono().get('/', (c) =>
         'GET /api/leaderboard': 'Overall and per-category rankings (average, best, completed)',
         'GET /api/meta': 'This document',
       },
-      roadmap: [
-        { day: 13, area: 'testing & security', endpoints: [] },
-        { day: 14, area: 'deployment & docs', endpoints: [] },
-      ],
+      security: {
+        rateLimit: 'auth routes: per-address and per-account failure buckets',
+        originGuard: 'state-changing requests must come from an allowed origin',
+        bodyLimit: 'oversized payloads are refused before parsing',
+        session: 'HS256 JWT in an httpOnly cookie, scoped by issuer and audience',
+        cache: 'every response is no-store',
+        docs: 'docs/security.md',
+      },
+      roadmap: [{ day: 14, area: 'deployment & docs', endpoints: [] }],
     },
     200,
   ),

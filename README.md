@@ -3,7 +3,7 @@
 Quiz Management & Online Assessment Platform — a Turborepo monorepo with a **Next.js** web app,
 a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 
-> **Status: Day 12 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
+> **Status: Day 13 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
 > authentication (register / login / logout / `/me`, scrypt hashes, httpOnly JWT cookies), role-scoped
 > API namespaces, guarded `/admin` + `/student` areas, an admin console with dashboard statistics,
 > user management, quiz management with a guarded publish/unpublish lifecycle, category CRUD,
@@ -15,8 +15,10 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 > the pass/fail split, and the most popular quizzes and categories over a selectable window, then
 > the leaderboard: overall and per-category boards ranked by average score, best score or quizzes
 > completed, over all time, this month or this week, with competition ranking and the caller's own
-> position always resolved.
-> 741 automated tests and a 69-check end-to-end smoke run. Testing & security hardening is next.
+> position always resolved — and a hardening pass: rate-limited sign-ins that cannot lock the real
+> owner out, a same-origin guard on every write, scoped JWTs, a body-size cap, `no-store` and a CSP —
+> with an adversarial suite that attacks each of the nine areas the spec names.
+> 800 automated tests and a 73-check end-to-end smoke run. Deployment & docs are next.
 
 ---
 
@@ -239,6 +241,8 @@ quizplatform/
 │  │  ├─ src/middleware/       requireAuth + requireRole guards
 │  │  ├─ src/lib/admin-stats.ts  dashboard aggregates (one query per section)
 │  │  ├─ src/lib/leaderboard.ts  one aggregate per board, ranks in TS
+│  │  ├─ src/lib/rate-limit.ts   fixed windows: address = hard, account = soft
+│  │  ├─ src/middleware/origin.ts  CSRF guard for state-changing requests
 │  │  ├─ src/lib/admin-users.ts  directory query + guarded role/status writes
 │  │  ├─ src/lib/admin-quizzes.ts  quiz CRUD, derived slugs, lifecycle rules
 │  │  ├─ src/lib/auth.ts       JWT signing, session cookie, claim mapping
@@ -255,6 +259,7 @@ quizplatform/
 │     ├─ src/lib/dashboard-params.ts  labels, deltas and bar widths for the dashboard
 │     ├─ src/lib/analytics-params.ts  window parsing, change copy, caption helpers
 │     ├─ src/lib/leaderboard-params.ts  metric/period filters, ranks, gaps, hrefs
+│     ├─ src/lib/security-headers.ts    CSP + hardening headers, tested without Next
 │     ├─ src/components/score-trend-chart.tsx  server-rendered SVG trend line
 │     ├─ src/components/activity-chart.tsx     fourteen-day CSS bar chart
 │     ├─ src/components/category-breakdown.tsx per-category averages
@@ -290,6 +295,7 @@ quizplatform/
 │  ├─ student-dashboard.md       statistic definitions, aggregates, chart geometry, screens
 │  ├─ admin-analytics.md         windows, definitions, queries, the cross-user sweep, charts
 │  ├─ leaderboard.md            metrics, periods, ranking rules, the screen, tests
+│  ├─ security.md               threat model, controls, rate limits, CSP, trade-offs
 │  ├─ authorization.md         role model, guards, redirect rules, failure modes
 │  └─ testing.md               test inventory, manual QA, security trade-offs
 ├─ scripts/
@@ -361,12 +367,12 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 741 tests, all workspaces through Turbo
+bun run test                    # 800 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
-bun run test:e2e                # 69 checks against a live server + throwaway DB
+bun run test:e2e                # 73 checks against a live server + throwaway DB
 ```
 
-**741 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
+**800 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
 
 **`@quiz/shared`** (240) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
@@ -385,7 +391,7 @@ integrity (quiz/question/option counts, one correct option each, attempt percent
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
 
-**`@quiz/api`** (262) — service banner, health payload shape, request IDs, security headers, CORS
+**`@quiz/api`** (313) — service banner, health payload shape, request IDs, security headers, CORS
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
 the database is unreachable, `/api/meta` roadmap, and the 404 error envelope.
 
@@ -459,6 +465,27 @@ shared package adds 32 — window parsing, zero-filled buckets, window totals, r
 100 with expired attempts kept apart, bar/series scaling and both schemas — and the web package 16
 window and caption helpers.
 
+Day 13 adds 51 API tests in one adversarial file, grouped by the nine areas the spec names:
+authentication (no plaintext stored or returned, unknown emails answering exactly like wrong passwords,
+a foreign `aud` and a foreign `iss` refused, `alg: none` refused, the cookie's flags and `no-store`),
+authorization (every admin read refused to a student and every student read refused to an admin, a
+token that claims `ADMIN` for a `STUDENT` row still refused, a self-registration asking for `ADMIN`
+stored as `STUDENT`), quiz creation (server-owned fields ignored, five invalid shapes rejected, a
+`<script>` title persisted verbatim as data), attempts (cross-student read/write/submit/review all
+`404`, drafts unseen, a double start resuming instead of spending a try, a foreign question id
+refused, no key in the live paper), the timer (a client-supplied deadline ignored, a late write `409`,
+a late submit graded with `autoSubmitted` and a clamped duration), scoring (a posted `score: 999`
+ignored, stored results agreeing with the paper), validation (malformed JSON, wrong content type,
+unknown route, the 422 envelope without stack frames, malformed ids, a 200 KB body `413`),
+unauthorized access (thirteen protected endpoints `401`, a foreign origin `403`, the app origin and a
+preview host allowed, reads untouched, every response `no-store` with `Vary: Cookie`), input validation
+(SQL metacharacters as an email and as a search term, an XSS category name round-tripped as data,
+password policy, a wrongly-typed payload) and the new rate limiter (bucket arithmetic with an injected
+clock, per-key isolation, a hard address block with `Retry-After`, a soft account block that never
+locks the owner out, registration capped). The web package adds 8 tests for the header policy — CSP
+directives, no `unsafe-eval` in production, the preview allowance on `frame-ancestors`, HSTS only in
+production, and the deliberate absence of `X-Frame-Options`.
+
 Day 12 adds 14 API tests: the overall board checked against every student's own aggregates, sorted
 and ranged, with no email in the payload; the caller's row and rank resolved beyond the visible slice;
 the best and completed boards; a controlled tie fixture (two 88s share rank 1, the next row is rank 3
@@ -478,7 +505,7 @@ email search, empty values, unknown roles), pagination, both sorts, 422s for bad
 lookups, 404/422 handling, promotion/demotion, deactivation lockout and restoration, `SELF_LOCKOUT`
 for self-demotion and self-deactivation, and 401/403 on every admin route.
 
-**`@quiz/web`** (177) — the error-envelope narrowing every auth form relies on (API error codes,
+**`@quiz/web`** (185) — the error-envelope narrowing every auth form relies on (API error codes,
 Zod issue extraction, fallbacks for malformed bodies, network-error mapping), the Day 3 page guard
 rules, the Day 4 directory parameters, the Day 5 quiz helpers, the Day 6 question-form helpers, and
 the Day 7–9 student helpers: catalogue filter parsing with `toStudentQuery`/`quizzesHref` round-trips
@@ -493,7 +520,7 @@ screen-reader summary).
 
 Beyond Vitest, `bun run test:e2e` boots the real API process against a throwaway database and walks
 the whole auth flow, the admin console, content authoring, quiz taking, grading and review over HTTP
-(69 checks, including cookie flags, a tampered-cookie replay, both role denials, dashboard aggregates,
+(73 checks, including cookie flags, a tampered-cookie replay, both role denials, dashboard aggregates,
 filtered user listing, a promote/demote round trip, `SELF_LOCKOUT`, a deactivation lockout, quiz
 creation, slug stability across a rename, the publish rules, the delete rules, category
 create/rename/delete, question authoring, reordering, `PUT` with retained option ids, the
@@ -503,7 +530,9 @@ locked write after grading, the catalogue reflecting the stored score, the relea
 `409` guarding a live attempt, the history and its filters, a cross-student review `404`, the dashboard statistics over HTTP, the
 dashboard's 401/403 and cross-student scoping, the platform analytics payload with its invariants, and
 the analytics window validation plus both refusals, the leaderboard's ordering and count
-invariants, no email leak, metric/period/category handling and its `422`/`404`/`401`). See
+invariants, no email leak, metric/period/category handling and its `422`/`404`/`401`, the hardening
+headers on the wire, a foreign origin blocked while the app origin passes, a `413` for an oversized
+body, and a `429` with `Retry-After` after ten bad passwords). See
 [`docs/testing.md`](docs/testing.md) for the full inventory, a manual QA checklist and the known
 security trade-offs.
 
@@ -517,7 +546,7 @@ The Turso-only rule applies to the running application, not to tests.
 
 ---
 
-## API surface (Day 12)
+## API surface (Day 13)
 
 | Method | Path                                            | Description                                         |
 | ------ | ----------------------------------------------- | --------------------------------------------------- |
@@ -1073,6 +1102,48 @@ Full detail is in [`docs/leaderboard.md`](docs/leaderboard.md).
 
 ---
 
+## Security (Day 13)
+
+Every request passes the same gauntlet before a handler runs, and each step can stop it:
+
+```
+requestId → security headers → Cache-Control: no-store → 64 KB body limit
+        → same-origin guard → CORS → logger → requireAuth / requireRole
+        → Zod (body · query · param) → handler
+```
+
+| Control                   | Behaviour                                                  | Refusal                                |
+| ------------------------- | ---------------------------------------------------------- | -------------------------------------- |
+| Sign-in, per address      | 10 failures / 5 min, checked before any hashing            | `429 RATE_LIMITED` + `Retry-After`     |
+| Sign-in, per account      | 5 failures / 15 min, consulted only after a wrong password | `429`, and the owner can still sign in |
+| Registration, per address | 10 / hour                                                  | `429`                                  |
+| Same-origin guard         | a state-changing request with a foreign `Origin`           | `403 CROSS_ORIGIN_BLOCKED`             |
+| Body limit                | anything over 64 KB                                        | `413 PAYLOAD_TOO_LARGE`                |
+| Session JWT               | HS256, `iss: quiz-api`, `aud: quiz-web`, httpOnly cookie   | `401 INVALID_SESSION`                  |
+| Role check                | the **stored** role, re-read per request                   | `403 FORBIDDEN`                        |
+| Validation                | every body, query and path param through Zod               | `422 VALIDATION_ERROR`                 |
+| Caching                   | `Cache-Control: no-store`, `Vary: Cookie, Origin`          | —                                      |
+
+The account guard is deliberately soft. A hard lockout is a denial-of-service gift — anyone who knows
+an email could lock its owner out — so the bucket is consulted _after_ the password is rejected: it
+stops answering guesses, and never stops the real owner.
+
+On the web side, `apps/web/src/lib/security-headers.ts` (imported by `next.config.ts`, unit tested on
+its own) sends a CSP with `default-src 'self'`, `object-src 'none'`, `base-uri`/`form-action` locked to
+self and `frame-ancestors` limited to the app plus the sandbox preview hosts, along with `nosniff`, a
+referrer policy and a closed-down `Permissions-Policy`. `X-Frame-Options` is deliberately absent: it
+cannot express that allow-list and `DENY` would break the preview iframe.
+
+The adversarial suite (`security.test.ts`, 51 tests) attacks each of the nine areas the spec names —
+forged and foreign-scoped tokens, role escalation, another student's paper, a client-set deadline, a
+score in the request body, injection strings, oversized payloads and cross-site writes — and the
+trade-offs (in-memory buckets, the trusted proxy header, the CSP's `'unsafe-inline'`) are written down
+rather than left implicit.
+
+Full detail is in [`docs/security.md`](docs/security.md).
+
+---
+
 ## Environment variables
 
 | Variable             | Required | Default                 | Used by                 |
@@ -1123,6 +1194,12 @@ change the time taken; lazy expiry on every student read; the attempt row stores
 `answers.is_correct` is stamped for the review; the attempt screen becomes a result card. 523 Vitest
 tests and a 58-check end-to-end smoke run.
 
+Day 13 (done): testing & security. Rate limiting on the auth routes (a hard per-address block and a
+soft per-account one that can never lock the owner out), a same-origin guard on every state-changing
+request, a 64 KB body cap, `no-store` on every response, JWTs scoped by issuer and audience, and a CSP
+on every page — each with a test. `security.test.ts` attacks the nine areas the spec lists. 800 Vitest
+tests and a 73-check end-to-end smoke run.
+
 Day 12 (done): the leaderboard. `GET /api/leaderboard` ranks students by average score, best score or
 quizzes completed — overall or per category, all time, monthly or weekly — with competition ranking,
 metric-unit gaps and the caller's own position resolved even off-page. The board ships the live
@@ -1168,8 +1245,8 @@ and a 25-check end-to-end smoke run.
 | 10  | ✅ Student dashboard & performance statistics                     |
 | 11  | ✅ Admin analytics — charts, windows, pass/fail                   |
 | 12  | ✅ Leaderboard — metrics, periods, categories, ranks              |
-| 13  | Testing & security hardening — next                               |
-| 14  | Deployment & docs                                                 |
+| 13  | ✅ Testing & security — hardened and attacked                     |
+| 14  | Deployment & docs — next                                          |
 
 ---
 

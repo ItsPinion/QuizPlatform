@@ -28,7 +28,21 @@ export type SessionClaims = JWTPayload & {
   /** Issued at / expiry, seconds since epoch (JWT standard claims). */
   iat: number;
   exp: number;
+  /** Who minted it, and who it is for. Both are checked on the way back in. */
+  iss: string;
+  aud: string;
 };
+
+/**
+ * Claim scoping.
+ *
+ * A token is only valid for *this* issuer and *this* audience. Without them, a
+ * JWT minted by any other service that happens to share the signing secret could
+ * be replayed here — a classic confused-deputy hole once secrets are copy-pasted
+ * between projects.
+ */
+const SESSION_ISSUER = 'quiz-api';
+const SESSION_AUDIENCE = 'quiz-web';
 
 /**
  * Development fallback secret.
@@ -89,6 +103,8 @@ export async function createSession(
     role: user.role,
     iat: issuedAt,
     exp: expiresAtSeconds,
+    iss: SESSION_ISSUER,
+    aud: SESSION_AUDIENCE,
   };
 
   const token = await sign(claims, resolveJwtSecret(), 'HS256');
@@ -104,7 +120,11 @@ export async function createSession(
  */
 export async function verifySession(token: string): Promise<SessionClaims | undefined> {
   try {
-    const payload = await verify(token, resolveJwtSecret(), 'HS256');
+    const payload = await verify(token, resolveJwtSecret(), {
+      alg: 'HS256',
+      iss: SESSION_ISSUER,
+      aud: SESSION_AUDIENCE,
+    });
 
     if (
       typeof payload.sub !== 'string' ||

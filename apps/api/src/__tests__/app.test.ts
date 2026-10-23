@@ -161,7 +161,7 @@ describe('GET /api/meta', () => {
     );
 
     const areas = body.roadmap.map((entry) => entry.area);
-    expect(areas).toEqual(expect.arrayContaining(['testing & security', 'deployment & docs']));
+    expect(areas).toEqual(['deployment & docs']);
     // Shipped days drop off the roadmap: auth (2), quizzes (5), categories &
     // questions (6), the quiz-taking interface (7) and submission & scoring (8)
     // are all live.
@@ -174,6 +174,8 @@ describe('GET /api/meta', () => {
     expect(areas).not.toContain('student dashboard');
     expect(areas).not.toContain('admin analytics');
     expect(areas).not.toContain('leaderboard');
+    // Day 13 shipped the hardening pass, so it is no longer promised.
+    expect(areas).not.toContain('testing & security');
   });
 });
 

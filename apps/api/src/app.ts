@@ -1,12 +1,14 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { prettyJSON } from 'hono/pretty-json';
 import { requestId } from 'hono/request-id';
 import { secureHeaders } from 'hono/secure-headers';
 
-import { APP_VERSION, allowedOrigins, env } from './lib/env';
+import { APP_VERSION, env, isAllowedOrigin } from './lib/env';
 import { errorHandler, notFoundHandler } from './lib/errors';
+import { requireSameOrigin } from './middleware/origin';
 import type { AppEnv } from './lib/types';
 import { adminRoutes } from './routes/admin';
 import { authRoutes } from './routes/auth';
@@ -40,14 +42,42 @@ export const app = new Hono<AppEnv>()
       crossOriginResourcePolicy: 'cross-origin',
     }),
   )
+  // Every response the API produces is per-session or time-sensitive; none of it
+  // belongs in a shared cache, a bfcache or a proxy.
+  .use(async (c, next) => {
+    await next();
+    c.header('Cache-Control', 'no-store');
+    c.header('Vary', 'Cookie, Origin');
+  })
+  // A body larger than the policy allows is refused before it is parsed: the
+  // largest legitimate payload is a question with a handful of options.
+  .use(
+    bodyLimit({
+      maxSize: env.MAX_BODY_BYTES,
+      onError: (c) =>
+        c.json(
+          {
+            error: {
+              code: 'PAYLOAD_TOO_LARGE',
+              message: `The request body must be smaller than ${Math.round(env.MAX_BODY_BYTES / 1024)} KB.`,
+            },
+          },
+          413,
+        ),
+    }),
+  )
+  // CSRF belt-and-braces: a foreign origin cannot drive a state-changing call.
+  .use(requireSameOrigin)
   .use(prettyJSON({ space: 2 }))
   .use(
     cors({
-      origin: allowedOrigins,
+      // A function, not the array: preview hosts match by suffix. Returning
+      // undefined withholds the header entirely for anyone else.
+      origin: (origin) => (isAllowedOrigin(origin) ? origin : undefined),
       credentials: true,
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization'],
-      exposeHeaders: ['X-Request-Id'],
+      exposeHeaders: ['X-Request-Id', 'Retry-After'],
       maxAge: 86_400,
     }),
   )

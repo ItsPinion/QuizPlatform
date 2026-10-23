@@ -13,6 +13,11 @@ export default defineConfig({
       TURSO_DATABASE_URL: TEST_DB_URL,
       TURSO_AUTH_TOKEN: '',
       WEB_ORIGIN: 'http://localhost:3000',
+      // The suites sign in and register far more often than a person does. The
+      // limiter is exercised explicitly in `security.test.ts`, which shrinks a
+      // rule at runtime rather than relying on these defaults.
+      AUTH_RATE_LIMIT_MAX: '10000',
+      REGISTER_RATE_LIMIT_MAX: '10000',
     },
     testTimeout: 30_000,
     hookTimeout: 60_000,

@@ -1922,6 +1922,114 @@ try {
     return `200 · ${overallBody.categories.length} categories · ${scopedBody.scope.categoryName} · 422 · 404 · 401`;
   });
 
+  /* ------------------------------- Day 13 -------------------------------- */
+
+  await check('API responses carry the hardening headers', async () => {
+    const res = await fetch(`${baseUrl}/api/health`);
+
+    expectStatus(res, 200);
+
+    for (const header of [
+      'x-content-type-options',
+      'x-frame-options',
+      'referrer-policy',
+      'x-request-id',
+    ]) {
+      if (!res.headers.get(header)) throw new Error(`missing ${header}`);
+    }
+
+    if (res.headers.get('cache-control') !== 'no-store') {
+      throw new Error(`cache-control was ${res.headers.get('cache-control')}`);
+    }
+
+    if (res.headers.get('vary')?.includes('Cookie') !== true) {
+      throw new Error('vary should name the session cookie');
+    }
+
+    return `200 · ${res.headers.get('x-content-type-options')} · no-store`;
+  });
+
+  await check('a foreign origin cannot drive a state-changing call', async () => {
+    const blocked = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'https://evil.example',
+        'x-forwarded-for': '203.0.113.11',
+      },
+      body: JSON.stringify({ email: 'rahul@quiz.dev', password: 'Password123' }),
+    });
+
+    expectStatus(blocked, 403);
+    const body = (await blocked.json()) as { error: { code: string } };
+
+    if (body.error.code !== 'CROSS_ORIGIN_BLOCKED') throw new Error(body.error.code);
+
+    // The same call from the app's own origin is fine.
+    const allowed = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'http://localhost:3000',
+        'x-forwarded-for': '203.0.113.12',
+      },
+      body: JSON.stringify({ email: 'priya@quiz.dev', password: 'Password123' }),
+    });
+
+    expectStatus(allowed, 200);
+
+    return `403 CROSS_ORIGIN_BLOCKED · 200 from the app origin`;
+  });
+
+  await check('an oversized body is refused before it is parsed', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-forwarded-for': '203.0.113.13',
+        // The server stops reading at the limit and closes; do not reuse the socket.
+        connection: 'close',
+      },
+      body: JSON.stringify({ email: `${'a'.repeat(200_000)}@quiz.dev`, password: 'Password123' }),
+    });
+
+    expectStatus(res, 413);
+    const body = (await res.json()) as { error: { code: string } };
+
+    if (body.error.code !== 'PAYLOAD_TOO_LARGE') throw new Error(body.error.code);
+
+    return '413 PAYLOAD_TOO_LARGE';
+  });
+
+  await check('repeated bad passwords are throttled', async () => {
+    const ip = '203.0.113.20';
+    const attempt = async (email: string, password: string, from = ip) =>
+      fetch(`${baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-for': from },
+        body: JSON.stringify({ email, password }),
+      });
+
+    // Ten guesses, each against a different account so only the address bucket
+    // fills — the account guard is a separate (softer) rule.
+    for (let index = 0; index < 10; index += 1) {
+      expectStatus(await attempt(`nobody-${index}@quiz.dev`, 'WrongPassword1'), 401);
+    }
+
+    const blocked = await attempt('amit@quiz.dev', 'Password123');
+    const body = (await blocked.json()) as { error?: { code?: string } };
+
+    if (blocked.status !== 429 || body.error?.code !== 'RATE_LIMITED') {
+      throw new Error(`expected 429 RATE_LIMITED, got ${blocked.status} ${body.error?.code}`);
+    }
+    if (!blocked.headers.get('retry-after')) throw new Error('missing Retry-After');
+
+    // The same credentials from another address still work.
+    expectStatus(await attempt('amit@quiz.dev', 'Password123', '203.0.113.21'), 200);
+
+    return `10 × 401 · 429 RATE_LIMITED · Retry-After ${blocked.headers.get('retry-after')} · other address 200`;
+  });
+
   await check('POST /api/auth/logout clears the cookie', async () => {
     const res = await fetch(`${baseUrl}/api/auth/logout`, {
       method: 'POST',

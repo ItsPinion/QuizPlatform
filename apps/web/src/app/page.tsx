@@ -24,6 +24,7 @@ import { AdminConsole } from '@/components/admin-console';
 import { QuestionManagement } from '@/components/question-management';
 import { QuizManagement } from '@/components/quiz-management';
 import { Roadmap } from '@/components/roadmap';
+import { SecurityPosture } from '@/components/security-posture';
 import { SectionHeading } from '@/components/section-heading';
 import { AnswerReviewPreview } from '@/components/answer-review-preview';
 import { StudentDashboardPreview } from '@/components/student-dashboard-preview';
@@ -99,7 +100,7 @@ export default function HomePage() {
             <div>
               <Badge className="border-primary/30 bg-primary/10 gap-2 py-1">
                 <span className="bg-primary size-1.5 rounded-full" />
-                Milestone · Day 12 of 14 complete
+                Milestone · Day 13 of 14 complete
               </Badge>
 
               <h1 className="mt-6 text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-[3.4rem]">
@@ -390,6 +391,20 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* ------------------------------ security ---------------------------- */}
+        <section id="security" className="border-border/60 bg-card/20 w-full border-y">
+          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
+            <SectionHeading
+              eyebrow="Day 13 · testing & security"
+              title="A hostile caller is the default assumption"
+              description="Nine areas the spec asks to test, attacked on purpose: forged and foreign-signed tokens, role escalation, another student's paper, a client-set deadline, a score in the body, injection strings, oversized payloads and cross-site writes. Every request also passes a fixed gauntlet before a handler runs."
+            />
+            <div className="mt-8">
+              <SecurityPosture />
+            </div>
+          </div>
+        </section>
+
         {/* ---------------------------- leaderboard --------------------------- */}
         <section id="leaderboard" className="border-border/60 bg-card/20 w-full border-y">
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
@@ -423,8 +438,8 @@ export default function HomePage() {
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
             <SectionHeading
               eyebrow="Two-week plan"
-              title="Twelve days shipped, two to go"
-              description="The spec's build schedule, tracked in the repo. Day 12 adds the leaderboard: three ranking bases, two scopes and three periods over one ranked board, with the caller's own position always resolved."
+              title="Thirteen days shipped, one to go"
+              description="The spec's build schedule, tracked in the repo. Day 13 hardens the platform: rate limiting on the auth routes, a CSRF origin guard, a body-size cap, scoped JWTs, a CSP on every page — and an adversarial suite that attacks each area the spec names."
             />
             <div className="mt-8">
               <Roadmap />
@@ -434,7 +449,7 @@ export default function HomePage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <LayoutDashboard className="text-primary size-4" />
-                  Shipped in Days 2–12
+                  Shipped in Days 2–13
                 </CardTitle>
                 <CardDescription>
                   Everything below is covered by the test suite and live on this deployment.
@@ -543,6 +558,15 @@ export default function HomePage() {
                   Overall and per-category rankings by average, best score or quizzes completed,
                   with competition ranking, rolling weekly and monthly boards, and your own row
                   pinned.
+                </div>
+                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
+                  <div className="text-foreground flex items-center gap-1.5 font-medium">
+                    <ShieldCheck className="text-success size-3.5" />
+                    Hardening
+                  </div>
+                  Rate-limited sign-ins that cannot lock the owner out, a same-origin guard on every
+                  write, scoped JWTs, a body-size cap and a CSP — each one covered by an attack
+                  test.
                 </div>
               </CardContent>
             </Card>

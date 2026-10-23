@@ -16,12 +16,13 @@ const tree = `quizplatform/
 │  │  ├─ src/lib/question-params.ts  option reconciliation + form validation
 │  │  ├─ src/lib/student-params.ts   catalogue filters, timer + start labels
 │  │  ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
+│  │  ├─ src/lib/security-headers.ts  CSP + hardening headers
 │  │  ├─ src/components/       admin nav, users table, combobox, question editor
-│  │  └─ next.config.ts        /api/* → Hono rewrite
+│  │  └─ next.config.ts        /api/* → Hono rewrite · security headers
 │  └─ api/            Hono 4 · @hono/node-server
 │     ├─ src/app.ts            chained routes → AppType
 │     ├─ src/routes/           auth · admin · student · health · meta
-│     ├─ src/middleware/       requireAuth · requireAdmin · requireStudent
+│     ├─ src/middleware/       session · role · same-origin guards
 │     ├─ src/lib/admin-stats.ts   dashboard aggregates (one per section)
 │     ├─ src/lib/admin-users.ts   directory query + guarded role/status writes
 │     ├─ src/lib/admin-quizzes.ts CRUD, derived slugs, publish/delete rules
@@ -33,7 +34,9 @@ const tree = `quizplatform/
 │     ├─ src/lib/student-dashboard.ts aggregates: totals, trend, categories, activity
 │     ├─ src/lib/admin-analytics.ts   platform aggregates: timeline, ratios, popularity
 │     ├─ src/lib/leaderboard.ts       ranked board: metrics, periods, ties, caller's row
+│     ├─ src/lib/rate-limit.ts        brute-force guards with an injectable clock
 │     ├─ src/routes/admin-quizzes.ts  /api/admin/quizzes (mounted under the guard)
+│     ├─ src/middleware/origin.ts     CSRF guard on state-changing requests
 │     ├─ src/lib/auth.ts       JWT signing + session cookies
 │     └─ src/lib/              env, jsonBody validator, error envelope
 ├─ packages/
@@ -53,6 +56,18 @@ const highlights = [
   { path: 'turbo.json', note: 'build / dev / test / typecheck pipelines with caching' },
   { path: 'apps/api/src/app.ts', note: 'every route chained so `AppType` is complete' },
   { path: 'apps/api/src/middleware/auth.ts', note: 'session, role, admin and student guards' },
+  {
+    path: 'apps/api/src/middleware/origin.ts',
+    note: 'CSRF guard: a foreign Origin cannot drive a write',
+  },
+  {
+    path: 'apps/api/src/lib/rate-limit.ts',
+    note: 'fixed-window buckets: address = hard block, account = soft',
+  },
+  {
+    path: 'apps/web/src/lib/security-headers.ts',
+    note: 'CSP + hardening headers, unit tested without booting Next',
+  },
   {
     path: 'apps/api/src/routes/admin.ts',
     note: 'requireAdmin mounted on the router, not handlers',

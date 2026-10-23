@@ -3,8 +3,8 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test       # 741 unit + integration tests across the four workspaces
-bun run test:e2e   # 69 checks against a real HTTP server (own process, own port)
+bun run test       # 800 unit + integration tests across the four workspaces
+bun run test:e2e   # 73 checks against a real HTTP server (own process, own port)
 ```
 
 Neither touches Turso. Every suite builds a throwaway `file:` database in `.data/` with the project's
@@ -20,8 +20,8 @@ tests.
 | -------------- | ----- | -------------------------------------------------------------------------------------------- |
 | `@quiz/shared` | 240   | auth + content contracts, attempt clocks, the grader, dashboard, analytics and ranking       |
 | `@quiz/db`     | 62    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring     |
-| `@quiz/api`    | 262   | health/readiness, auth, guards, content, taking, grading, reviewing, stats, analytics, board |
-| `@quiz/web`    | 177   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers |
+| `@quiz/api`    | 313   | health/readiness, auth, guards, content, taking, grading, reviewing, stats, analytics, board |
+| `@quiz/web`    | 185   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers |
 
 Run one workspace at a time when you are iterating:
 
@@ -303,6 +303,48 @@ bun run test --filter=@quiz/web
   gap wording (`Tied`, `5 pts behind`, `1 quiz behind`), the current-user caption and the board's
   screen-reader summary.
 
+### Security coverage (Day 13)
+
+Fifty-one tests in `apps/api/src/__tests__/security.test.ts`, grouped exactly as the spec lists the
+areas. Every one assumes a hostile caller; none of them re-asserts a happy path another file covers.
+
+- **Authentication** — no plaintext password is stored or returned (the record matches the scrypt
+  format), an unknown email answers byte-identically to a wrong password, a token minted for another
+  `aud` or by another `iss` is refused even with the right secret, `alg: none` is refused, and the
+  session cookie carries `HttpOnly`/`SameSite=Lax`/`Path=/` on a `no-store` response.
+- **Authorization** — every admin read is `403` for a student and every student read `403` for an
+  admin (parametrised, one case per endpoint); a token signed by us that claims `ADMIN` for a
+  `STUDENT` row still gets `403` because the stored role decides; writes are guarded too; and a
+  registration asking for `role: ADMIN` is stored as `STUDENT`.
+- **Quiz creation** — `status`, `id`, `slug`, `attemptCount` and `createdAt` sent by a client are all
+  ignored; five malformed payloads are `422`; an XSS title is stored and returned verbatim as data.
+- **Quiz attempts** — another student's paper is `404` for read, write, submit and review; a draft
+  cannot be started; a second start resumes the same row (one attempt in the table, `resumed: true`);
+  an answer pointing at another quiz's question is refused; the live paper contains no answer key.
+- **Timer** — a client-supplied `expiresAt`/`startedAt`/`durationMinutes` is ignored and the deadline
+  is exactly `startedAt + duration`; a write past the deadline is `409 ATTEMPT_EXPIRED`; a late submit
+  is graded as auto-submitted with its duration clamped.
+- **Score calculation** — a submitted `score: 999`/`percentage: 100`/`status: PASSED` is ignored and
+  the paper is graded at zero; a one-of-two paper scores 1/2 = 50% and the stored result agrees with
+  the marks.
+- **API validation** — malformed JSON `400`, wrong content type `400`, unknown route `404`, a 422
+  envelope with per-field issues and no stack frames, malformed UUIDs `422` before any query, and a
+  200 KB body `413`.
+- **Unauthorized access** — thirteen protected endpoints answer `401` without a session; a write from
+  `https://evil.example` is `403 CROSS_ORIGIN_BLOCKED` while the app origin and a preview host pass;
+  reads are unaffected and get no CORS grant; every response is `no-store` with `Vary: Cookie`.
+- **Input validation** — `' OR 1=1 --` as an email is `401` and as a directory search returns zero
+  users; an `<img onerror>` category name round-trips as data and is deleted again; the password
+  policy rejects five shapes; a wrongly-typed field is `422` rather than coerced.
+- **Rate limiting** (new control) — bucket arithmetic across a window boundary with an injected clock,
+  per-key isolation, a hard per-address block with `Retry-After` (and another address unaffected), a
+  soft per-account block that still lets the owner in, registration capped, and successes never
+  counted against the limit.
+- **Headers** (`@quiz/web`, 8) — the CSP directives themselves: `default-src 'self'`, no remote hosts
+  in any script/style/connect/img/font source, no `'unsafe-eval'` in production, `frame-ancestors`
+  limited to self plus the preview hosts, HSTS only in production, and the deliberate absence of
+  `X-Frame-Options`.
+
 ---
 
 ## End-to-end smoke run
@@ -392,8 +434,14 @@ then asserts:
     caller present, and no email anywhere in the body
 67. the leaderboard's controls → `metric=completed&period=week` sorted by quizzes, the category scope
     echoing its name, `422` for `?metric=streak`, `404` for an unknown category, `401` anonymously
-68. logout → 200 with `Max-Age=0`
-69. unknown route → 404 `NOT_FOUND`
+68. hardening headers on the wire → `nosniff`, frame and referrer policies, a request id,
+    `Cache-Control: no-store` and `Vary: Cookie`
+69. a write from a foreign origin → 403 `CROSS_ORIGIN_BLOCKED`, while the app's own origin → 200
+70. a 200 KB body → 413 `PAYLOAD_TOO_LARGE`, refused before it is parsed
+71. ten bad passwords from one address → `429 RATE_LIMITED` with `Retry-After`, and the same
+    credentials from another address still → 200
+72. logout → 200 with `Max-Age=0`
+73. unknown route → 404 `NOT_FOUND`
 
 It prints a pass/fail table, exits non-zero on failure, and removes the database afterwards.
 
@@ -539,6 +587,14 @@ QUIZ_WOULD_HAVE_NO_QUESTIONS`; unpublish and the delete goes through.
       reads `Tied` for the pair and `—` for the leader.
 - [ ] Open the board as a student with no graded attempt → the card invites a quiz instead of printing
       a rank, and they are absent from the table.
+- [ ] Type a wrong password ten times → the eleventh attempt answers “Too many attempts” with
+      `Retry-After` (network tab), and signing in from another address still works.
+- [ ] Check the response headers of any page: `Content-Security-Policy` is present, `X-Frame-Options`
+      is not, and the page still renders and hydrates with no console violation.
+- [ ] `curl -X POST` with `-H 'Origin: https://evil.example'` → `403 CROSS_ORIGIN_BLOCKED`; repeat with
+      `-H 'Origin: http://localhost:3000'` → the normal answer.
+- [ ] Post a 200 KB JSON body → `413`; confirm the API stays up for the next request.
+- [ ] Sign out and reuse the old cookie via `curl` → the session no longer resolves to a user.
 - [ ] In the admin console, create a new category, then reload `/student/leaderboard` → the new name is
       in the filter row immediately (dimmed, `attempts: 0`), with no rebuild and no code change.
 

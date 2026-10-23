@@ -15,6 +15,17 @@ const envSchema = z.object({
   DATABASE_URL: z.string().optional(),
   TURSO_AUTH_TOKEN: z.string().optional(),
   JWT_SECRET: z.string().optional(),
+  // Brute-force guards (Day 13). Defaults are the shipping policy; `0` disables a
+  // limiter, which is only ever useful in a local experiment.
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(0).default(10),
+  AUTH_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(1).default(300),
+  REGISTER_RATE_LIMIT_MAX: z.coerce.number().int().min(0).default(10),
+  /** Largest accepted request body, in bytes. */
+  MAX_BODY_BYTES: z.coerce
+    .number()
+    .int()
+    .min(1024)
+    .default(64 * 1024),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -36,3 +47,35 @@ export const allowedOrigins = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
 ].filter((origin, index, list) => list.indexOf(origin) === index);
+
+/**
+ * Preview hosts the app is expected to run under.
+ *
+ * The repository is developed inside a sandbox that serves each port on
+ * `https://<port>-<id>.e2b.app`, so the browser's `Origin` is that host even
+ * though the app's own configuration only knows `localhost`. Allowing the
+ * platform's own subdomains keeps the origin checks (CORS and the CSRF guard)
+ * usable there without opening them to arbitrary sites.
+ */
+const PREVIEW_HOST_PATTERNS = [/\.e2b\.app$/i, /\.e2b\.dev$/i, /\.arena\.ai$/i];
+
+/**
+ * Is this `Origin` allowed to call the API from a browser?
+ *
+ * Exact matches come from configuration; preview hosts match by suffix. Anything
+ * else — including the opaque `null` origin a sandboxed iframe sends — is not.
+ */
+export function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin || origin === 'null') return false;
+  if (allowedOrigins.includes(origin)) return true;
+
+  try {
+    const { hostname, protocol } = new URL(origin);
+
+    if (protocol !== 'https:' && protocol !== 'http:') return false;
+
+    return PREVIEW_HOST_PATTERNS.some((pattern) => pattern.test(hostname));
+  } catch {
+    return false;
+  }
+}
