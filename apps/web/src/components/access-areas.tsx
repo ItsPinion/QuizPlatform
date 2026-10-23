@@ -13,7 +13,8 @@ import Link from 'next/link';
 
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { BentoCard } from '@/components/ui/bento';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 const AREAS = [
@@ -57,9 +58,14 @@ const DENIALS = [
 export function AccessAreas() {
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-2">
         {AREAS.map((area) => (
-          <Card key={area.role} className="card-sheen">
+          <BentoCard
+            key={area.role}
+            tone={area.role === 'ADMIN' ? 'primary' : 'sky'}
+            magnet
+            className="card-sheen flex flex-col gap-6 py-6"
+          >
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
                 <CardTitle className="flex items-center gap-2">
@@ -95,7 +101,7 @@ export function AccessAreas() {
                 </Link>
               </div>
             </CardContent>
-          </Card>
+          </BentoCard>
         ))}
       </div>
 

@@ -61,6 +61,8 @@ export function PlatformBento() {
         href="/admin"
         tone="primary"
         className="group flex flex-col justify-between gap-4 p-5 lg:col-span-2"
+        particles={12}
+        magnet
         ripple
       >
         <div className="flex items-start justify-between gap-3">
@@ -94,6 +96,8 @@ export function PlatformBento() {
         href="#student"
         tone="sky"
         className="group flex flex-col justify-between gap-3 p-5"
+        particles={7}
+        magnet
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -118,6 +122,8 @@ export function PlatformBento() {
         href="#security"
         tone="warning"
         className="group flex flex-col justify-between gap-3 p-5"
+        particles={7}
+        magnet
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -143,6 +149,8 @@ export function PlatformBento() {
         href="#submission"
         tone="success"
         className="group flex flex-col justify-between gap-3 p-5"
+        particles={7}
+        magnet
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -176,6 +184,8 @@ export function PlatformBento() {
         href="#deployment"
         tone="primary"
         className="group flex flex-col justify-between gap-3 p-5 lg:col-span-2"
+        particles={12}
+        magnet
         ripple
       >
         <div className="flex items-start justify-between gap-3">
@@ -201,7 +211,13 @@ export function PlatformBento() {
       </BentoCard>
 
       {/* -------------------------------- stack ----------------------------- */}
-      <BentoCard href="#stack" tone="sky" className="group flex flex-col justify-between gap-3 p-5">
+      <BentoCard
+        href="#stack"
+        tone="sky"
+        className="group flex flex-col justify-between gap-3 p-5"
+        particles={7}
+        magnet
+      >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             <Database className="size-4 text-[oklch(0.74_0.13_215)]" />

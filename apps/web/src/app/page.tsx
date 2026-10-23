@@ -38,7 +38,7 @@ import { SiteHeader } from '@/components/site-header';
 import { StackGrid } from '@/components/stack-grid';
 import { WorkspaceTree } from '@/components/workspace-tree';
 import { Badge } from '@/components/ui/badge';
-import { BentoCard } from '@/components/ui/bento';
+import { BentoCard, BentoSurface } from '@/components/ui/bento';
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -222,8 +222,8 @@ export default function HomePage() {
               description="Six surfaces, one session and one typed contract behind them. Every number on a card is a fact about this repository — point at one and it answers."
             />
             <p className="text-muted-foreground/80 max-w-[15rem] text-[11px] leading-relaxed">
-              Spotlight, border glow and a three-degree tilt. No animation on touch, and none at all
-              if your system asks for reduced motion.
+              Spotlight, a lit border, drifting stars and a few degrees of tilt. Nothing moves on
+              touch, or if your system asks for reduced motion.
             </p>
           </div>
           <div className="mt-8">
@@ -495,131 +495,134 @@ export default function HomePage() {
                   Everything below is covered by the test suite and live on this deployment.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="text-muted-foreground grid gap-3 text-[12.5px] sm:grid-cols-2 lg:grid-cols-3">
-                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground flex items-center gap-1.5 font-medium">
-                    <KeyRound className="text-success size-3.5" />
-                    Password auth
+              <CardContent>
+                <BentoSurface className="text-muted-foreground grid gap-3 text-[12.5px] sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="bento-card p-3.5">
+                    <div className="text-foreground flex items-center gap-1.5 font-medium">
+                      <KeyRound className="text-success size-3.5" />
+                      Password auth
+                    </div>
+                    scrypt with a unique salt per user; unknown emails still run a decoy hash so
+                    timing does not leak who exists.
                   </div>
-                  scrypt with a unique salt per user; unknown emails still run a decoy hash so
-                  timing does not leak who exists.
-                </div>
-                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground flex items-center gap-1.5 font-medium">
-                    <Cookie className="text-success size-3.5" />
-                    Session cookies
+                  <div className="bento-card p-3.5">
+                    <div className="text-foreground flex items-center gap-1.5 font-medium">
+                      <Cookie className="text-success size-3.5" />
+                      Session cookies
+                    </div>
+                    HS256 JWT in an httpOnly, SameSite=Lax cookie that expires after seven days. The
+                    browser never sees the token.
                   </div>
-                  HS256 JWT in an httpOnly, SameSite=Lax cookie that expires after seven days. The
-                  browser never sees the token.
-                </div>
-                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground flex items-center gap-1.5 font-medium">
-                    <Check className="text-success size-3.5" />
-                    Role areas
+                  <div className="bento-card p-3.5">
+                    <div className="text-foreground flex items-center gap-1.5 font-medium">
+                      <Check className="text-success size-3.5" />
+                      Role areas
+                    </div>
+                    <code className="bg-muted rounded px-1 py-0.5 font-mono text-[11px]">
+                      /api/admin
+                    </code>
+                    and
+                    <code className="bg-muted mx-1 rounded px-1 py-0.5 font-mono text-[11px]">
+                      /api/student
+                    </code>
+                    are guarded end to end, and the web pages redirect the wrong role to its own
+                    area.
                   </div>
-                  <code className="bg-muted rounded px-1 py-0.5 font-mono text-[11px]">
-                    /api/admin
-                  </code>
-                  and
-                  <code className="bg-muted mx-1 rounded px-1 py-0.5 font-mono text-[11px]">
-                    /api/student
-                  </code>
-                  are guarded end to end, and the web pages redirect the wrong role to its own area.
-                </div>
-                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground flex items-center gap-1.5 font-medium">
-                    <LayoutDashboard className="text-success size-3.5" />
-                    Admin console
+                  <div className="bento-card p-3.5">
+                    <div className="text-foreground flex items-center gap-1.5 font-medium">
+                      <LayoutDashboard className="text-success size-3.5" />
+                      Admin console
+                    </div>
+                    Six aggregates, newest accounts and attempts, plus a searchable directory where
+                    role and status changes are one guarded PATCH away.
                   </div>
-                  Six aggregates, newest accounts and attempts, plus a searchable directory where
-                  role and status changes are one guarded PATCH away.
-                </div>
-                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground flex items-center gap-1.5 font-medium">
-                    <ListChecks className="text-success size-3.5" />
-                    Quiz management
+                  <div className="bento-card p-3.5">
+                    <div className="text-foreground flex items-center gap-1.5 font-medium">
+                      <ListChecks className="text-success size-3.5" />
+                      Quiz management
+                    </div>
+                    Create, edit and delete quizzes, derive slugs on the server, and publish or
+                    unpublish only when the rules allow it.
                   </div>
-                  Create, edit and delete quizzes, derive slugs on the server, and publish or
-                  unpublish only when the rules allow it.
-                </div>
-                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground flex items-center gap-1.5 font-medium">
-                    <FolderTree className="text-success size-3.5" />
-                    Categories &amp; questions
+                  <div className="bento-card p-3.5">
+                    <div className="text-foreground flex items-center gap-1.5 font-medium">
+                      <FolderTree className="text-success size-3.5" />
+                      Categories &amp; questions
+                    </div>
+                    Category CRUD with case-insensitive names, plus multiple choice questions that
+                    carry options, marks, difficulty and one correct answer.
                   </div>
-                  Category CRUD with case-insensitive names, plus multiple choice questions that
-                  carry options, marks, difficulty and one correct answer.
-                </div>
-                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground flex items-center gap-1.5 font-medium">
-                    <Timer className="text-success size-3.5" />
-                    Student quiz interface
+                  <div className="bento-card p-3.5">
+                    <div className="text-foreground flex items-center gap-1.5 font-medium">
+                      <Timer className="text-success size-3.5" />
+                      Student quiz interface
+                    </div>
+                    Published-only catalogue, pre-flight rules, and a timed attempt that saves every
+                    answer and resumes after a refresh without spending a try.
                   </div>
-                  Published-only catalogue, pre-flight rules, and a timed attempt that saves every
-                  answer and resumes after a refresh without spending a try.
-                </div>
-                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground flex items-center gap-1.5 font-medium">
-                    <Gauge className="text-success size-3.5" />
-                    Submission &amp; scoring
+                  <div className="bento-card p-3.5">
+                    <div className="text-foreground flex items-center gap-1.5 font-medium">
+                      <Gauge className="text-success size-3.5" />
+                      Submission &amp; scoring
+                    </div>
+                    Manual or automatic submission, one idempotent grader, and a stored result:
+                    marks, counts, percentage, pass/fail and time taken.
                   </div>
-                  Manual or automatic submission, one idempotent grader, and a stored result: marks,
-                  counts, percentage, pass/fail and time taken.
-                </div>
-                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground flex items-center gap-1.5 font-medium">
-                    <ListChecks className="text-success size-3.5" />
-                    Results &amp; review
+                  <div className="bento-card p-3.5">
+                    <div className="text-foreground flex items-center gap-1.5 font-medium">
+                      <ListChecks className="text-success size-3.5" />
+                      Results &amp; review
+                    </div>
+                    The answer key and explanations, unlocked only after submission, plus an attempt
+                    history you can filter by status and sort by score.
                   </div>
-                  The answer key and explanations, unlocked only after submission, plus an attempt
-                  history you can filter by status and sort by score.
-                </div>
-                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground flex items-center gap-1.5 font-medium">
-                    <Gauge className="text-success size-3.5" />
-                    Student dashboard
+                  <div className="bento-card p-3.5">
+                    <div className="text-foreground flex items-center gap-1.5 font-medium">
+                      <Gauge className="text-success size-3.5" />
+                      Student dashboard
+                    </div>
+                    The spec&apos;s six statistics in one round trip, with a score trend,
+                    per-category averages and a fortnight of activity.
                   </div>
-                  The spec&apos;s six statistics in one round trip, with a score trend, per-category
-                  averages and a fortnight of activity.
-                </div>
-                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground flex items-center gap-1.5 font-medium">
-                    <Radio className="text-success size-3.5" />
-                    Admin analytics
+                  <div className="bento-card p-3.5">
+                    <div className="text-foreground flex items-center gap-1.5 font-medium">
+                      <Radio className="text-success size-3.5" />
+                      Admin analytics
+                    </div>
+                    Attempts and registrations over time, the pass/fail split, and the quizzes and
+                    categories people actually sit — over a window you choose.
                   </div>
-                  Attempts and registrations over time, the pass/fail split, and the quizzes and
-                  categories people actually sit — over a window you choose.
-                </div>
-                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground flex items-center gap-1.5 font-medium">
-                    <Trophy className="text-success size-3.5" />
-                    Leaderboard
+                  <div className="bento-card p-3.5">
+                    <div className="text-foreground flex items-center gap-1.5 font-medium">
+                      <Trophy className="text-success size-3.5" />
+                      Leaderboard
+                    </div>
+                    Overall and per-category rankings by average, best score or quizzes completed,
+                    with competition ranking, rolling weekly and monthly boards, and your own row
+                    pinned.
                   </div>
-                  Overall and per-category rankings by average, best score or quizzes completed,
-                  with competition ranking, rolling weekly and monthly boards, and your own row
-                  pinned.
-                </div>
-                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground flex items-center gap-1.5 font-medium">
-                    <ShieldCheck className="text-success size-3.5" />
-                    Hardening
+                  <div className="bento-card p-3.5">
+                    <div className="text-foreground flex items-center gap-1.5 font-medium">
+                      <ShieldCheck className="text-success size-3.5" />
+                      Hardening
+                    </div>
+                    Rate-limited sign-ins that cannot lock the owner out, a same-origin guard on
+                    every write, scoped JWTs, a body-size cap and a CSP — each one covered by an
+                    attack test.
                   </div>
-                  Rate-limited sign-ins that cannot lock the owner out, a same-origin guard on every
-                  write, scoped JWTs, a body-size cap and a CSP — each one covered by an attack
-                  test.
-                </div>
-                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
-                  <div className="text-foreground flex items-center gap-1.5 font-medium">
-                    <ServerCog className="text-success size-3.5" />
-                    Deployment gate
+                  <div className="bento-card p-3.5">
+                    <div className="text-foreground flex items-center gap-1.5 font-medium">
+                      <ServerCog className="text-success size-3.5" />
+                      Deployment gate
+                    </div>
+                    Eight environment rules become one verdict, reported before a build, over the
+                    wire after a deploy and on{' '}
+                    <code className="bg-muted rounded px-1 py-0.5 font-mono text-[11px]">
+                      /admin/system
+                    </code>{' '}
+                    — with a Dockerfile and a runbook behind it.
                   </div>
-                  Eight environment rules become one verdict, reported before a build, over the wire
-                  after a deploy and on{' '}
-                  <code className="bg-muted rounded px-1 py-0.5 font-mono text-[11px]">
-                    /admin/system
-                  </code>{' '}
-                  — with a Dockerfile and a runbook behind it.
-                </div>
+                </BentoSurface>
               </CardContent>
             </Card>
           </div>
