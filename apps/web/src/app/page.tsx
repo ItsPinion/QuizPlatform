@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 import { AccessAreas } from '@/components/access-areas';
+import { AdminAnalyticsPreview } from '@/components/admin-analytics-preview';
 import { AdminConsole } from '@/components/admin-console';
 import { QuestionManagement } from '@/components/question-management';
 import { QuizManagement } from '@/components/quiz-management';
@@ -96,7 +97,7 @@ export default function HomePage() {
             <div>
               <Badge className="border-primary/30 bg-primary/10 gap-2 py-1">
                 <span className="bg-primary size-1.5 rounded-full" />
-                Milestone · Day 10 of 14 complete
+                Milestone · Day 11 of 14 complete
               </Badge>
 
               <h1 className="mt-6 text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-[3.4rem]">
@@ -373,6 +374,20 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* ----------------------------- analytics ---------------------------- */}
+        <section id="analytics" className="border-border/60 w-full border-y">
+          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
+            <SectionHeading
+              eyebrow="Day 11 · admin analytics"
+              title="The whole platform, in five charts"
+              description="Attempts over time, student registrations, the pass/fail split, the most popular quizzes and the most popular categories — plus the student, quiz and attempt statistics behind them. One endpoint, one window (7 / 14 / 30 / 90 days), and every rate with a stated denominator."
+            />
+            <div className="mt-8">
+              <AdminAnalyticsPreview />
+            </div>
+          </div>
+        </section>
+
         {/* ----------------------------- workspace ---------------------------- */}
         <section id="workspace" className="border-border/60 bg-card/20 w-full border-y">
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
@@ -392,8 +407,8 @@ export default function HomePage() {
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
             <SectionHeading
               eyebrow="Two-week plan"
-              title="Ten days shipped, four to go"
-              description="The spec's build schedule, tracked in the repo. Day 10 adds the student dashboard: the spec's six statistics, a score trend, a category breakdown and an activity chart — all aggregated by the API."
+              title="Eleven days shipped, three to go"
+              description="The spec's build schedule, tracked in the repo. Day 11 adds the admin analytics screen: five charts over a selectable window, the pass/fail split and the platform's student, quiz and attempt statistics."
             />
             <div className="mt-8">
               <Roadmap />
@@ -403,7 +418,7 @@ export default function HomePage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <LayoutDashboard className="text-primary size-4" />
-                  Shipped in Days 2–10
+                  Shipped in Days 2–11
                 </CardTitle>
                 <CardDescription>
                   Everything below is covered by the test suite and live on this deployment.
@@ -495,6 +510,14 @@ export default function HomePage() {
                   </div>
                   The spec&apos;s six statistics in one round trip, with a score trend, per-category
                   averages and a fortnight of activity.
+                </div>
+                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
+                  <div className="text-foreground flex items-center gap-1.5 font-medium">
+                    <Radio className="text-success size-3.5" />
+                    Admin analytics
+                  </div>
+                  Attempts and registrations over time, the pass/fail split, and the quizzes and
+                  categories people actually sit — over a window you choose.
                 </div>
               </CardContent>
             </Card>

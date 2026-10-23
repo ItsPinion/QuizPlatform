@@ -31,6 +31,7 @@ const tree = `quizplatform/
 │     ├─ src/lib/submissions.ts       grading, idempotent submit, lazy expiry
 │     ├─ src/lib/reviews.ts           answer review + paged attempt history
 │     ├─ src/lib/student-dashboard.ts aggregates: totals, trend, categories, activity
+│     ├─ src/lib/admin-analytics.ts   platform aggregates: timeline, ratios, popularity
 │     ├─ src/routes/admin-quizzes.ts  /api/admin/quizzes (mounted under the guard)
 │     ├─ src/lib/auth.ts       JWT signing + session cookies
 │     └─ src/lib/              env, jsonBody validator, error envelope
@@ -112,6 +113,14 @@ const highlights = [
   {
     path: 'apps/api/src/lib/student-dashboard.ts',
     note: 'five aggregates, one round trip, graded rows only',
+  },
+  {
+    path: 'packages/shared/src/analytics.ts',
+    note: 'windowed buckets, ratio slices, bar scaling',
+  },
+  {
+    path: 'apps/api/src/lib/admin-analytics.ts',
+    note: 'platform-wide aggregates + a cross-user expiry sweep',
   },
   { path: 'apps/web/src/lib/api.ts', note: 'hc<AppType>() — zero codegen RPC' },
   { path: 'packages/db/src/schema.ts', note: 'users → attempts → answers relations' },

@@ -1,4 +1,5 @@
 import { idSchema } from '@quiz/shared';
+import { analyticsQuerySchema, adminAnalyticsSchema } from '@quiz/shared/analytics';
 import {
   dashboardStatsSchema,
   updateUserSchema,
@@ -9,6 +10,7 @@ import {
 import { PERMISSIONS, type AccessDescriptor } from '@quiz/shared/auth';
 import { Hono } from 'hono';
 
+import { buildAdminAnalytics } from '../lib/admin-analytics';
 import { buildDashboardStats } from '../lib/admin-stats';
 import { getUserById, listUsers, updateUser } from '../lib/admin-users';
 import { adminCategoryRoutes } from './admin-categories';
@@ -59,6 +61,25 @@ export const adminRoutes = new Hono<AppEnv>()
   .get('/stats', async (c) => {
     const stats = await buildDashboardStats();
     return c.json(dashboardStatsSchema.parse(stats), 200);
+  })
+
+  /* ------------------------------- analytics ------------------------------ */
+  /**
+   * Day 11: the platform-wide charts. `?days=` picks the window (7 / 14 / 30 /
+   * 90, default 30) and is validated here — the screen's filter parser is
+   * forgiving, this endpoint is not.
+   */
+  .get('/analytics', async (c) => {
+    const raw = new URL(c.req.url).searchParams.get('days') ?? '';
+
+    // An empty `?days=` is a cleared filter, not a value — same rule the rest
+    // of the console's query parsing uses.
+    const query = analyticsQuerySchema.parse({
+      days: raw.trim() === '' ? undefined : raw,
+    });
+
+    const analytics = await buildAdminAnalytics(query.days);
+    return c.json(adminAnalyticsSchema.parse(analytics), 200);
   })
 
   /* ---------------------------- user management --------------------------- */

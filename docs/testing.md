@@ -3,8 +3,8 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test       # 622 unit + integration tests across the four workspaces
-bun run test:e2e   # 65 checks against a real HTTP server (own process, own port)
+bun run test       # 683 unit + integration tests across the four workspaces
+bun run test:e2e   # 67 checks against a real HTTP server (own process, own port)
 ```
 
 Neither touches Turso. Every suite builds a throwaway `file:` database in `.data/` with the project's
@@ -16,12 +16,12 @@ tests.
 
 ## What runs where
 
-| Workspace      | Tests | Focus                                                                                      |
-| -------------- | ----- | ------------------------------------------------------------------------------------------ |
-| `@quiz/shared` | 182   | auth + content contracts, attempt clocks, the grader, review/history and dashboard helpers |
-| `@quiz/db`     | 61    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring   |
-| `@quiz/api`    | 236   | health/readiness, auth, guards, content, taking, grading, reviewing, dashboard stats       |
-| `@quiz/web`    | 143   | error envelopes, page guards, directory/quiz/student/review/dashboard helpers              |
+| Workspace      | Tests | Focus                                                                                    |
+| -------------- | ----- | ---------------------------------------------------------------------------------------- |
+| `@quiz/shared` | 214   | auth + content contracts, attempt clocks, the grader, dashboard and analytics helpers    |
+| `@quiz/db`     | 62    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring |
+| `@quiz/api`    | 248   | health/readiness, auth, guards, content, taking, grading, reviewing, stats and analytics |
+| `@quiz/web`    | 159   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics helpers  |
 
 Run one workspace at a time when you are iterating:
 
@@ -246,6 +246,32 @@ bun run test --filter=@quiz/web
 - **Health probe** — `/api/health/db` now compares its counts against a direct query rather than a
   frozen snapshot, because the fixture database is shared by parallel test files.
 
+### Admin analytics coverage (Day 11)
+
+- **Every aggregate against the database** — students, active students, learners, quizzes,
+  published/draft/unpublished quiz counts, and attempts by status are compared with direct queries,
+  so "the number on the card" and "the rows in the table" cannot drift apart.
+- **Buckets add up** — `passed + failed + expired + inProgress = total`, `graded = passed + failed`,
+  `attempted + neverAttempted = quizzes`, and every rate is inside 0–100.
+- **The timeline** — exactly `days` buckets, chronological, ending today, labelled `15 Mar`, and its
+  attempts sum to `attempts.inWindow`.
+- **The windows** — 7, 14, 30 and 90 each answer with the right length; `days=365` is `422`;
+  `days=` (empty) means the default; `inPreviousWindow` counts the adjacent window, not this one.
+- **Popularity** — quiz rows sum to the total attempts and are ordered by attempts desc, with a pass
+  rate, a parseable `lastAttemptAt` and a category; category rows cover every category (quiet ones
+  with `null` averages) and their `quizzes` counts match the quizzes table.
+- **Live data** — a new graded attempt moves totals, today's bucket and the quiz row on the next call;
+  an `IN_PROGRESS` row moves no average or pass rate; a timed-out paper is swept (status becomes
+  PASSED/FAILED) and counted as graded rather than lingering in progress.
+- **Registrations** — a new student lands in today's bucket and in `newInWindow`.
+- **Access** — `401` anonymously, `403` for a student.
+- **The helpers** (`@quiz/shared`) — window parsing, zero-filled buckets and their labels, window
+  totals and the busiest day, ratio slices (expired separate, percentages summing to 100), share and
+  bar scaling, series points for a flat/empty/single-value series, percent change, and both schemas.
+- **Presentation** (`@quiz/web`) — window parsing and href round-trips, change wording and tones,
+  outcome labels and tones, popularity captions (singular included), clamped score bars, pass-rate
+  captions and the timeline's screen-reader summary.
+
 ---
 
 ## End-to-end smoke run
@@ -326,8 +352,12 @@ then asserts:
     `recent`)
 63. the dashboard is scoped and guarded → 401 anonymously, 403 for the admin, no overlap between two
     students' recent attempts
-64. logout → 200 with `Max-Age=0`
-65. unknown route → 404 `NOT_FOUND`
+64. `GET /api/admin/analytics?days=7` → 200, seven chronological buckets ending today, status buckets
+    adding up, the timeline total matching `inWindow`, and quiz/category rows summing to the attempts
+65. the window is validated and guarded → `422` for `days=365`, `403` for the student, `401`
+    anonymously, and `days=90` returns ninety buckets
+66. logout → 200 with `Max-Age=0`
+67. unknown route → 404 `NOT_FOUND`
 
 It prints a pass/fail table, exits non-zero on failure, and removes the database afterwards.
 
@@ -449,6 +479,18 @@ QUIZ_WOULD_HAVE_NO_QUESTIONS`; unpublish and the delete goes through.
       quizzes; the filter survives a reload.
 - [ ] Past a quiz's deadline, reload `/student` → the row is no longer "in progress" (the expiry
       sweep settled it) and the averages include it.
+- [ ] `/admin/analytics` opens from the console sidebar (no longer a disabled "Day 11" item) and
+      shows six stat cards plus four charts.
+- [ ] Switch the window with the `7d` / `14d` / `30d` / `90d` chips → the URL carries `?days=`, the
+      bars resize, and a reload reproduces the view. Try `?days=365` → it falls back to 30 days.
+- [ ] Compare the cards with `/api/admin/analytics?days=30` → same numbers; the pass/fail legend's
+      counts match `passed` / `failed` / `expired`.
+- [ ] Hover a bar in **Attempts over time** → the tooltip names the day, the attempts, the
+      registrations and that day's average.
+- [ ] Submit a quiz in another tab, then reload `/admin/analytics` → today's bar, the quiz row and the
+      averages all move.
+- [ ] Sign in as a student and open `/admin/analytics` → redirected; `curl` the endpoint with the
+      student cookie → `403`.
 
 ---
 

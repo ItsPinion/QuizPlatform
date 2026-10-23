@@ -26,7 +26,7 @@ export function SiteHeader() {
         <nav className="flex items-center gap-2">
           <Badge variant="outline" className="hidden gap-1.5 lg:inline-flex">
             <Sparkles className="text-primary" />
-            Day 10 · student dashboard
+            Day 11 · admin analytics
           </Badge>
           <a
             href="/api/health"

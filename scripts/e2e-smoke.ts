@@ -1678,6 +1678,112 @@ try {
     return `200 · ${mineIds.size} recent · 403 for admin`;
   });
 
+  /* ------------------------------- Day 11 -------------------------------- */
+
+  await check('GET /api/admin/analytics reports the platform charts', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/analytics?days=7`, {
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as {
+      windowDays: number;
+      students: { total: number; active: number; activeLearners: number };
+      quizzes: { total: number; published: number; attempted: number; neverAttempted: number };
+      attempts: {
+        total: number;
+        graded: number;
+        passed: number;
+        failed: number;
+        expired: number;
+        inProgress: number;
+        passRate: number | null;
+        averagePercentage: number | null;
+        inWindow: number;
+      };
+      timeline: { date: string; attempts: number; registrations: number; label: string }[];
+      quizPerformance: { attempts: number; averagePercentage: number | null }[];
+      categories: { name: string; attempts: number }[];
+    };
+
+    if (body.windowDays !== 7) throw new Error(`window mismatch: ${body.windowDays}`);
+    if (body.timeline.length !== 7) throw new Error('expected a seven-day window');
+
+    const dates = body.timeline.map((point) => point.date);
+    if (JSON.stringify([...dates].sort()) !== JSON.stringify(dates)) {
+      throw new Error('the timeline must be chronological');
+    }
+    if (body.timeline.at(-1)?.date !== new Date().toISOString().slice(0, 10)) {
+      throw new Error('the timeline must end today');
+    }
+
+    const { attempts } = body;
+    if (
+      attempts.passed + attempts.failed + attempts.expired + attempts.inProgress !==
+      attempts.total
+    ) {
+      throw new Error('the status buckets do not add up to the attempts');
+    }
+    if (attempts.graded !== attempts.passed + attempts.failed) {
+      throw new Error('graded must be passed + failed');
+    }
+    if (attempts.passRate != null && (attempts.passRate < 0 || attempts.passRate > 100)) {
+      throw new Error(`pass rate out of range: ${attempts.passRate}`);
+    }
+    if (
+      attempts.averagePercentage != null &&
+      (attempts.averagePercentage < 0 || attempts.averagePercentage > 100)
+    ) {
+      throw new Error(`average out of range: ${attempts.averagePercentage}`);
+    }
+
+    const timelineAttempts = body.timeline.reduce((sum, point) => sum + point.attempts, 0);
+    if (timelineAttempts !== attempts.inWindow) {
+      throw new Error('the timeline total does not match attempts.inWindow');
+    }
+
+    if (body.quizzes.attempted + body.quizzes.neverAttempted !== body.quizzes.total) {
+      throw new Error('attempted + neverAttempted must equal the quiz total');
+    }
+
+    const quizAttempts = body.quizPerformance.reduce((sum, row) => sum + row.attempts, 0);
+    if (quizAttempts !== attempts.total) throw new Error('quiz rows do not sum to the attempts');
+
+    const categoryAttempts = body.categories.reduce((sum, row) => sum + row.attempts, 0);
+    if (categoryAttempts !== attempts.total)
+      throw new Error('category rows do not sum to the attempts');
+    if (body.categories.some((row) => row.name.length === 0)) {
+      throw new Error('every category needs a name');
+    }
+
+    return `200 · ${attempts.total} attempts · pass ${attempts.passRate ?? '—'}% · ${body.categories.length} categories`;
+  });
+
+  await check('the analytics window is validated and admin-only', async () => {
+    const bad = await fetch(`${baseUrl}/api/admin/analytics?days=365`, {
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(bad, 422);
+
+    const student = await fetch(`${baseUrl}/api/admin/analytics`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(student, 403);
+
+    const anonymous = await fetch(`${baseUrl}/api/admin/analytics`);
+    expectStatus(anonymous, 401);
+
+    const ninety = await fetch(`${baseUrl}/api/admin/analytics?days=90`, {
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(ninety, 200);
+
+    const body = (await ninety.json()) as { timeline: unknown[] };
+    if (body.timeline.length !== 90) throw new Error('days=90 should return ninety buckets');
+
+    return '422 for days=365 · 403 student · 401 anonymous · 90 buckets';
+  });
+
   await check('POST /api/auth/logout clears the cookie', async () => {
     const res = await fetch(`${baseUrl}/api/auth/logout`, {
       method: 'POST',

@@ -154,7 +154,9 @@ async function main() {
     passwordHash: demoHashes[index] ?? demoHashes[0]!,
     role: 'STUDENT',
     status: 'ACTIVE',
-    createdAt: new Date(now - (45 - index * 7) * 24 * 60 * 60 * 1000),
+    // Inside the analytics window on purpose: a fresh install should show
+    // registrations on the Day 11 chart, not an empty line.
+    createdAt: new Date(now - (24 - index * 9) * 24 * 60 * 60 * 1000),
   }));
 
   await db.insert(users).values([admin, ...studentRows]);

@@ -280,6 +280,19 @@ describe('seeded data integrity', () => {
     expect(Number(rows[0]?.average)).toBeGreaterThan(0);
   });
 
+  it('dates registrations so the day-11 analytics chart is not empty', async () => {
+    const rows = await db
+      .select({ createdAt: schema.users.createdAt })
+      .from(schema.users)
+      .where(eq(schema.users.role, 'STUDENT'));
+
+    const now = Date.now();
+    const month = 30 * 24 * 60 * 60 * 1000;
+
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.some((row) => now - row.createdAt.getTime() < month)).toBe(true);
+  });
+
   it('dates the attempts so the day-10 activity chart is not empty', async () => {
     const rows = await db
       .select({

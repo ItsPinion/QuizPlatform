@@ -13,7 +13,8 @@
     "./attempt": "./src/attempt.ts",
     "./submission": "./src/submission.ts",
     "./review": "./src/review.ts",
-    "./dashboard": "./src/dashboard.ts"
+    "./dashboard": "./src/dashboard.ts",
+    "./analytics": "./src/analytics.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -29,7 +29,7 @@ const ITEMS: NavItem[] = [
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/quizzes', label: 'Quizzes', icon: ListChecks, prefix: true },
   { href: '/admin/categories', label: 'Categories', icon: FolderTree },
-  { href: '/admin/analytics', label: 'Analytics', icon: BarChart3, day: 11 },
+  { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
 ];
 
 /**
