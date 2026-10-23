@@ -591,7 +591,7 @@ The Turso-only rule applies to the running application, not to tests.
 
 | Method | Path                                            | Description                                            |
 | ------ | ----------------------------------------------- | ------------------------------------------------------ |
-| GET    | `/api`                                          | Service banner                                         |
+| GET    | `/`                                             | Service banner: name, version, endpoint index          |
 | GET    | `/api/health`                                   | Liveness: version, runtime, uptime                     |
 | GET    | `/api/health/db`                                | Readiness: target, latency, live row counts            |
 | GET    | `/api/meta`                                     | API index + the spec's remaining endpoint roadmap      |

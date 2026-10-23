@@ -35,6 +35,14 @@ export function Hero({ payload, role }: { payload: LandingPayload | null; role: 
   const actions = heroActions(role);
   const signedIn = role === 'STUDENT' || role === 'ADMIN';
 
+  // Never print a version we do not have. `v0.0.0` is not a version, it is a
+  // placeholder wearing one, and the badge is the first thing on the page.
+  const badge = payload
+    ? `v${payload.service.version} · ${signedIn ? 'you are signed in' : 'live demo'}`
+    : signedIn
+      ? 'you are signed in'
+      : 'demo';
+
   return (
     <section className="border-border/60 relative overflow-hidden border-b">
       <div className="bg-glow pointer-events-none absolute inset-0" />
@@ -44,8 +52,7 @@ export function Hero({ payload, role }: { payload: LandingPayload | null; role: 
           <div className="reveal" style={{ '--reveal-delay': '60ms' } as React.CSSProperties}>
             <Badge className="border-primary/30 bg-primary/10 text-primary gap-2 py-1 font-mono text-[10.5px] tracking-wide uppercase">
               <span className="bg-primary animate-pulse-dot size-1.5 rounded-full motion-reduce:animate-none" />
-              v{payload?.service.version ?? '0.0.0'} ·{' '}
-              {signedIn ? 'you are signed in' : 'live demo'}
+              {badge}
             </Badge>
           </div>
 

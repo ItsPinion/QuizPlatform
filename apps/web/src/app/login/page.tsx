@@ -62,7 +62,9 @@ export default async function LoginPage({
       <p className="text-muted-foreground/80 mt-4 px-1 text-[11.5px] leading-relaxed">
         {demo.length > 0
           ? 'The demo buttons fill the form with accounts that exist in this database. Nothing is submitted until you press Sign in.'
-          : 'No demo accounts are published on this deployment. Use the account you registered with.'}
+          : payload
+            ? 'No demo accounts are published on this deployment. Use the account you registered with.'
+            : 'Demo accounts are unavailable right now — the API did not answer. The form still works for an account you already have.'}
       </p>
     </AuthShell>
   );

@@ -12,6 +12,7 @@ import {
 } from '@quiz/shared/landing';
 import { db, getDatabaseConfig, schema } from '@quiz/db';
 
+import { classifyDatabaseError } from './db-errors';
 import { APP_VERSION, env } from './env';
 
 const { attempts, categories, options, questions, quizzes, users } = schema;
@@ -365,6 +366,19 @@ function safeConfig(): Pick<LandingPayload['database'], 'target' | 'urlHint'> {
 }
 
 /**
+ * One line a person can act on, instead of a driver stack.
+ *
+ * The public landing page is not the place for `Failed query: select count(*)
+ * from "users"` — it leaks table names and tells a visitor nothing. The raw
+ * error still reaches the API log; the page gets a sentence.
+ */
+export function explainFailure(reason: unknown): string {
+  return classifyDatabaseError(reason) === 'schema-missing'
+    ? 'the database has not been migrated yet'
+    : 'the database did not answer';
+}
+
+/**
  * The payload a broken database gets.
  *
  * The page is entirely data-driven, so an unhandled 500 would leave it blank. This
@@ -401,7 +415,6 @@ export function emptyLandingPayload(reason: unknown): LandingPayload {
     sampleQuestion: null,
     sampleResult: null,
     demo: { enabled: demoEnabled(), accounts: [] },
-    unavailableReason:
-      reason instanceof Error ? reason.message.slice(0, 120) : 'database unavailable',
+    unavailableReason: explainFailure(reason),
   };
 }

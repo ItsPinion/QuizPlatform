@@ -221,7 +221,7 @@ export function PlatformBento({ payload }: { payload: LandingPayload | null }) {
 
         <div>
           <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
-            <Figure value={`v${service?.version ?? '0.0.0'}`} />
+            <Figure value={service ? `v${service.version}` : 'this process'} />
             <span className="text-muted-foreground font-mono text-[11px]">
               {database?.target ?? '—'} ·{' '}
               {database?.latencyMs ? `${Math.round(database.latencyMs)} ms` : '—'}

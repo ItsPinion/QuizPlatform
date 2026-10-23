@@ -5,6 +5,7 @@ import { Atmosphere } from '@/components/landing/atmosphere';
 import { LibraryScene } from '@/components/landing/library-scene';
 import { LiveStatus } from '@/components/landing/live-status';
 import { SiteFooter } from '@/components/site-footer';
+import { SkipLink } from '@/components/skip-link';
 import { SiteHeader } from '@/components/site-header';
 import { cn } from '@/lib/utils';
 import { authStats } from '@/lib/auth-params';
@@ -87,12 +88,7 @@ export function AuthShell({
 }) {
   return (
     <div className="flex min-h-dvh flex-col">
-      <a
-        href="#auth"
-        className="focus:bg-primary focus:text-primary-foreground sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-100 focus:rounded-lg focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:shadow-lg"
-      >
-        Skip to the form
-      </a>
+      <SkipLink href="#auth" label="Skip to the form" />
 
       <SiteHeader version={payload?.service.version} />
 

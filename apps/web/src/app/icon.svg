@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The mark from components/brand/logo.tsx, flattened for a favicon: no CSS
+       variables and no gradients that need a document context. -->
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="55%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fdfcff"/>
+      <stop offset="100%" stop-color="#e6e2f5"/>
+    </linearGradient>
+    <linearGradient id="pageShade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fdfcff"/>
+      <stop offset="100%" stop-color="#dcd6ee"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="32" height="32" rx="9" fill="url(#plate)"/>
+  <rect x="0.75" y="0.75" width="30.5" height="30.5" rx="8.25" fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="1.5"/>
+
+  <path d="M9 10.6h3.4v8.2L10.7 17l-1.7 1.8z" fill="#f0c04a"/>
+  <path d="M6.6 10.2 15.1 12v12.1L6.6 22.3z" fill="url(#page)"/>
+  <path d="M25.4 10.2 16.9 12v12.1l8.5-1.8z" fill="url(#pageShade)"/>
+  <rect x="15.1" y="11.7" width="1.8" height="12.6" fill="#5b4a80"/>
+
+  <path d="M19.6 17.2l1.9 2 3.6-4.3" fill="none" stroke="#7c3aed" stroke-width="2.1" stroke-linecap="square"/>
+</svg>

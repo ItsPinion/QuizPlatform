@@ -9,6 +9,7 @@ import { SectionHeading } from '@/components/landing/section-heading';
 import { Tour } from '@/components/landing/tour';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
+import { SkipLink } from '@/components/skip-link';
 import { cn } from '@/lib/utils';
 import { fetchLanding } from '@/lib/landing';
 
@@ -38,6 +39,17 @@ export default async function HomePage() {
   const [payload, session] = await Promise.all([fetchLanding(), getSession()]);
   const role = session?.user.role ?? null;
   const numbers = payload ? headlineNumbers(payload) : [];
+
+  /**
+   * Why there is nothing to show, in the page's own words.
+   *
+   * Two different failures arrive here as two different shapes: an API that
+   * answers but cannot read the database sends `unavailableReason`, while an API
+   * that does not answer at all leaves `fetchLanding` with nothing. Both used to
+   * look the same — empty cards and no explanation — which reads like a broken
+   * page rather than a broken service.
+   */
+  const unavailable = payload ? payload.unavailableReason : 'the API did not answer';
   const notes: Record<string, string> = payload
     ? {
         categories: 'every one a row, not an enum',
@@ -51,19 +63,17 @@ export default async function HomePage() {
     <div className="flex min-h-dvh flex-col">
       <SiteHeader version={payload?.service.version} />
 
-      <a
-        href="#main"
-        className="focus:bg-primary focus:text-primary-foreground sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-100 focus:rounded-lg focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:shadow-lg"
-      >
-        Skip to content
-      </a>
+      <SkipLink />
 
       <main id="main" className="relative flex-1 overflow-hidden">
         <Atmosphere />
 
-        {payload?.unavailableReason ? (
-          <div className="border-destructive/30 bg-destructive/10 text-destructive border-b px-5 py-2 text-center text-[11.5px] sm:px-8">
-            Live data is unavailable right now — {payload.unavailableReason}. Showing empty states
+        {unavailable ? (
+          <div
+            role="status"
+            className="border-destructive/30 bg-destructive/10 text-destructive border-b px-5 py-2 text-center text-[11.5px] sm:px-8"
+          >
+            Live data is unavailable right now — {unavailable}. The page is showing its empty states
             rather than guessed numbers.
           </div>
         ) : null}

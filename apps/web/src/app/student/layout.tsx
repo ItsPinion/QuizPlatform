@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { SiteHeader } from '@/components/site-header';
+import { SkipLink } from '@/components/skip-link';
 import { StudentNav } from '@/components/student-nav';
 
 export const metadata: Metadata = {
@@ -18,11 +19,14 @@ export const metadata: Metadata = {
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col">
+      <SkipLink href="#main" label="Skip to the content" />
       <SiteHeader />
 
       <div className="mx-auto grid w-full max-w-6xl flex-1 gap-8 px-5 py-10 sm:px-8 lg:grid-cols-[190px_minmax(0,1fr)]">
         <StudentNav />
-        <main className="min-w-0">{children}</main>
+        <main id="main" tabIndex={-1} className="min-w-0 outline-none">
+          {children}
+        </main>
       </div>
     </div>
   );

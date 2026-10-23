@@ -3,6 +3,7 @@ import { db, schema } from '@quiz/db';
 import { describe, expect, it } from 'vitest';
 
 import { app } from '../app';
+import { emptyLandingPayload, explainFailure } from '../lib/landing';
 
 /**
  * `GET /api/landing` is the only unauthenticated route that reads content, so
@@ -134,5 +135,44 @@ describe('GET /api/landing', () => {
 
     expect(res.headers.get('cache-control')).toBe('no-store');
     expect(res.headers.get('vary')).toContain('Cookie');
+  });
+});
+
+describe('when the database cannot be read', () => {
+  it('names a missing migration instead of quoting the driver', () => {
+    const error = Object.assign(new Error('Failed query: select count(*) from "users"'), {
+      cause: new Error('no such table: users'),
+    });
+
+    expect(explainFailure(error)).toBe('the database has not been migrated yet');
+  });
+
+  it('falls back to a plain sentence for anything else', () => {
+    expect(explainFailure(new Error('fetch failed'))).toBe('the database did not answer');
+    expect(explainFailure('not an error')).toBe('the database did not answer');
+  });
+
+  it('never puts a table name, a query or a stack in the public payload', () => {
+    const reason = explainFailure(
+      Object.assign(new Error('Failed query: select * from "users"'), {
+        cause: new Error('no such table: users'),
+      }),
+    );
+
+    expect(reason).not.toContain('users');
+    expect(reason).not.toContain('select');
+  });
+
+  it('still answers with a valid, empty payload', () => {
+    const body = emptyLandingPayload(new Error('no such table: users'));
+
+    expect(() => landingPayloadSchema.parse(body)).not.toThrow();
+    expect(body.counts.publishedQuizzes).toBe(0);
+    expect(body.quizzes).toEqual([]);
+    expect(body.sampleQuestion).toBeNull();
+    expect(body.sampleResult).toBeNull();
+    expect(body.demo.accounts).toEqual([]);
+    expect(body.database.connected).toBe(false);
+    expect(body.unavailableReason).toBe('the database has not been migrated yet');
   });
 });

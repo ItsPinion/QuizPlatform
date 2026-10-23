@@ -385,7 +385,30 @@ not what you signed up for.
 
 ---
 
-## 10. Next
+## 10. When something goes wrong
+
+Three boundaries, because a dark product must never flash a white page:
+
+| File                   | Catches                                        | Look                                                                                                                               |
+| ---------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `app/not-found.tsx`    | any unknown URL, and `notFound()` from a route | the full room: header, nav, skip link, pixel art, and the two links a lost visitor wants (back to the library, browse the quizzes) |
+| `app/error.tsx`        | a throw inside a route segment                 | a `glow-frame` card with **Try again** (`reset()`) and the error `digest` so a report can be traced to the server log              |
+| `app/global-error.tsx` | a crash in the root layout itself              | replaces `<html>`, so **every style is inline** and the palette is written by hand — nothing from `globals.css` can be relied on   |
+
+The 404 is a real route, not a redirect: it keeps its `404` status, which matters
+for anything checking a shared link.
+
+`app/robots.ts` allows the public pages and disallows `/admin`, `/student`,
+`/login`, `/register` and `/api/` — every one of those redirects to the sign-in
+screen without a cookie, so a crawler only wastes a round trip.
+
+`app/icon.svg` is the book mark from `components/brand/logo.tsx`, flattened for a
+favicon (no CSS variables, no gradients that need a document context). Next emits
+the `<link rel="icon">` itself.
+
+---
+
+## 11. Next
 
 - The admin shell (`/admin`) and the student dashboard are still on the flat card.
   Same primitives, different grid: stat cards become bento cells with a
