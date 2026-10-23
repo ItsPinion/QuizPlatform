@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { LeaderboardResponse } from '@quiz/shared/leaderboard';
 import { db, schema } from '@quiz/db';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { app } from '../app';
@@ -288,6 +288,58 @@ describe('GET /api/leaderboard', () => {
     expect(body.entries[0]?.gapToNext).toBe(0);
     expect(body.entries[1]?.gapToNext).toBe(0);
     expect(body.entries[2]?.gapToNext).toBe(18);
+  });
+
+  it('offers every category in the database, with live attempt counts', async () => {
+    const { body } = await board();
+
+    const rows = await db
+      .select({ id: schema.categories.id, name: schema.categories.name })
+      .from(schema.categories);
+
+    // No fixed list: exactly the rows in the table, no more and no fewer.
+    expect(body.categories.map((category) => category.id).sort()).toEqual(
+      rows.map((row) => row.id).sort(),
+    );
+    expect(body.categories.map((category) => category.name)).toEqual(
+      [...body.categories.map((category) => category.name)].sort(),
+    );
+
+    // And the count beside each one is the graded attempts filed under it.
+    const graded = await db
+      .select({
+        categoryId: schema.quizzes.categoryId,
+        value: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(schema.attempts)
+      .innerJoin(schema.quizzes, eq(schema.quizzes.id, schema.attempts.quizId))
+      .innerJoin(schema.users, eq(schema.users.id, schema.attempts.userId))
+      .where(
+        and(
+          inArray(schema.attempts.status, ['PASSED', 'FAILED']),
+          eq(schema.users.role, 'STUDENT'),
+        ),
+      )
+      .groupBy(schema.quizzes.categoryId);
+
+    const expected = new Map(graded.map((row) => [row.categoryId, row.value]));
+
+    for (const category of body.categories) {
+      expect(category.attempts).toBe(expected.get(category.id) ?? 0);
+    }
+  });
+
+  it('picks up a category created a moment ago, with no deploy', async () => {
+    const id = randomUUID();
+    const name = `Fresh Category ${id.slice(0, 6)}`;
+
+    await db.insert(schema.categories).values({ id, name, slug: `fresh-${id.slice(0, 6)}` });
+    createdCategoryIds.push(id);
+
+    const { body } = await board();
+
+    expect(body.categories).toContainEqual({ id, name, attempts: 0 });
+    expect(body.entries.every((entry) => entry.name !== name)).toBe(true);
   });
 
   it('filters by category and names the scope', async () => {

@@ -240,6 +240,10 @@ describe('leaderboardResponseSchema', () => {
     metric: 'average' as const,
     period: 'all' as const,
     scope: { type: 'overall' as const, categoryId: null, categoryName: null },
+    categories: [
+      { id: 'c1', name: 'CSS', attempts: 4 },
+      { id: 'c2', name: 'JavaScript', attempts: 0 },
+    ],
     entries: [
       {
         rank: 1,
@@ -273,6 +277,15 @@ describe('leaderboardResponseSchema', () => {
         totals: { participants: 0, attempts: 0, quizzes: 0 },
       }).success,
     ).toBe(true);
+  });
+
+  it('accepts a board whose category list is empty', () => {
+    expect(leaderboardResponseSchema.safeParse({ ...valid, categories: [] }).success).toBe(true);
+  });
+
+  it('requires every category option to carry its attempt count', () => {
+    const broken = { ...valid, categories: [{ id: 'c1', name: 'CSS' }] };
+    expect(leaderboardResponseSchema.safeParse(broken).success).toBe(false);
   });
 
   it('rejects a row without a rank', () => {

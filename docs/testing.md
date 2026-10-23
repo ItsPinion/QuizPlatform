@@ -3,7 +3,7 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test       # 737 unit + integration tests across the four workspaces
+bun run test       # 741 unit + integration tests across the four workspaces
 bun run test:e2e   # 69 checks against a real HTTP server (own process, own port)
 ```
 
@@ -18,9 +18,9 @@ tests.
 
 | Workspace      | Tests | Focus                                                                                        |
 | -------------- | ----- | -------------------------------------------------------------------------------------------- |
-| `@quiz/shared` | 238   | auth + content contracts, attempt clocks, the grader, dashboard, analytics and ranking       |
+| `@quiz/shared` | 240   | auth + content contracts, attempt clocks, the grader, dashboard, analytics and ranking       |
 | `@quiz/db`     | 62    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring     |
-| `@quiz/api`    | 260   | health/readiness, auth, guards, content, taking, grading, reviewing, stats, analytics, board |
+| `@quiz/api`    | 262   | health/readiness, auth, guards, content, taking, grading, reviewing, stats, analytics, board |
 | `@quiz/web`    | 177   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers |
 
 Run one workspace at a time when you are iterating:
@@ -291,6 +291,10 @@ bun run test --filter=@quiz/web
   `?period=year`, `?limit=0|51` and a malformed `categoryId` are `422`.
 - **The caller** — `currentUser` is returned with `isCurrentUser: true` and a rank consistent with
   the visible slice, `401` anonymously for both roles allowed.
+- **The category filter** — `categories[]` is compared row-for-row against the `categories` table
+  (same ids, nothing invented, nothing omitted), ordered by name, with each count matching a direct
+  tally of graded attempts; a category inserted mid-test appears with `attempts: 0` on the next
+  request, which is what makes a runtime-added category work without a deploy.
 - **The helpers** (`@quiz/shared`) — metric values, sorting per metric with tie-breakers, competition
   ranks and gaps in percentage points _and_ quizzes, `buildLeaderboard` (current-user marking, pass
   rates, an empty board), rolling period starts, `topPercentOf` and the query/payload schemas.
@@ -535,6 +539,8 @@ QUIZ_WOULD_HAVE_NO_QUESTIONS`; unpublish and the delete goes through.
       reads `Tied` for the pair and `—` for the leader.
 - [ ] Open the board as a student with no graded attempt → the card invites a quiz instead of printing
       a rank, and they are absent from the table.
+- [ ] In the admin console, create a new category, then reload `/student/leaderboard` → the new name is
+      in the filter row immediately (dimmed, `attempts: 0`), with no rebuild and no code change.
 
 ---
 

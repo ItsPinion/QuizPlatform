@@ -1,7 +1,8 @@
-import { and, count, countDistinct, eq, gte, max, sql } from 'drizzle-orm';
+import { and, asc, count, countDistinct, eq, gte, max, sql } from 'drizzle-orm';
 
 import type {
   LeaderboardCandidate,
+  LeaderboardCategoryWire,
   LeaderboardQuery,
   LeaderboardResponse,
 } from '@quiz/shared/leaderboard';
@@ -18,6 +19,39 @@ function round2(value: number): number {
 
 /** The only attempts that carry a score: a live paper has none, an expired one was never graded. */
 const GRADED = sql`${attempts.status} in ('PASSED','FAILED')`;
+
+/**
+ * Categories for the filter, straight from the table.
+ *
+ * Deliberately *not* filtered to categories with published quizzes (what the
+ * student catalogue shows): a category is a legitimate board even before its
+ * first paper is graded, and hard-coding a list here would mean a new category
+ * only shows up after a deploy. `attempts` counts graded papers all time, so the
+ * UI can render a quiet category without pretending it has a board.
+ */
+async function listBoardCategories(): Promise<LeaderboardCategoryWire[]> {
+  const rows = await db
+    .select({
+      id: categories.id,
+      name: categories.name,
+      attempts:
+        sql<number>`coalesce(sum(case when ${attempts.status} in ('PASSED','FAILED') and ${users.role} = 'STUDENT' then 1 else 0 end), 0)`.mapWith(
+          Number,
+        ),
+    })
+    .from(categories)
+    .leftJoin(quizzes, eq(quizzes.categoryId, categories.id))
+    .leftJoin(attempts, eq(attempts.quizId, quizzes.id))
+    .leftJoin(users, eq(users.id, attempts.userId))
+    .groupBy(categories.id)
+    .orderBy(asc(categories.name));
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    attempts: Number(row.attempts),
+  }));
+}
 
 /**
  * The ranked board, built from one aggregate query.
@@ -99,6 +133,8 @@ export async function getLeaderboard(
 
   const board = buildLeaderboard(candidates, query.metric, currentUserId);
 
+  const categoriesBoard = await listBoardCategories();
+
   const [quizTotals] = await db
     .select({ value: countDistinct(attempts.quizId) })
     .from(attempts)
@@ -115,6 +151,7 @@ export async function getLeaderboard(
       categoryId: query.categoryId ?? null,
       categoryName,
     },
+    categories: categoriesBoard,
     entries: board.slice(0, query.limit),
     // The caller's own rank, even when it falls outside the visible slice.
     currentUser: board.find((entry) => entry.isCurrentUser) ?? null,

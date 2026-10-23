@@ -1,5 +1,4 @@
 import type { LeaderboardResponse } from '@quiz/shared/leaderboard';
-import type { CategoryListResponse } from '@quiz/shared/quiz';
 import { Award, Medal, ShieldCheck, Sparkles, Trophy } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -41,20 +40,20 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
   const filters = parseLeaderboardFilters(await searchParams);
 
   let board: LeaderboardResponse | null = null;
-  let categories: CategoryListResponse['categories'] = [];
 
   try {
     const api = await serverApi();
-    const [boardRes, categoriesRes] = await Promise.all([
-      api.api.leaderboard.$get({ query: toLeaderboardQuery(filters) }),
-      api.api.student.categories.$get(),
-    ]);
+    const boardRes = await api.api.leaderboard.$get({ query: toLeaderboardQuery(filters) });
 
     if (boardRes.ok) board = await boardRes.json();
-    if (categoriesRes.ok) categories = (await categoriesRes.json()).categories;
   } catch {
     board = null;
   }
+
+  // Straight from the response — no hard-coded list, so a category an admin adds
+  // is on this screen the next time it loads. A category with no graded paper
+  // stays selectable (it has an empty state) but is visibly quiet.
+  const categories = board?.categories ?? [];
 
   const me = board?.currentUser ?? null;
   const scopeName = board?.scope.categoryName ?? 'Overall';
@@ -135,11 +134,18 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                 key={category.id}
                 href={leaderboardHref(filters, { categoryId: category.id })}
                 aria-current={filters.categoryId === category.id ? 'true' : undefined}
+                title={
+                  category.attempts === 0
+                    ? `${category.name} — no graded attempts yet`
+                    : `${category.name} — ${category.attempts} graded attempt${category.attempts === 1 ? '' : 's'}`
+                }
                 className={cn(
                   'rounded-full border px-2.5 py-1 text-[11px] transition-colors',
                   filters.categoryId === category.id
                     ? 'border-primary/40 bg-primary/10 text-primary'
-                    : 'border-border/60 text-muted-foreground hover:text-foreground',
+                    : category.attempts === 0
+                      ? 'border-border/60 text-muted-foreground/60 hover:text-foreground'
+                      : 'border-border/60 text-muted-foreground hover:text-foreground',
                 )}
               >
                 {category.name}

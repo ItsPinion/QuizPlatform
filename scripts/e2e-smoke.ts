@@ -1845,7 +1845,7 @@ try {
     return `200 · ${body.totals.participants} ranked · leader ${body.entries[0]?.averagePercentage}%`;
   });
 
-  await check('the leaderboard honours metrics, periods, categories and the guards', async () => {
+  await check('the leaderboard carries the live category filter and honours it', async () => {
     const completed = await fetch(`${baseUrl}/api/leaderboard?metric=completed&period=week`, {
       headers: { cookie: studentCookie },
     });
@@ -1870,12 +1870,27 @@ try {
       }
     }
 
-    const categories = (await (
-      await fetch(`${baseUrl}/api/student/categories`, { headers: { cookie: studentCookie } })
-    ).json()) as { categories: { id: string; name: string }[] };
+    // The category filter comes with the board itself — read from the table, not
+    // a list baked into the UI — so a category added later needs no deploy.
+    const overall = await fetch(`${baseUrl}/api/leaderboard`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(overall, 200);
 
-    const categoryId = categories.categories[0]?.id;
-    if (!categoryId) throw new Error('expected seeded categories');
+    const overallBody = (await overall.json()) as {
+      categories: { id: string; name: string; attempts: number }[];
+    };
+
+    if (overallBody.categories.length === 0) throw new Error('expected seeded categories');
+    const names = overallBody.categories.map((category) => category.name);
+    if (JSON.stringify(names) !== JSON.stringify([...names].sort())) {
+      throw new Error('categories should be ordered by name');
+    }
+
+    const category = overallBody.categories.find((entry) => entry.attempts > 0);
+    if (!category) throw new Error('expected a category with graded attempts');
+
+    const categoryId = category.id;
 
     const scoped = await fetch(`${baseUrl}/api/leaderboard?categoryId=${categoryId}`, {
       headers: { cookie: studentCookie },
@@ -1904,7 +1919,7 @@ try {
     const anonymous = await fetch(`${baseUrl}/api/leaderboard`);
     expectStatus(anonymous, 401);
 
-    return `200 · completed/week · category ${scopedBody.scope.categoryName} · 422 · 404 · 401`;
+    return `200 · ${overallBody.categories.length} categories · ${scopedBody.scope.categoryName} · 422 · 404 · 401`;
   });
 
   await check('POST /api/auth/logout clears the cookie', async () => {

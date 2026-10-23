@@ -16,7 +16,7 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 > the leaderboard: overall and per-category boards ranked by average score, best score or quizzes
 > completed, over all time, this month or this week, with competition ranking and the caller's own
 > position always resolved.
-> 737 automated tests and a 69-check end-to-end smoke run. Testing & security hardening is next.
+> 741 automated tests and a 69-check end-to-end smoke run. Testing & security hardening is next.
 
 ---
 
@@ -361,14 +361,14 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 737 tests, all workspaces through Turbo
+bun run test                    # 741 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
 bun run test:e2e                # 69 checks against a live server + throwaway DB
 ```
 
-**737 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
+**741 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
 
-**`@quiz/shared`** (238) — scrypt record format, unique salts, correct/wrong passwords, unicode
+**`@quiz/shared`** (240) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
 auth contracts (trimming, lowercased emails, stripped unknown keys, the exact password policy,
 session constants), plus the Day 4 admin contracts: query coercion and defaults, the
@@ -385,7 +385,7 @@ integrity (quiz/question/option counts, one correct option each, attempt percent
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
 
-**`@quiz/api`** (248) — service banner, health payload shape, request IDs, security headers, CORS
+**`@quiz/api`** (262) — service banner, health payload shape, request IDs, security headers, CORS
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
 the database is unreachable, `/api/meta` roadmap, and the 404 error envelope.
 
@@ -459,16 +459,18 @@ shared package adds 32 — window parsing, zero-filled buckets, window totals, r
 100 with expired attempts kept apart, bar/series scaling and both schemas — and the web package 16
 window and caption helpers.
 
-Day 12 adds 12 API tests: the overall board checked against every student's own aggregates, sorted
+Day 12 adds 14 API tests: the overall board checked against every student's own aggregates, sorted
 and ranged, with no email in the payload; the caller's row and rank resolved beyond the visible slice;
 the best and completed boards; a controlled tie fixture (two 88s share rank 1, the next row is rank 3
 with an 18-point gap); the category scope and its `404`; rolling week and month windows bounded on
 `completed_at`; in-progress attempts invisible to the board; a new graded attempt ranked immediately;
-the validation matrix; and both roles admitted, anonymous refused. The shared package adds 24 — metric
-values, sorting by each metric with its tie-breakers, competition ranks and gaps in both units,
-`buildLeaderboard` (current-user marking, pass rates, an empty board), rolling period starts,
-`topPercentOf` and the query/payload schemas — and the web package 18 filter, label, ordinal,
-gap-wording and caption helpers.
+the validation matrix; both roles admitted, anonymous refused; the category filter checked row-for-row
+against the categories table with its live attempt counts; and a category created mid-test appearing
+instantly with `attempts: 0`. The shared package adds 26 — metric values, sorting by each metric with
+its tie-breakers, competition ranks and gaps in both units, `buildLeaderboard` (current-user marking,
+pass rates, an empty board), rolling period starts, `topPercentOf`, and the query/payload schemas
+including the category options — and the web package 18 filter, label, ordinal, gap-wording and
+caption helpers.
 
 Day 4 adds 30 API tests: statistics arithmetic that agrees with the database, the pass-rate range,
 the newest-five strips, live reflection of a new account, directory filters (role, status, name and
@@ -1058,8 +1060,9 @@ parser falls back to the defaults, so a hand-edited URL always renders something
 
 On screen, `/student/leaderboard` (a live item in the student nav) shows:
 
-- metric chips (average / best / completed), period chips (all time / this month / this week) and a
-  category row built from the same catalogue call the quiz list uses — all links, all in the URL;
+- metric chips (average / best / completed), period chips (all time / this month / this week), and a
+  category row that comes from the response, not a constant — every category in the database, every
+  one a link, all of it in the URL;
 - **your position** — rank, metric value, finished attempts, quizzes completed and pass rate, with
   `2nd of 4 · top 50%` as the caption and an invitation to take a quiz when the caller has none;
 - a **podium** for the top three and the full ranked table beneath it, the caller's row tinted and
@@ -1122,9 +1125,10 @@ tests and a 58-check end-to-end smoke run.
 
 Day 12 (done): the leaderboard. `GET /api/leaderboard` ranks students by average score, best score or
 quizzes completed — overall or per category, all time, monthly or weekly — with competition ranking,
-metric-unit gaps and the caller's own position resolved even off-page. `/student/leaderboard` renders
-the board server-side with the filters in the URL. 737 Vitest tests and a 69-check end-to-end smoke
-run.
+metric-unit gaps and the caller's own position resolved even off-page. The board ships the live
+category filter with it, read from the categories table on every request, so a category added in the
+admin console is on the leaderboard the next time it loads. `/student/leaderboard` renders the board
+server-side with the filters in the URL. 741 Vitest tests and a 69-check end-to-end smoke run.
 
 Day 11 (done): admin analytics. `GET /api/admin/analytics` answers the spec's admin charts — attempts
 over time, registrations, the pass/fail split, and the most popular quizzes and categories — over a

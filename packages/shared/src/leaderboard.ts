@@ -218,6 +218,20 @@ export const leaderboardEntrySchema = z.object({
   gapToNext: z.number(),
 });
 
+/**
+ * One entry in the category filter.
+ *
+ * The list is read from the categories table on every request, so a category an
+ * admin adds appears on the next load without a deploy. `attempts` is how many
+ * graded papers that category holds (all time, not just this period) — the UI
+ * uses it to play down categories nobody has sat yet rather than hiding them.
+ */
+export const leaderboardCategorySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  attempts: z.number(),
+});
+
 export const leaderboardResponseSchema = z.object({
   generatedAt: z.string(),
   metric: z.enum(LEADERBOARD_METRICS),
@@ -227,6 +241,8 @@ export const leaderboardResponseSchema = z.object({
     categoryId: z.string().nullable(),
     categoryName: z.string().nullable(),
   }),
+  /** Every category in the database, ordered by name. */
+  categories: z.array(leaderboardCategorySchema),
   entries: z.array(leaderboardEntrySchema),
   /** The caller's row, even when it falls outside `entries`. */
   currentUser: leaderboardEntrySchema.nullable(),
@@ -240,3 +256,4 @@ export const leaderboardResponseSchema = z.object({
 export type LeaderboardQuery = z.infer<typeof leaderboardQuerySchema>;
 export type LeaderboardResponse = z.infer<typeof leaderboardResponseSchema>;
 export type LeaderboardEntryWire = z.infer<typeof leaderboardEntrySchema>;
+export type LeaderboardCategoryWire = z.infer<typeof leaderboardCategorySchema>;
