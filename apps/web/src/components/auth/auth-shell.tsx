@@ -1,6 +1,8 @@
 import type { LandingPayload } from '@quiz/shared/landing';
 import { CirclePlay, KeyRound, ListChecks, Sparkles, Timer, Trophy } from 'lucide-react';
 
+import { Atmosphere } from '@/components/landing/atmosphere';
+import { LibraryScene } from '@/components/landing/library-scene';
 import { LiveStatus } from '@/components/landing/live-status';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
@@ -94,12 +96,15 @@ export function AuthShell({
 
       <SiteHeader version={payload?.service.version} />
 
-      <main id="main" className="relative flex-1">
-        <div aria-hidden className="bg-glow pointer-events-none absolute inset-0 opacity-80" />
-        <div aria-hidden className="bg-grid pointer-events-none absolute inset-0 opacity-25" />
+      <main id="main" className="relative flex-1 overflow-hidden">
+        <Atmosphere className="opacity-70" />
 
         <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-5 py-10 sm:px-8 lg:grid-cols-[minmax(0,1fr)_27rem] lg:items-start lg:gap-16 lg:py-16">
-          <div id="auth" tabIndex={-1} className="order-1 w-full max-w-lg lg:order-2 lg:max-w-none">
+          <div
+            id="auth"
+            tabIndex={-1}
+            className="reveal-scale order-1 w-full max-w-lg lg:order-2 lg:max-w-none"
+          >
             {children}
           </div>
 
@@ -153,7 +158,7 @@ function AuthAside({
       <ul className="mt-7 space-y-5">
         {points.map((point) => (
           <li key={point.title} className="flex gap-3.5">
-            <span className="border-border/70 bg-card/70 text-primary mt-0.5 grid size-10 shrink-0 place-items-center rounded-lg border">
+            <span className="border-border/70 bg-card/70 text-primary float-slow mt-0.5 grid size-10 shrink-0 place-items-center rounded-lg border shadow-[0_0_24px_-8px_var(--primary)]">
               <point.icon aria-hidden className="size-4" />
             </span>
             <div>
@@ -169,6 +174,8 @@ function AuthAside({
       <div className="mt-7">
         <LiveStatus payload={payload} />
       </div>
+
+      <LibraryScene className="mt-8 hidden max-w-[15rem] opacity-80 lg:block" />
     </aside>
   );
 }

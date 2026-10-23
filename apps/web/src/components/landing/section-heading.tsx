@@ -11,12 +11,12 @@ export function SectionHeading({ eyebrow, title, description, className }: Secti
   return (
     <div className={cn('max-w-2xl', className)}>
       <div className="flex items-center gap-2">
-        <span className="bg-primary/70 h-px w-6" />
+        <span className="from-primary to-primary/0 glow-pulse h-px w-10 bg-gradient-to-r" />
         <span className="text-primary font-mono text-[11px] tracking-[0.18em] uppercase">
           {eyebrow}
         </span>
       </div>
-      <h2 className="mt-3 text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
+      <h2 className="text-glow-soft mt-3 text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
         {title}
       </h2>
       {description ? (

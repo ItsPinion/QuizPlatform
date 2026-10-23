@@ -332,3 +332,493 @@
     display: none;
   }
 }
+
+/* ==========================================================================
+   The library at night — ambient layers
+
+   Three ideas, borrowed and rebuilt for this palette:
+
+   - the drifting aurora of Aceternity's `Aurora Background` and the star field
+     of 21st.dev's `AuroraBackground`, both reduced to blurred CSS blobs that
+     only ever animate `transform` and `opacity`;
+   - Magic UI's `AnimatedGridPattern` and `BorderBeam`, reimplemented as a
+     panning masked grid and a rotating conic ring, so the page needs no
+     `motion` dependency;
+   - the pixel art, which is ours: an SVG drawn on a 4px grid with
+     `shape-rendering: crispEdges`, because a library deserves a library.
+
+   Everything here is decoration and every layer is `aria-hidden` in the markup.
+   The reduced-motion block at the end of this file turns all of it off.
+   ========================================================================== */
+
+@property --beam-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.atmos {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+/* ---------- the aurora: three slow blobs, no repaint ---------- */
+
+.atmos-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(64px);
+  opacity: 0.5;
+  will-change: transform;
+}
+
+.atmos-blob-a {
+  top: -18%;
+  left: -12%;
+  width: 46rem;
+  height: 30rem;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--primary) 62%, transparent),
+    transparent 68%
+  );
+  animation: atmos-drift-a 28s ease-in-out infinite alternate;
+}
+
+.atmos-blob-b {
+  top: 4%;
+  right: -14%;
+  width: 40rem;
+  height: 26rem;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, oklch(0.7 0.14 215) 58%, transparent),
+    transparent 68%
+  );
+  animation: atmos-drift-b 34s ease-in-out infinite alternate;
+}
+
+.atmos-blob-c {
+  bottom: -22%;
+  left: 28%;
+  width: 44rem;
+  height: 24rem;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, oklch(0.72 0.15 160) 42%, transparent),
+    transparent 70%
+  );
+  animation: atmos-drift-c 40s ease-in-out infinite alternate;
+}
+
+/* The reading lamp: warm, slow, upper right. */
+.atmos-lamp {
+  position: absolute;
+  top: -10%;
+  right: 2%;
+  width: 38rem;
+  height: 28rem;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--warning) 20%, transparent),
+    transparent 72%
+  );
+  animation: atmos-breathe 11s ease-in-out infinite;
+}
+
+/* ---------- stars: two tileable fields, twinkling out of phase ---------- */
+
+.atmos-stars {
+  position: absolute;
+  inset: -12%;
+  background-image:
+    radial-gradient(1.4px 1.4px at 18% 24%, rgb(255 255 255 / 80%), transparent 60%),
+    radial-gradient(1px 1px at 62% 12%, rgb(255 255 255 / 60%), transparent 60%),
+    radial-gradient(1.6px 1.6px at 84% 46%, rgb(210 220 255 / 80%), transparent 60%),
+    radial-gradient(1px 1px at 34% 68%, rgb(255 255 255 / 50%), transparent 60%),
+    radial-gradient(1.2px 1.2px at 74% 82%, rgb(230 220 255 / 70%), transparent 60%);
+  background-size: 260px 260px;
+  animation: atmos-twinkle 7s ease-in-out infinite alternate;
+}
+
+.atmos-stars-far {
+  position: absolute;
+  inset: -12%;
+  background-image:
+    radial-gradient(1px 1px at 40% 40%, rgb(255 255 255 / 35%), transparent 60%),
+    radial-gradient(1px 1px at 10% 70%, rgb(255 255 255 / 30%), transparent 60%),
+    radial-gradient(1px 1px at 90% 20%, rgb(255 255 255 / 30%), transparent 60%);
+  background-size: 140px 140px;
+  animation: atmos-twinkle 11s ease-in-out infinite alternate-reverse;
+}
+
+/* ---------- dust: motes that rise, set per-mote with CSS variables ---------- */
+
+.atmos-mote {
+  position: absolute;
+  bottom: -2rem;
+  width: var(--mote-size, 3px);
+  height: var(--mote-size, 3px);
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--warning) 55%, white);
+  box-shadow: 0 0 8px color-mix(in oklab, var(--warning) 45%, transparent);
+  opacity: 0;
+  animation: atmos-mote var(--mote-duration, 22s) linear infinite;
+  animation-delay: var(--mote-delay, 0s);
+}
+
+/* ---------- the panning grid behind everything ---------- */
+
+.atmos-grid {
+  position: absolute;
+  inset: -20%;
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in oklab, var(--border) 70%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--border) 70%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 20%, black 10%, transparent 78%);
+  animation: atmos-grid-pan 32s linear infinite;
+  opacity: 0.5;
+}
+
+/* ---------- glowing frame: a beam that circles a card ---------- */
+
+.glow-frame {
+  position: relative;
+  isolation: isolate;
+}
+
+.glow-frame::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--beam-angle),
+    transparent 0deg 210deg,
+    color-mix(in oklab, var(--primary) 85%, transparent) 268deg,
+    color-mix(in oklab, oklch(0.8 0.14 200) 85%, transparent) 300deg,
+    transparent 330deg 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: beam-spin 6.5s linear infinite;
+  pointer-events: none;
+}
+
+/* ---------- entrance, float, glow, shine ---------- */
+
+.reveal {
+  opacity: 0;
+  animation: reveal-up 720ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+.reveal-scale {
+  opacity: 0;
+  animation: reveal-scale 820ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+.float-slow {
+  animation: float-y 8s ease-in-out infinite;
+}
+
+.float-slower {
+  animation: float-y 13s ease-in-out infinite;
+}
+
+.glow-pulse {
+  animation: glow-pulse 4.5s ease-in-out infinite;
+}
+
+.text-glow-soft {
+  text-shadow: 0 0 22px color-mix(in oklab, var(--primary) 30%, transparent);
+}
+
+.text-glow {
+  text-shadow:
+    0 0 18px color-mix(in oklab, var(--primary) 55%, transparent),
+    0 0 48px color-mix(in oklab, var(--primary) 28%, transparent);
+}
+
+/* A light sweep across a button, on hover only. */
+.shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  translate: -120% 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in oklab, white 32%, transparent) 50%,
+    transparent 80%
+  );
+  transition: translate 620ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  pointer-events: none;
+}
+
+.shine:hover::after,
+.shine:focus-visible::after {
+  translate: 120% 0;
+}
+
+/* Pixel art gets its own crispness, independent of the surrounding smooth type. */
+.pixel-art {
+  shape-rendering: crispEdges;
+  image-rendering: pixelated;
+}
+
+@keyframes atmos-drift-a {
+  from {
+    transform: translate3d(-2%, -1%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(7%, 5%, 0) scale(1.14);
+  }
+}
+
+@keyframes atmos-drift-b {
+  from {
+    transform: translate3d(3%, 2%, 0) scale(1.06);
+  }
+  to {
+    transform: translate3d(-6%, 6%, 0) scale(0.94);
+  }
+}
+
+@keyframes atmos-drift-c {
+  from {
+    transform: translate3d(-4%, 0, 0) scale(0.96);
+  }
+  to {
+    transform: translate3d(5%, -5%, 0) scale(1.1);
+  }
+}
+
+@keyframes atmos-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes atmos-twinkle {
+  0% {
+    opacity: 0.25;
+  }
+  100% {
+    opacity: 0.75;
+  }
+}
+
+@keyframes atmos-mote {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0);
+  }
+  12% {
+    opacity: 0.7;
+  }
+  80% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--mote-drift, 12px), -70vh, 0);
+  }
+}
+
+@keyframes atmos-grid-pan {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 64px, 0);
+  }
+}
+
+@keyframes beam-spin {
+  to {
+    --beam-angle: 360deg;
+  }
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes reveal-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translate3d(0, 18px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0);
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 6px color-mix(in oklab, var(--primary) 40%, transparent));
+  }
+  50% {
+    filter: drop-shadow(0 0 18px color-mix(in oklab, var(--primary) 70%, transparent));
+  }
+}
+
+/* Lamp light inside the pixel scene. */
+@keyframes lamp-glow {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+@keyframes tail-sway {
+  0%,
+  100% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
+}
+
+/* ==========================================================================
+   Reduced motion: nothing floats, nothing drifts, nothing is left invisible.
+   The reveals resolve to their final state instead of never running.
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .atmos-blob,
+  .atmos-lamp,
+  .atmos-stars,
+  .atmos-stars-far,
+  .atmos-mote,
+  .atmos-grid,
+  .glow-frame::before,
+  .float-slow,
+  .float-slower,
+  .glow-pulse,
+  .shine::after,
+  .pixel-art [class*='animate'] {
+    animation: none !important;
+  }
+
+  .atmos-mote {
+    display: none;
+  }
+
+  .reveal,
+  .reveal-scale {
+    opacity: 1;
+    animation: none;
+    transform: none;
+  }
+
+  .shine::after {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   The little equaliser in the music toggle. Three bars, one animation, so the
+   button says "playing" without a label anyone has to read.
+   ========================================================================== */
+
+.eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+
+.eq-bar {
+  width: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  animation: eq-bounce 1.15s ease-in-out infinite;
+}
+
+.eq-bar:nth-child(1) {
+  height: 6px;
+  animation-delay: 0ms;
+}
+
+.eq-bar:nth-child(2) {
+  height: 12px;
+  animation-delay: 160ms;
+}
+
+.eq-bar:nth-child(3) {
+  height: 8px;
+  animation-delay: 320ms;
+}
+
+@keyframes eq-bounce {
+  0%,
+  100% {
+    transform: scaleY(0.45);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eq-bar {
+    animation: none;
+  }
+}

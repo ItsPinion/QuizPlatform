@@ -1,7 +1,7 @@
 'use client';
 
 import type { AuthUser } from '@quiz/shared/auth';
-import { LogOut, ShieldCheck, UserRound } from 'lucide-react';
+import { LayoutDashboard, LogOut, ShieldCheck, UserRound } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -19,6 +19,11 @@ type SessionState =
  *
  * The cookie is httpOnly, so the browser cannot inspect it — the only way to
  * know who is signed in is to ask the API.
+ *
+ * The area button used to be a `sm` ghost link reading "My area": 32px tall,
+ * transparent, in a row of outlines, and effectively invisible to anyone who
+ * had just signed in. It is now the only filled button in the header, 44px
+ * tall, with an icon and a sentence-case label that says where it goes.
  */
 export function SessionNav() {
   const router = useRouter();
@@ -59,17 +64,23 @@ export function SessionNav() {
   }
 
   if (session.status === 'loading') {
-    return <div className="bg-muted/50 h-8 w-24 animate-pulse rounded-md" aria-hidden="true" />;
+    return <div className="bg-muted/50 h-9 w-32 animate-pulse rounded-lg" aria-hidden="true" />;
   }
 
   if (session.status === 'guest') {
     return (
       <>
-        <Link href="/login" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}>
+        <Link
+          href="/login"
+          className={cn(buttonVariants({ variant: 'ghost', size: 'default' }), 'text-[13px]')}
+        >
           Sign in
         </Link>
-        <Link href="/register" className={cn(buttonVariants({ size: 'sm' }))}>
-          Create account
+        <Link
+          href="/register"
+          className={cn(buttonVariants({ size: 'default' }), 'shine text-[13px] font-semibold')}
+        >
+          Get started
         </Link>
       </>
     );
@@ -83,12 +94,21 @@ export function SessionNav() {
     <>
       <Link
         href={areaHref}
-        className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'hidden sm:inline-flex')}
+        className={cn(
+          buttonVariants({ size: 'default' }),
+          'shine shadow-primary/40 h-10 gap-2 rounded-lg px-3.5 text-[13px] font-semibold shadow-[0_10px_30px_-14px] sm:px-4',
+        )}
       >
-        {isAdmin ? 'Admin area' : 'My area'}
+        {isAdmin ? (
+          <ShieldCheck aria-hidden className="size-4" />
+        ) : (
+          <LayoutDashboard aria-hidden className="size-4" />
+        )}
+        <span className="hidden sm:inline">{isAdmin ? 'Admin console' : 'My dashboard'}</span>
+        <span className="sm:hidden">{isAdmin ? 'Admin' : 'Dashboard'}</span>
       </Link>
 
-      <div className="border-border/70 bg-card/60 hidden items-center gap-2 rounded-full border py-1 pr-3 pl-1 sm:flex">
+      <div className="border-border/70 bg-card/60 hidden items-center gap-2 rounded-full border py-1 pr-3 pl-1 lg:flex">
         <span className="bg-primary/15 text-primary grid size-6 place-items-center rounded-full">
           {isAdmin ? <ShieldCheck className="size-3.5" /> : <UserRound className="size-3.5" />}
         </span>
@@ -106,7 +126,7 @@ export function SessionNav() {
         aria-label="Sign out"
       >
         <LogOut />
-        <span className="hidden sm:inline">{signingOut ? 'Signing out…' : 'Sign out'}</span>
+        <span className="hidden lg:inline">{signingOut ? 'Signing out…' : 'Sign out'}</span>
       </Button>
     </>
   );

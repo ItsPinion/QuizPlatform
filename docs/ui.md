@@ -14,16 +14,16 @@ itself.
 
 Six blocks, in the order a visitor asks the questions:
 
-| Block    | Answers                       | What is in it                                                               |
-| -------- | ----------------------------- | --------------------------------------------------------------------------- |
-| Hero     | What is this, can I see it?   | One promise, two buttons, a real question from a real quiz, a **live** pill |
-| Numbers  | Is there anything behind it?  | Four counts, rendered from the database                                     |
-| Platform | What does it contain?         | The six-cell bento map                                                      |
-| Tour     | What does using it feel like? | Three screens in story order: browse it → read a result → run the console   |
-| Call     | Can I try it?                 | Demo logins, but only for accounts that exist                               |
-| Footer   | Where is the documentation?   | Links to the README and `docs/`, plus the live endpoints                    |
+| Block    | Answers                       | What is in it                                                                                                        |
+| -------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Hero     | What is this, can I see it?   | One promise, two session-aware buttons, a real question from a real quiz, a **live** pill and the pixel reading room |
+| Numbers  | Is there anything behind it?  | Four counts, rendered from the database                                                                              |
+| Platform | What does it contain?         | The six-cell bento map                                                                                               |
+| Tour     | What does using it feel like? | Three screens in story order: browse it → read a result → run the console                                            |
+| Call     | Can I try it?                 | Demo logins, but only for accounts that exist                                                                        |
+| Footer   | Where is the documentation?   | Links to the README and `docs/`, plus the live endpoints                                                             |
 
-Three rules hold the page together:
+Four rules hold the page together:
 
 1. **The page sells, the docs explain.** The schema, the endpoint table, the
    migration notes and the day-by-day log live in the README and `docs/`. The
@@ -32,6 +32,11 @@ Three rules hold the page together:
    components is typed by hand — see §2.
 3. **Every picture is the product.** The hero and the three tour rows are live
    markup built from real rows, not screenshots and not illustration.
+4. **The buttons know who is looking.** `lib/hero-params.ts` decides both of
+   them: a visitor gets **Get started** → `/register`; a student gets **Take a
+   quiz** → `/student/quizzes`; an administrator gets **Open the console** →
+   `/admin`. The closing section switches the same way (`CtaBand`), so a
+   signed-in person is never asked to sign in again.
 
 ---
 
@@ -194,7 +199,88 @@ case — the pointer tracking without the theatre.
 
 ---
 
-## 7. The auth screens
+## 7. The reading room
+
+The page is meant to feel like a library at night: warm lamp light, dust in the
+air, a shelf of books, a cat asleep on the lower one. None of it is an image
+file and none of it blocks anything.
+
+### The mark
+
+`components/brand/logo.tsx` — an open book with a check etched into the right
+page, on a soft square plate, drawn on a 32-unit grid. It replaced a letter `Q`
+in a rounded box, which is what a logo looks like before anyone designs one.
+`LogoMark` takes a `glow` prop (the header pulses, the footer does not) and a
+`title` (only when it needs an accessible name — in the header the link already
+carries "QuizPlatform — home", so the mark itself is `aria-hidden`).
+
+### The ambient layer
+
+`components/landing/atmosphere.tsx` stacks six decorative layers behind a
+section: a masked grid that pans upward, three blurred aurora blobs on 28 s / 34 s
+/ 40 s clocks, a warm lamp glow breathing in the corner, two star fields
+twinkling out of phase, and fourteen dust motes that rise on their own delays.
+
+Three constraints kept it honest:
+
+1. **Every animation is `transform` or `opacity`.** No gradient is re-composited
+   per frame, no `filter` is animated, and the whole thing sits inside
+   `contain: strict` so it cannot force a layout of the page.
+2. **The whole layer is `aria-hidden`.** It contributes nothing to a screen
+   reader and nothing to the tab order.
+3. **`prefers-reduced-motion` switches all of it off** — four of the six layers
+   are also `display: none` rather than merely frozen, because a static dust mote
+   is just a dot.
+
+Where the ideas came from: the aurora is Aceternity's `Aurora Background` and
+the star field from 21st.dev's `AuroraBackground`; the panning masked grid is
+Magic UI's `AnimatedGridPattern`; the `glow-frame` border beam is Magic UI's
+`BorderBeam`, rebuilt with a registered `@property --beam-angle` so a conic
+gradient can rotate without JavaScript or the `motion` dependency.
+
+### The pixel art
+
+`components/landing/library-scene.tsx` is a hand-placed SVG on a
+`viewBox="0 0 200 120"` grid, one `<rect>` at a time: two shelves of books, a
+framed moon print, a globe, a hanging plant, a brass desk lamp, a stack of
+books, a potted plant, a folded newspaper and a sleeping cat.
+
+- `shape-rendering: crispEdges` (the `.pixel-art` class) keeps it sharp instead
+  of smearing like a scaled bitmap.
+- Only two things move: the lamp's cone of light (`lamp-glow`) and the cat's
+  tail (`tail-sway`), both switched off by the reduced-motion block.
+- It is decoration, so it is `aria-hidden` and does not appear in the
+  accessibility tree.
+
+### Sound
+
+`components/music-toggle.tsx` — the header's **Music** button. There is no audio
+file; the reading-room drone is synthesised with Web Audio:
+
+| Layer    | What it is                                                                             |
+| -------- | -------------------------------------------------------------------------------------- |
+| Pad      | six detuned voices (A1 · A2 · E3 · A3 · C4 · E4) through a low-pass filter             |
+| Movement | the filter sweeps 620 → 980 Hz over ~26 s; a tremolo runs at 0.05 Hz                   |
+| Bells    | occasional sines from A-minor pentatonic, 3.4 s decay, through a 0.42 s feedback delay |
+
+It is **off by default and never autoplays**. The choice is remembered in
+`localStorage`, but resuming still waits for a pointer or key gesture, because a
+context created without one stays suspended. The button is a real
+`<button aria-pressed>` named "Play/Turn off library ambience", and stopping
+ramps the gain down over half a second before the context closes so there is no
+click in the speakers.
+
+### Glow, everywhere
+
+`.glow-frame` wraps the two auth cards and the closing call-to-action: a conic
+beam circling the border. `.shine` is a light that sweeps across a button on
+hover. `.text-glow` / `.text-glow-soft` put a halo behind the hero headline and
+every section title. `.float-slow` lifts the slowest decorative pieces. The
+bento cards keep their own pointer-following light from §3.
+
+---
+
+## 8. The auth screens
 
 `/login` and `/register` are the only two pages every visitor has to get through,
 so they are the largest type and the biggest targets in the app. Both share
@@ -255,7 +341,7 @@ not what you signed up for.
 
 ---
 
-## 8. Next
+## 9. Next
 
 - The admin shell (`/admin`) and the student dashboard are still on the flat card.
   Same primitives, different grid: stat cards become bento cells with a

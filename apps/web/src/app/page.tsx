@@ -1,5 +1,7 @@
 import { headlineNumbers } from '@quiz/shared/landing';
 
+import { getSession } from '@/lib/session';
+import { Atmosphere } from '@/components/landing/atmosphere';
 import { CtaBand } from '@/components/landing/cta-band';
 import { Hero } from '@/components/landing/hero';
 import { PlatformBento } from '@/components/landing/platform-bento';
@@ -33,7 +35,8 @@ import { fetchLanding } from '@/lib/landing';
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
-  const payload = await fetchLanding();
+  const [payload, session] = await Promise.all([fetchLanding(), getSession()]);
+  const role = session?.user.role ?? null;
   const numbers = payload ? headlineNumbers(payload) : [];
   const notes: Record<string, string> = payload
     ? {
@@ -48,7 +51,9 @@ export default async function HomePage() {
     <div className="flex min-h-dvh flex-col">
       <SiteHeader version={payload?.service.version} />
 
-      <main className="flex-1">
+      <main className="relative flex-1 overflow-hidden">
+        <Atmosphere />
+
         {payload?.unavailableReason ? (
           <div className="border-destructive/30 bg-destructive/10 text-destructive border-b px-5 py-2 text-center text-[11.5px] sm:px-8">
             Live data is unavailable right now — {payload.unavailableReason}. Showing empty states
@@ -56,7 +61,7 @@ export default async function HomePage() {
           </div>
         ) : null}
 
-        <Hero payload={payload} />
+        <Hero payload={payload} role={role} />
 
         {/* ------------------------------- numbers ------------------------------ */}
         {numbers.length > 0 ? (
@@ -65,7 +70,9 @@ export default async function HomePage() {
               {numbers.map((item, index) => (
                 <div
                   key={item.label}
+                  style={{ '--reveal-delay': `${index * 90}ms` } as React.CSSProperties}
                   className={cn(
+                    'reveal',
                     'border-border/50 border-l pl-5 lg:pl-8',
                     index === 0 && 'border-l-0 pl-0 lg:pl-0',
                     index === 2 && 'border-l-0 pl-0 lg:border-l lg:pl-8',

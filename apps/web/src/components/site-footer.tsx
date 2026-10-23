@@ -2,6 +2,8 @@ import type { LandingPayload } from '@quiz/shared/landing';
 import { ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 
+import { Logo } from '@/components/brand/logo';
+
 const REPO = 'https://github.com/ItsPinion/QuizPlatform';
 
 const COLUMNS: { title: string; links: { label: string; href: string; external?: boolean }[] }[] = [
@@ -59,10 +61,7 @@ export function SiteFooter({ payload }: { payload?: LandingPayload | null } = {}
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_repeat(3,0.9fr)]">
           <div>
             <div className="flex items-center gap-2.5">
-              <span className="bg-primary text-primary-foreground grid size-7 place-items-center rounded-md text-[11px] font-bold">
-                Q
-              </span>
-              <span className="text-[13.5px] font-semibold tracking-tight">QuizPlatform</span>
+              <Logo glow={false} markClassName="size-7" />
             </div>
             <p className="text-muted-foreground mt-3 max-w-xs text-[11.5px] leading-relaxed">
               Quiz management and online assessment: a Next.js front end, a Hono API and Drizzle

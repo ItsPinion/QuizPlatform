@@ -143,49 +143,56 @@ export function LoginForm({ next = '/', demo = [] }: LoginFormProps) {
         ) : null}
       </div>
 
-      <TextField
-        ref={emailRef}
-        id="email"
-        name="email"
-        label="Email address"
-        type="email"
-        inputMode="email"
-        autoComplete="email"
-        spellCheck={false}
-        autoCapitalize="none"
-        placeholder="you@quiz.dev"
-        icon={Mail}
-        hint="The address you registered with."
-        error={errors.email}
-        value={email}
-        onChange={(event) => {
-          setEmail(event.target.value);
-          if (errors.email) setErrors((current) => ({ ...current, email: undefined }));
-        }}
-        required
-      />
+      <div className="reveal" style={{ '--reveal-delay': '120ms' } as React.CSSProperties}>
+        <TextField
+          ref={emailRef}
+          id="email"
+          name="email"
+          label="Email address"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          spellCheck={false}
+          autoCapitalize="none"
+          placeholder="you@quiz.dev"
+          icon={Mail}
+          hint="The address you registered with."
+          error={errors.email}
+          value={email}
+          onChange={(event) => {
+            setEmail(event.target.value);
+            if (errors.email) setErrors((current) => ({ ...current, email: undefined }));
+          }}
+          required
+        />
+      </div>
 
-      <PasswordField
-        ref={passwordRef}
-        id="password"
-        name="password"
-        label="Password"
-        autoComplete="current-password"
-        placeholder="Your password"
-        value={password}
-        onChange={(event) => {
-          setPassword(event.target.value);
-          if (errors.password) setErrors((current) => ({ ...current, password: undefined }));
-        }}
-        error={errors.password ?? (rejected ? 'Check the email and password and try again.' : null)}
-        required
-      />
+      <div className="reveal" style={{ '--reveal-delay': '200ms' } as React.CSSProperties}>
+        <PasswordField
+          ref={passwordRef}
+          id="password"
+          name="password"
+          label="Password"
+          autoComplete="current-password"
+          placeholder="Your password"
+          value={password}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            if (errors.password) setErrors((current) => ({ ...current, password: undefined }));
+          }}
+          error={
+            errors.password ?? (rejected ? 'Check the email and password and try again.' : null)
+          }
+          required
+        />
+      </div>
 
       <Button
         ref={submitRef}
         type="submit"
         size="xl"
-        className="w-full"
+        className="reveal shine w-full"
+        style={{ '--reveal-delay': '280ms' } as React.CSSProperties}
         disabled={pending}
         aria-busy={pending}
       >
@@ -248,9 +255,6 @@ export function LoginForm({ next = '/', demo = [] }: LoginFormProps) {
                       <span className="text-muted-foreground block truncate font-mono text-[11px]">
                         {account.email}
                       </span>
-                    </span>
-                    <span className="text-muted-foreground group-hover:text-foreground text-[11px] font-medium">
-                      Use
                     </span>
                   </button>
                 </li>

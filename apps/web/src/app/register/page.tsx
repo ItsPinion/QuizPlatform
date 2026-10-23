@@ -19,7 +19,7 @@ export default async function RegisterPage() {
 
   return (
     <AuthShell payload={payload} kind="register">
-      <div className="border-border/70 bg-card/70 card-sheen relative rounded-2xl border p-6 shadow-[0_40px_120px_-70px] shadow-black sm:p-8">
+      <div className="glow-frame border-border/70 bg-card/70 card-sheen relative rounded-2xl border p-6 shadow-[0_40px_120px_-70px] shadow-black sm:p-8">
         <h1
           id="register-heading"
           className="text-[2.1rem] leading-[1.05] font-semibold tracking-tight sm:text-[2.6rem]"
