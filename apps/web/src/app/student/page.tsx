@@ -59,7 +59,7 @@ export default async function StudentPage() {
             <UserRound className="size-3" />
             STUDENT
           </Badge>
-          <Badge variant="outline">Day 7 · quiz interface</Badge>
+          <Badge variant="outline">Day 8 · submission &amp; scoring</Badge>
         </div>
 
         <h1 className="text-2xl font-semibold tracking-tight">
@@ -67,7 +67,8 @@ export default async function StudentPage() {
         </h1>
         <p className="text-muted-foreground max-w-2xl text-sm">
           Every published quiz is here, with its rules stated up front: duration, pass mark,
-          attempts left. An attempt runs on the server clock, so closing the tab does not stop it.
+          attempts left. An attempt runs on the server clock, so closing the tab does not stop it —
+          and submitting it returns a graded pass/fail result the browser cannot influence.
         </p>
       </header>
 

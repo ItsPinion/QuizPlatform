@@ -14,6 +14,7 @@
 import { z } from 'zod';
 
 import { difficultySchema, quizStatusSchema } from './index';
+import { attemptResultSchema } from './submission';
 
 /* -------------------------------------------------------------------------- */
 /*  Time                                                                      */
@@ -215,6 +216,12 @@ export const attemptSessionSchema = z.object({
     /** Server-computed, so the client countdown has an authoritative starting point. */
     secondsRemaining: z.number(),
     expired: z.boolean(),
+    /**
+     * Present once the paper is graded — a manual submit or the deadline.
+     * While `IN_PROGRESS` it is `null`, and there is still no answer key in
+     * this payload: correctness belongs to the Day 9 review screen.
+     */
+    result: attemptResultSchema.nullable(),
     /** So the client can correct for clock skew between machines. */
     serverNow: z.string(),
   }),

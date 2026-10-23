@@ -10,7 +10,8 @@
     "./admin": "./src/admin.ts",
     "./quiz": "./src/quiz.ts",
     "./question": "./src/question.ts",
-    "./attempt": "./src/attempt.ts"
+    "./attempt": "./src/attempt.ts",
+    "./submission": "./src/submission.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

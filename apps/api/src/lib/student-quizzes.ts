@@ -16,6 +16,7 @@ import type { CategoryOption } from '@quiz/shared/quiz';
 import { db, schema } from '@quiz/db';
 
 import { ApiError } from './errors';
+import { expireStaleAttempts, getAttemptResult } from './submissions';
 
 const { answers, attempts, categories, options, questions, quizzes } = schema;
 
@@ -159,6 +160,10 @@ export async function listStudentQuizzes(
   query: StudentQuizListQuery,
   userId: string,
 ): Promise<StudentQuizListResponse> {
+  // Grade anything this student let run out before reading their aggregates,
+  // so "best score" and "attempts used" include the attempt the clock ended.
+  await expireStaleAttempts(userId);
+
   const where = filtersFor(query);
 
   const [rows, [totals]] = await Promise.all([
@@ -255,6 +260,8 @@ export async function getStudentQuiz(
   quizId: string,
   userId: string,
 ): Promise<StudentQuizDetailResponse> {
+  await expireStaleAttempts(userId);
+
   const detail = await loadQuiz(quizId, userId);
 
   if (!detail) {
@@ -272,6 +279,10 @@ export async function getStudentQuiz(
  * attempt is only created when the rules allow it.
  */
 export async function startAttempt(quizId: string, userId: string): Promise<StartAttemptResponse> {
+  // A dead attempt must be graded before the rules are applied, otherwise it
+  // would still look live and be "resumed" with no time left on it.
+  await expireStaleAttempts(userId);
+
   const detail = await loadQuiz(quizId, userId);
 
   if (!detail) {
@@ -361,13 +372,17 @@ async function loadAttempt(attemptId: string, userId: string) {
  * The payload the quiz taker renders.
  *
  * Options are returned in their stored order with text only — no `isCorrect`,
- * no explanation, no marks keyed to correctness. Grading is a Day 8 concern and
- * the browser is never given the material to do it early.
+ * no explanation, no marks keyed to correctness. Once the paper is graded the
+ * attempt carries a `result` summary (score, counts, pass/fail) and still no
+ * answer key; correctness per question is the Day 9 review.
  */
 export async function getAttemptSession(
   attemptId: string,
   userId: string,
 ): Promise<AttemptSession> {
+  // Reaching this route is itself a chance to settle an attempt the clock ended.
+  await expireStaleAttempts(userId);
+
   const attempt = await loadAttempt(attemptId, userId);
 
   const [quizRow] = await db
@@ -421,7 +436,8 @@ export async function getAttemptSession(
   ]);
 
   const now = new Date();
-  const remaining = secondsRemaining(attempt.expiresAt, now.getTime());
+  const finished = attempt.status !== 'IN_PROGRESS';
+  const remaining = finished ? 0 : secondsRemaining(attempt.expiresAt, now.getTime());
 
   return {
     attempt: {
@@ -430,7 +446,10 @@ export async function getAttemptSession(
       startedAt: attempt.startedAt.toISOString(),
       expiresAt: attempt.expiresAt.toISOString(),
       secondsRemaining: remaining,
-      expired: remaining === 0,
+      // A graded attempt is not "expired" in the UI sense — it is finished, and
+      // `result.autoSubmitted` says whether the clock ended it.
+      expired: !finished && remaining === 0,
+      result: finished ? await getAttemptResult(attemptId, userId) : null,
       serverNow: now.toISOString(),
     },
     quiz: {
@@ -526,7 +545,7 @@ export async function saveAnswer(
       attemptId,
       questionId,
       selectedOptionId: optionId,
-      // Graded on submission (Day 8); never trusted from the client.
+      // Stamped by the grader on submission; never trusted from the client.
       isCorrect: null,
     });
   }

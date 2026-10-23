@@ -159,7 +159,7 @@ export default async function StudentQuizDetailPage({ params }: PageProps) {
             <p className="text-muted-foreground border-border/60 rounded-lg border border-dashed p-3 text-[11.5px] sm:col-span-2">
               <ShieldCheck className="text-success mr-1 inline size-3.5" />
               Answers are saved as you select them, and the answer key never reaches your browser.
-              Submitting and scoring arrive with Day 8.
+              Submit — or let the countdown do it — and the backend grades the paper.
             </p>
           </CardContent>
         </Card>

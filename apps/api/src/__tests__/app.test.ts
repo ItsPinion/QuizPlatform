@@ -131,17 +131,20 @@ describe('GET /api/meta', () => {
         'POST /api/student/quizzes/:id/start',
         'GET /api/student/attempts/:id',
         'PUT /api/student/attempts/:id/answers/:questionId',
+        'POST /api/student/attempts/:id/submit',
       ]),
     );
 
     const areas = body.roadmap.map((entry) => entry.area);
-    expect(areas).toEqual(expect.arrayContaining(['submission & scoring', 'leaderboard']));
+    expect(areas).toEqual(expect.arrayContaining(['results & review', 'leaderboard']));
     // Shipped days drop off the roadmap: auth (2), quizzes (5), categories &
-    // questions (6) and the quiz-taking interface (7) are all live.
+    // questions (6), the quiz-taking interface (7) and submission & scoring (8)
+    // are all live.
     expect(areas).not.toContain('auth');
     expect(areas).not.toContain('quizzes');
     expect(areas).not.toContain('categories & questions');
     expect(areas).not.toContain('attempts');
+    expect(areas).not.toContain('submission & scoring');
   });
 });
 

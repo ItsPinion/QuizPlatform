@@ -28,6 +28,7 @@ const tree = `quizplatform/
 │     ├─ src/lib/admin-categories.ts  find-or-create, rename, guarded delete
 │     ├─ src/lib/admin-questions.ts   options by id, ordering, delete rules
 │     ├─ src/lib/student-quizzes.ts   catalogue, attempt start/resume, answers
+│     ├─ src/lib/submissions.ts       grading, idempotent submit, lazy expiry
 │     ├─ src/routes/admin-quizzes.ts  /api/admin/quizzes (mounted under the guard)
 │     ├─ src/lib/auth.ts       JWT signing + session cookies
 │     └─ src/lib/              env, jsonBody validator, error envelope
@@ -85,6 +86,14 @@ const highlights = [
   {
     path: 'apps/api/src/lib/student-quizzes.ts',
     note: 'published-only reads, resume-not-spend, expiry on every write',
+  },
+  {
+    path: 'packages/shared/src/submission.ts',
+    note: 'one pure grader — marks, counts, percentage, pass/fail',
+  },
+  {
+    path: 'apps/api/src/lib/submissions.ts',
+    note: 'idempotent submit, is_correct stamping, lazy deadline sweep',
   },
   { path: 'apps/web/src/lib/api.ts', note: 'hc<AppType>() — zero codegen RPC' },
   { path: 'packages/db/src/schema.ts', note: 'users → attempts → answers relations' },

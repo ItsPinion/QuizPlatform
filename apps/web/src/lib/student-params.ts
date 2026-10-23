@@ -1,5 +1,6 @@
 import type { StudentQuiz, StudentQuizSort } from '@quiz/shared/attempt';
 import { formatClock } from '@quiz/shared/attempt';
+import type { AttemptResult } from '@quiz/shared/submission';
 
 export type SearchParamsInput = Record<string, string | string[] | undefined>;
 export type StudentDifficultyFilter = 'EASY' | 'MEDIUM' | 'HARD' | '';
@@ -152,4 +153,51 @@ export function timerClass(seconds: number, expired: boolean): string {
   if (seconds <= 60) return 'border-destructive/40 bg-destructive/10 text-destructive';
   if (seconds <= 300) return 'border-warning/40 bg-warning/10 text-warning';
   return 'border-border bg-background/60 text-foreground';
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Submission results                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `80%` / `66.67%` — trailing zeros are noise on a score card.
+ *
+ * The number itself is always the server's; this only formats it.
+ */
+export function formatPercentage(value: number): string {
+  return `${Number(value.toFixed(2))}%`;
+}
+
+export function resultHeadline(result: Pick<AttemptResult, 'passed'>): string {
+  return result.passed ? 'You passed' : 'Not this time';
+}
+
+export type ResultTone = 'success' | 'destructive';
+
+export function resultTone(passed: boolean): ResultTone {
+  return passed ? 'success' : 'destructive';
+}
+
+/** `8 of 10 marks`, the line under the big percentage. */
+export function scoreFraction(result: Pick<AttemptResult, 'score' | 'totalMarks'>): string {
+  return `${result.score} of ${result.totalMarks} mark${result.totalMarks === 1 ? '' : 's'}`;
+}
+
+/** Only shown when the clock, not the student, ended the attempt. */
+export function autoSubmitNote(autoSubmitted: boolean): string | null {
+  return autoSubmitted
+    ? 'Time ran out — this attempt was submitted automatically at the deadline.'
+    : null;
+}
+
+/** `14:21` — how long the attempt actually took. */
+export function timeTakenLabel(seconds: number): string {
+  return formatClock(seconds);
+}
+
+/** One-line verdict for screen readers and the result card header. */
+export function resultSummary(result: AttemptResult): string {
+  return `${result.passed ? 'Passed' : 'Failed'} with ${formatPercentage(
+    result.percentage,
+  )} — ${scoreFraction(result)}`;
 }

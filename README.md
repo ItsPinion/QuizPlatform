@@ -3,13 +3,13 @@
 Quiz Management & Online Assessment Platform — a Turborepo monorepo with a **Next.js** web app,
 a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 
-> **Status: Day 7 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
+> **Status: Day 8 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
 > authentication (register / login / logout / `/me`, scrypt hashes, httpOnly JWT cookies), role-scoped
 > API namespaces, guarded `/admin` + `/student` areas, an admin console with dashboard statistics,
 > user management, quiz management with a guarded publish/unpublish lifecycle, category CRUD,
-> question authoring, and the student quiz interface — a published-only catalogue, a timed attempt
-> with saved answers and question navigation.
-> 489 automated tests and a 53-check end-to-end smoke run. Submission, expiry and scoring are next.
+> question authoring, the student quiz interface, and server-side submission and scoring — manual or
+> automatic at the deadline, idempotent, with the whole result stored on the attempt.
+> 523 automated tests and a 58-check end-to-end smoke run. Results and answer review are next.
 
 ---
 
@@ -264,6 +264,7 @@ quizplatform/
 │  ├─ quiz-management.md       CRUD, slugs, lifecycle rules, screens
 │  ├─ categories-and-questions.md  category CRUD, question authoring, option rules
 │  ├─ student-quiz-interface.md  catalogue, attempt lifecycle, the taker, timer rules
+│  ├─ submission-and-scoring.md  grading rules, lazy expiry, idempotency, result card
 │  ├─ authorization.md         role model, guards, redirect rules, failure modes
 │  └─ testing.md               test inventory, manual QA, security trade-offs
 ├─ scripts/
@@ -335,14 +336,14 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 489 tests, all workspaces through Turbo
+bun run test                    # 523 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
-bun run test:e2e                # 53 checks against a live server + throwaway DB
+bun run test:e2e                # 58 checks against a live server + throwaway DB
 ```
 
-**489 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring and quiz taking:
+**523 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking and grading:
 
-**`@quiz/shared`** (120) — scrypt record format, unique salts, correct/wrong passwords, unicode
+**`@quiz/shared`** (140) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
 auth contracts (trimming, lowercased emails, stripped unknown keys, the exact password policy,
 session constants), plus the Day 4 admin contracts: query coercion and defaults, the
@@ -359,7 +360,7 @@ integrity (quiz/question/option counts, one correct option each, attempt percent
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
 
-**`@quiz/api`** (205) — service banner, health payload shape, request IDs, security headers, CORS
+**`@quiz/api`** (213) — service banner, health payload shape, request IDs, security headers, CORS
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
 the database is unreachable, `/api/meta` roadmap, and the 404 error envelope.
 
@@ -392,28 +393,38 @@ name that differs only by internal whitespace collapses to the existing row, `PO
 `categoryId` and `categoryName` is rejected, sending neither is rejected, an unknown `categoryId` is
 still `422 CATEGORY_NOT_FOUND`, and `PATCH` can move a quiz to a brand-new category by name alone.
 
+Day 8 adds 8 API tests: start → answer → submit over the API with stored counts and `is_correct`
+stamps, wrong and cleared answers, an idempotent retry that returns the original `completedAt`, an
+auto-submit after the deadline (with the `ATTEMPT_EXPIRED` → `ATTEMPT_NOT_ACTIVE` transition), the
+lazy sweep that grades a stale attempt behind a catalogue read, no answer key in either payload,
+owner-only access and the admin 403. The shared package adds 20 — the grading matrix, weighted marks, two-decimal rounding, the exact
+pass boundary, the empty paper, duration maths, auto-submit detection and a graded attempt session
+that must carry its result.
+
 Day 4 adds 30 API tests: statistics arithmetic that agrees with the database, the pass-rate range,
 the newest-five strips, live reflection of a new account, directory filters (role, status, name and
 email search, empty values, unknown roles), pagination, both sorts, 422s for bad queries, detail
 lookups, 404/422 handling, promotion/demotion, deactivation lockout and restoration, `SELF_LOCKOUT`
 for self-demotion and self-deactivation, and 401/403 on every admin route.
 
-**`@quiz/web`** (104) — the error-envelope narrowing every auth form relies on (API error codes,
+**`@quiz/web`** (110) — the error-envelope narrowing every auth form relies on (API error codes,
 Zod issue extraction, fallbacks for malformed bodies, network-error mapping), the Day 3 page guard
 rules, the Day 4 directory parameters, the Day 5 quiz helpers, the Day 6 question-form helpers, and
-the Day 7 student helpers: catalogue filter parsing with `toStudentQuery`/`quizzesHref` round-trips
+the Day 7–8 student helpers: catalogue filter parsing with `toStudentQuery`/`quizzesHref` round-trips
 (including refusing to emit a value the parser would drop), start state and button labels, attempts
-and best-score labels, clock text for sighted and screen-reader use, progress percentages and timer
-tones.
+and best-score labels, clock text for sighted and screen-reader use, progress percentages, timer
+tones, and result presentation (percentage formatting, pass/fail headline and badge tone, the marks
+line, the auto-submit note and the time-taken clock).
 
 Beyond Vitest, `bun run test:e2e` boots the real API process against a throwaway database and walks
-the whole auth flow, the admin console, content authoring and quiz taking over HTTP (53 checks,
-including cookie flags, a tampered-cookie replay, both role denials, dashboard aggregates, filtered
-user listing, a promote/demote round trip, `SELF_LOCKOUT`, a deactivation lockout, quiz creation,
-slug stability across a rename, the publish rules, the delete rules, category create/rename/delete,
-question authoring, reordering, `PUT` with retained option ids, the last-question guard, the
-published-only catalogue, start/resume, a payload with no answer key, an answer round-trip, a
-cross-student 404 and the admin 403). See
+the whole auth flow, the admin console, content authoring, quiz taking and grading over HTTP (58
+checks, including cookie flags, a tampered-cookie replay, both role denials, dashboard aggregates,
+filtered user listing, a promote/demote round trip, `SELF_LOCKOUT`, a deactivation lockout, quiz
+creation, slug stability across a rename, the publish rules, the delete rules, category
+create/rename/delete, question authoring, reordering, `PUT` with retained option ids, the
+last-question guard, the published-only catalogue, start/resume, a payload with no answer key, an
+answer round-trip, a cross-student 404, submitting and grading over HTTP, an idempotent retry, a
+locked write after grading and the catalogue reflecting the stored score). See
 [`docs/testing.md`](docs/testing.md) for the full inventory, a manual QA checklist and the known
 security trade-offs.
 
@@ -427,7 +438,7 @@ The Turso-only rule applies to the running application, not to tests.
 
 ---
 
-## API surface (Day 7)
+## API surface (Day 8)
 
 | Method | Path                                            | Description                                         |
 | ------ | ----------------------------------------------- | --------------------------------------------------- |
@@ -467,6 +478,7 @@ The Turso-only rule applies to the running application, not to tests.
 | POST   | `/api/student/quizzes/:id/start`                | Start an attempt, or resume the one in flight       |
 | GET    | `/api/student/attempts/:id`                     | Questions, saved answers, remaining time            |
 | PUT    | `/api/student/attempts/:id/answers/:questionId` | Save or clear one answer                            |
+| POST   | `/api/student/attempts/:id/submit`              | Grade the paper — manual or at the deadline         |
 
 Responses use a consistent error envelope:
 
@@ -780,11 +792,47 @@ Resuming never spends an attempt: `start` returns the attempt already in flight.
 one click at a time, so a closed tab loses at most one selection, and a refresh restores
 everything from the API.
 
-Submission, automatic expiry and scoring are Day 8 — the submit button is rendered disabled with
-that note, and saved answers stay in the database in the meantime.
+Submission is Day 8: **Submit quiz** confirms (naming any blank questions) and grades the paper on
+the server, and the countdown does the same thing automatically at `00:00`.
 
 Full detail — every rule, the attempt payload, the locked states and the trade-offs — is in
 [`docs/student-quiz-interface.md`](docs/student-quiz-interface.md).
+
+---
+
+## Submission & scoring (Day 8)
+
+```
+POST /api/student/attempts/:id/submit   → 200 { alreadySubmitted: false, result: { … } }
+POST (again)                            → 200 { alreadySubmitted: true,  same completedAt }
+```
+
+The request carries no score and no claim about why it was sent. The server looks at `expiresAt`:
+
+- **before the deadline** → a manual submission; `completedAt = now`;
+- **at or after it** → an automatic one; `completedAt` is clamped to `expiresAt`, so the recorded
+  time taken is exactly the quiz duration and a late network call changes nothing.
+
+`gradeAttempt()` in `packages/shared` is the only grader, and both paths reach it through the same
+handler. It reads the saved answers against the key in `options.is_correct` and produces marks,
+correct / incorrect / unanswered counts, a percentage, pass/fail (inclusive of the pass mark) and
+time taken. A selection that is not one of that question's options counts as unanswered, never as a
+guess. An empty paper can never pass.
+
+**Expiry is lazy**, because this project has no cron: every student read first settles any of that
+student's attempts whose deadline has passed (bounded to 50 per request). A closed laptop is graded
+on the next page load, and the catalogue's best score includes it.
+
+**The result is stored, not recomputed.** The attempt row keeps the score, totals, counts,
+percentage, status and time taken, and `answers.is_correct` is stamped per answer for Day 9's review.
+A retry re-reads those columns, so a percentage cannot move under the student.
+
+The attempt screen swaps to a result card when a result exists: percentage, `8 of 10 marks`, pass
+mark, the four counts, time taken, and — only when the clock ended it — a "time ran out" note. If the
+auto-submit request fails, the alert keeps a **Retry** action instead of pretending it worked.
+
+Full detail, including the error table and the trade-offs, is in
+[`docs/submission-and-scoring.md`](docs/submission-and-scoring.md).
 
 ---
 
@@ -832,6 +880,12 @@ and a server-enforced deadline. The attempt payload carries no correctness data.
 `/student/quizzes`, `/student/quizzes/:id` and `/student/attempt/:id`. 489 Vitest tests and a
 53-check end-to-end smoke run.
 
+Day 8 (done): submission and scoring. One pure grader behind one idempotent endpoint, serving both
+the Submit button and the countdown; `completedAt` clamped to the deadline so a late call cannot
+change the time taken; lazy expiry on every student read; the attempt row stores the full result and
+`answers.is_correct` is stamped for the review; the attempt screen becomes a result card. 522 Vitest
+tests and a 58-check end-to-end smoke run.
+
 Day 4 (done): admin console shell with sidebar navigation, `GET /api/admin/stats` aggregates,
 `GET /api/admin/users` with search/filter/sort/pagination, `GET` and `PATCH /api/admin/users/:id`
 with the `SELF_LOCKOUT` rule, server-rendered `/admin` and `/admin/users` screens, 258 Vitest tests
@@ -845,8 +899,8 @@ and a 25-check end-to-end smoke run.
 | 5   | ✅ Quiz management — CRUD + publish/unpublish                     |
 | 6   | ✅ Categories & questions — CRUD, options, correct answers        |
 | 7   | ✅ Student quiz UI — listing, details, navigation, timer          |
-| 8   | Submission & scoring — server-side grading, expiry enforcement    |
-| 9   | Results & answer review, attempt history                          |
+| 8   | ✅ Submission & scoring — server-side grading, expiry enforcement |
+| 9   | Results & answer review, attempt history — next                   |
 | 10  | Student dashboard & performance charts                            |
 | 11  | Admin analytics                                                   |
 | 12  | Leaderboard                                                       |

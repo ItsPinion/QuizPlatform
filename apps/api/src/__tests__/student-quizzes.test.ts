@@ -474,9 +474,14 @@ describe('PUT /api/student/attempts/:id/answers/:questionId', () => {
       .set({ expiresAt: new Date(Date.now() - 1_000) })
       .where(eq(schema.attempts.id, attemptId));
 
+    // Since Day 8, reading an attempt past its deadline settles it: the paper is
+    // graded on the spot, so the screen shows a result instead of a locked,
+    // half-finished quiz. It is finished, not "expired", from the UI's side.
     const expiredSession = await session(cookie, attemptId);
-    expect(expiredSession.attempt.expired).toBe(true);
     expect(expiredSession.attempt.secondsRemaining).toBe(0);
+    expect(expiredSession.attempt.expired).toBe(false);
+    expect(expiredSession.attempt.status).not.toBe('IN_PROGRESS');
+    expect(expiredSession.attempt.result).not.toBeNull();
 
     const write = await app.request(
       `/api/student/attempts/${attemptId}/answers/${question.id}`,
@@ -484,7 +489,7 @@ describe('PUT /api/student/attempts/:id/answers/:questionId', () => {
     );
 
     expect(write.status).toBe(409);
-    expect((await json<{ error: { code: string } }>(write)).error.code).toBe('ATTEMPT_EXPIRED');
+    expect((await json<{ error: { code: string } }>(write)).error.code).toBe('ATTEMPT_NOT_ACTIVE');
 
     // An expired attempt is spent, so starting again opens a new one.
     const next = await start(cookie, quizId);

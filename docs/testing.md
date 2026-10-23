@@ -3,8 +3,8 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test       # 489 unit + integration tests across the four workspaces
-bun run test:e2e   # 53 checks against a real HTTP server (own process, own port)
+bun run test       # 523 unit + integration tests across the four workspaces
+bun run test:e2e   # 58 checks against a real HTTP server (own process, own port)
 ```
 
 Neither touches Turso. Every suite builds a throwaway `file:` database in `.data/` with the project's
@@ -18,10 +18,10 @@ tests.
 
 | Workspace      | Tests | Focus                                                                                    |
 | -------------- | ----- | ---------------------------------------------------------------------------------------- |
-| `@quiz/shared` | 67    | scrypt + auth contracts, admin schemas, quiz slugs and lifecycle rules                   |
-| `@quiz/db`     | 58    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring |
-| `@quiz/api`    | 147   | health/readiness, auth flows, session forgery/expiry, guards, stats/users/quizzes        |
-| `@quiz/web`    | 66    | error envelopes, page guards, user-directory and quiz-screen parameter helpers           |
+| `@quiz/shared` | 140   | scrypt + auth contracts, admin/quiz/question schemas, attempt clocks, the grader         |
+| `@quiz/db`     | 60    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring |
+| `@quiz/api`    | 213   | health/readiness, auth flows, guards, stats/users/quizzes, taking and grading attempts   |
+| `@quiz/web`    | 110   | error envelopes, page guards, directory/quiz/student parameter and result helpers        |
 
 Run one workspace at a time when you are iterating:
 
@@ -157,11 +157,43 @@ bun run test --filter=@quiz/web
   progress counts; an option from a different question is `422 OPTION_NOT_FOUND`, an unknown question
   `422 QUESTION_NOT_FOUND`, a malformed option id 422.
 - **Locks** — a finished attempt answers `409 ATTEMPT_NOT_ACTIVE`; moving the deadline into the past
-  makes the session report `expired: true` / `secondsRemaining: 0`, the next write answers
-  `409 ATTEMPT_EXPIRED`, and starting again opens a _new_ attempt rather than resuming the dead one.
+  makes the next read settle the attempt (Day 8's lazy expiry): the status leaves `IN_PROGRESS`,
+  `expired` becomes `false` and `result` is populated, a write answers `409 ATTEMPT_NOT_ACTIVE`, and
+  starting again opens a _new_ attempt rather than resuming the dead one.
 - **Contracts** — `secondsRemaining` (rounding up, never negative, Dates and timestamps),
   `formatClock`, every `startDecision` branch (draft, empty, exhausted, resume-wins), progress
   counting that ignores stale answers, timer tones, `saveAnswerSchema` and the list-query defaults.
+
+### Submission & scoring coverage (Day 8)
+
+- **The grading matrix** (`@quiz/shared`) — correct / incorrect / unanswered counts, per-question
+  marks adding up, a selection outside the question's own options counting as unanswered, unknown
+  question ids ignored, duplicate rows letting the last one win, two-decimal rounding, the exact pass
+  boundary, one point below it, and an empty paper never passing even with a 0 pass mark.
+- **Timing** — `timeTakenSeconds` (whole seconds, rounding, never negative) and `wasAutoSubmitted`
+  (false inside the window, true exactly at and after the deadline).
+- **Wire shapes** — the result schema parses, rejects a status outside `PASSED`/`FAILED`, and the
+  submit envelope round-trips.
+- **End to end** (`@quiz/api`) — start → answer → submit returns full marks and `PASSED` with the
+  attempt row updated and `is_correct` stamped on every answer.
+- **Wrong and blank answers** — one wrong option, one saved-then-cleared answer and the rest
+  untouched produce `incorrectAnswers: 1`, `unanswered: n − 1`, `0%`, `FAILED`, and the cleared row
+  keeps `is_correct = null`.
+- **Idempotency** — a second submit answers `alreadySubmitted: true` with the same percentage,
+  `completedAt` and time taken, and the database row is unchanged.
+- **Auto-submit** — with the deadline in the past, a write is `409 ATTEMPT_EXPIRED`, the submit
+  succeeds with `autoSubmitted: true`, `completedAt === expiresAt` and `timeTakenSeconds` equal to the
+  duration, and the next write answers `409 ATTEMPT_NOT_ACTIVE`.
+- **Lazy expiry** — a stale attempt is still `IN_PROGRESS` until a catalogue read settles it; then
+  `attemptsUsed` includes it, `inProgressAttemptId` is null, the session carries the result and
+  `expired` is false.
+- **No answer key** — neither the live session nor the graded session nor the submit response
+  contains `isCorrect` or `explanation`.
+- **Access** — another student's attempt is `404`, an unknown id `404`, an admin `403`, a malformed id
+  `422`.
+- **Presentation** (`@quiz/web`) — percentage formatting, the pass/fail headline and badge tone, the
+  `8 of 10 marks` line, the auto-submit note appearing only when relevant, the time-taken clock and
+  the one-sentence summary.
 
 ---
 
@@ -225,8 +257,14 @@ then asserts:
 49. saving an answer → 200 with progress, and it round-trips through the session
 50. another student reading/writing that attempt → 404
 51. student routes → 403 for the admin
-52. logout → 200 with `Max-Age=0`
-53. unknown route → 404 `NOT_FOUND`
+52. submit the attempt → 200, the counts add up to the paper, percentage in range, `status` agrees
+    with `passed`, `completedAt` set, no `isCorrect` in the body
+53. submitting again → 200 `alreadySubmitted: true` with the same percentage and `completedAt`
+54. the graded attempt reports its result, `expired: false`, a further write → 409 `ATTEMPT_NOT_ACTIVE`
+55. the catalogue reflects it → no `inProgressAttemptId`, `bestPercentage` equals the stored score
+56. another student submitting that attempt → 404 `ATTEMPT_NOT_FOUND`
+57. logout → 200 with `Max-Age=0`
+58. unknown route → 404 `NOT_FOUND`
 
 It prints a pass/fail table, exits non-zero on failure, and removes the database afterwards.
 
@@ -307,6 +345,22 @@ QUIZ_WOULD_HAVE_NO_QUESTIONS`; unpublish and the delete goes through.
 - [ ] Try to open `/student/attempt/<another student's id>` → 404.
 - [ ] Use up every attempt on a quiz → the detail page reads "No attempts left" and the API answers
       `409 ATTEMPTS_EXHAUSTED`.
+- [ ] Answer some (not all) questions, press **Submit quiz** → the confirm names how many are still
+      blank; **Keep working** returns to the paper, **Submit now** shows the result card.
+- [ ] The result card shows the percentage, `score of total marks`, the pass mark, correct /
+      incorrect / unanswered counts and the time taken; the API's `attemptsUsed` and `bestPercentage`
+      agree with it.
+- [ ] Reload the result page → the same numbers come back from the server (nothing is recomputed in
+      the browser), and the attempt is not resumable from the catalogue.
+- [ ] Submit twice with `curl` → the second call answers `200` with `alreadySubmitted: true` and the
+      same `completedAt`.
+- [ ] Writes after grading → `409 ATTEMPT_NOT_ACTIVE`, with `curl`.
+- [ ] Leave an attempt open, then move its `expires_at` into the past in the database → reload the
+      attempt: it comes back graded, `expired` is false, and the result notes that the time ran out.
+- [ ] Let the countdown reach `00:00` on a short quiz → the options lock, the banner says the attempt
+      is being submitted, and the result card appears without a click.
+- [ ] Block the network (DevTools → Offline) right before `00:00` → the alert keeps a **Retry**
+      action, and retrying after going back online shows the result.
 
 ---
 

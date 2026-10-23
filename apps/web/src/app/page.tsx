@@ -7,6 +7,7 @@ import {
   GitBranch,
   KeyRound,
   FolderTree,
+  Gauge,
   LayoutDashboard,
   ListChecks,
   Radio,
@@ -22,6 +23,7 @@ import { QuizManagement } from '@/components/quiz-management';
 import { Roadmap } from '@/components/roadmap';
 import { SectionHeading } from '@/components/section-heading';
 import { StudentQuizInterface } from '@/components/student-quiz-interface';
+import { SubmissionScoring } from '@/components/submission-scoring';
 import { SetupStatus } from '@/components/setup-status';
 import { SiteHeader } from '@/components/site-header';
 import { StackGrid } from '@/components/stack-grid';
@@ -92,7 +94,7 @@ export default function HomePage() {
             <div>
               <Badge className="border-primary/30 bg-primary/10 gap-2 py-1">
                 <span className="bg-primary size-1.5 rounded-full" />
-                Milestone · Day 7 of 14 complete
+                Milestone · Day 8 of 14 complete
               </Badge>
 
               <h1 className="mt-6 text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-[3.4rem]">
@@ -108,8 +110,8 @@ export default function HomePage() {
                 Turso. Sign-in is real — scrypt hashes, httpOnly JWT cookies — the admin and student
                 areas are separated by role guards on both sides, the admin console reports live
                 statistics, quizzes can be created, edited, published and retired — and students can
-                now take them: a server-timed attempt with saved answers, question navigation and a
-                refresh that costs nothing.
+                take them: a server-timed attempt with saved answers and question navigation, then a
+                submission that is graded on the server into marks, counts and a pass/fail verdict.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -326,6 +328,20 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* ---------------------------- submission ---------------------------- */}
+        <section id="submission" className="border-border/60 bg-card/20 w-full border-y">
+          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
+            <SectionHeading
+              eyebrow="Day 8 · submission & scoring"
+              title="The paper becomes a result"
+              description="Submit, or let the countdown do it: the server grades the saved answers against the answer key and stores marks, correct / incorrect / unanswered counts, a percentage, pass or fail, and the time taken. Nothing about the score comes from the browser."
+            />
+            <div className="mt-8">
+              <SubmissionScoring />
+            </div>
+          </div>
+        </section>
+
         {/* ----------------------------- workspace ---------------------------- */}
         <section id="workspace" className="border-border/60 bg-card/20 w-full border-y">
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
@@ -345,8 +361,8 @@ export default function HomePage() {
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
             <SectionHeading
               eyebrow="Two-week plan"
-              title="Seven days shipped, seven to go"
-              description="The spec's build schedule, tracked in the repo. Day 7 opens the student side: a published-quiz catalogue, quiz details, and a timed attempt with saved answers and question navigation."
+              title="Eight days shipped, six to go"
+              description="The spec's build schedule, tracked in the repo. Day 8 closes the attempt loop: submitting — by hand or by the clock — returns a server-graded score, counts, a percentage and a pass/fail verdict."
             />
             <div className="mt-8">
               <Roadmap />
@@ -356,7 +372,7 @@ export default function HomePage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <LayoutDashboard className="text-primary size-4" />
-                  Shipped in Days 2–7
+                  Shipped in Days 2–8
                 </CardTitle>
                 <CardDescription>
                   Everything below is covered by the test suite and live on this deployment.
@@ -424,6 +440,14 @@ export default function HomePage() {
                   </div>
                   Published-only catalogue, pre-flight rules, and a timed attempt that saves every
                   answer and resumes after a refresh without spending a try.
+                </div>
+                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
+                  <div className="text-foreground flex items-center gap-1.5 font-medium">
+                    <Gauge className="text-success size-3.5" />
+                    Submission &amp; scoring
+                  </div>
+                  Manual or automatic submission, one idempotent grader, and a stored result: marks,
+                  counts, percentage, pass/fail and time taken.
                 </div>
               </CardContent>
             </Card>

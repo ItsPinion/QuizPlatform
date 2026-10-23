@@ -2,6 +2,7 @@
 
 import type { AttemptSession } from '@quiz/shared/attempt';
 import { formatClock } from '@quiz/shared/attempt';
+import type { AttemptResult } from '@quiz/shared/submission';
 import {
   ArrowLeft,
   ArrowRight,
@@ -15,13 +16,14 @@ import {
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { AttemptResultCard } from '@/components/attempt-result';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { client } from '@/lib/api';
 import { parseApiFailure, toApiFailure } from '@/lib/api-error';
 import { difficultyTone } from '@/lib/quiz-params';
-import { optionLetter, progressPercent, timerClass } from '@/lib/student-params';
+import { optionLetter, progressPercent } from '@/lib/student-params';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -39,14 +41,17 @@ function toAnswerMap(session: AttemptSession): AnswerMap {
 /**
  * The quiz taker.
  *
- * Three things are deliberately server-owned:
+ * Four things are deliberately server-owned:
  *
  * - **the deadline** — the countdown is derived from `expiresAt`, and the tab
  *   re-reads it when it becomes visible again, so throttled timers or a system
  *   clock change cannot buy time;
  * - **the answer key** — the payload has no correctness flags at all;
  * - **the writes** — every selection is a `PUT`, and a rejected write is rolled
- *   back in the UI instead of being shown as saved.
+ *   back in the UI instead of being shown as saved;
+ * - **the score** — `POST …/submit` grades the paper. The button and the
+ *   deadline both call it, and whichever arrives second gets the stored result
+ *   back (`alreadySubmitted: true`) instead of a second grade.
  */
 export function QuizRunner({ initial }: Props) {
   const questions = initial.questions;
@@ -55,14 +60,22 @@ export function QuizRunner({ initial }: Props) {
   const [current, setCurrent] = useState(0);
   const [seconds, setSeconds] = useState(initial.attempt.secondsRemaining);
   const [expired, setExpired] = useState(initial.attempt.expired);
+  const [result, setResult] = useState<AttemptResult | null>(initial.attempt.result);
   const [saving, setSaving] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
   // Local mirror of the server deadline; recomputed from `expiresAt` on resync.
   const deadline = useRef(Date.now() + initial.attempt.secondsRemaining * 1000);
+  // A double click, the countdown and a manual submit must not race into three
+  // submissions — the API is idempotent, but the UI should not be noisy either.
+  const inFlight = useRef(false);
 
   useEffect(() => {
+    if (result) return;
+
     const tick = () => {
       const left = Math.max(0, Math.ceil((deadline.current - Date.now()) / 1000));
       setSeconds(left);
@@ -73,7 +86,48 @@ export function QuizRunner({ initial }: Props) {
     tick();
     const id = window.setInterval(tick, 1_000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [result]);
+
+  /**
+   * Submit the paper — the student's click, or the clock reaching zero.
+   *
+   * The request carries no score and no claim about why it is being sent: the
+   * server decides from `expiresAt` whether this was a manual or an automatic
+   * submission.
+   */
+  const submit = useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const res = await client.api.student.attempts[':id'].submit.$post({
+        param: { id: initial.attempt.id },
+      });
+
+      if (!res.ok) {
+        setError(parseApiFailure(await res.json()).message);
+        return;
+      }
+
+      const body = await res.json();
+      setResult(body.result);
+      setExpired(false);
+      setConfirming(false);
+    } catch (cause) {
+      setError(toApiFailure(cause).message);
+    } finally {
+      inFlight.current = false;
+      setSubmitting(false);
+    }
+  }, [initial.attempt.id]);
+
+  /** The countdown hitting zero is a submission, not just a lock. */
+  useEffect(() => {
+    if (!expired || result || submitting) return;
+    void submit();
+  }, [expired, result, submit, submitting]);
 
   /** Re-sync with the server: deadline, status and any answers saved elsewhere. */
   const resync = useCallback(async () => {
@@ -85,6 +139,14 @@ export function QuizRunner({ initial }: Props) {
       if (!res.ok) return;
 
       const fresh = await res.json();
+
+      // Another tab may have submitted (or the deadline may have been settled by
+      // a server read) — adopt that result instead of continuing to answer.
+      if (fresh.attempt.result) {
+        setResult(fresh.attempt.result);
+        return;
+      }
+
       deadline.current = Date.now() + fresh.attempt.secondsRemaining * 1000;
       setSeconds(fresh.attempt.secondsRemaining);
       setExpired(fresh.attempt.expired);
@@ -108,10 +170,8 @@ export function QuizRunner({ initial }: Props) {
     [answers, questions],
   );
 
-  const question = questions[current];
-
   async function select(questionId: string, optionId: string) {
-    if (expired) return;
+    if (expired || result) return;
 
     const previous = answers[questionId] ?? null;
 
@@ -141,6 +201,12 @@ export function QuizRunner({ initial }: Props) {
     }
   }
 
+  if (result) {
+    return <AttemptResultCard result={result} quizTitle={initial.quiz.title} />;
+  }
+
+  const question = questions[current];
+
   if (!question) {
     return (
       <Card>
@@ -156,6 +222,7 @@ export function QuizRunner({ initial }: Props) {
   }
 
   const percent = progressPercent(answered, questions.length);
+  const unanswered = questions.length - answered;
 
   return (
     <div className="space-y-4">
@@ -208,13 +275,22 @@ export function QuizRunner({ initial }: Props) {
       {expired ? (
         <div
           role="alert"
-          className="border-warning/40 bg-warning/10 text-warning flex items-start gap-2 rounded-lg border px-3 py-2 text-[12.5px]"
+          className="border-warning/40 bg-warning/10 text-warning flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-[12.5px]"
         >
-          <Lock className="mt-0.5 size-3.5 shrink-0" />
-          <span>
-            Time is up — answers are locked. The saved ones are kept; scoring and submission arrive
-            with Day 8.
+          <Lock className="size-3.5 shrink-0" />
+          <span className="flex-1">
+            Time is up — answers are locked.{' '}
+            {submitting
+              ? 'Submitting your saved answers for grading…'
+              : 'The attempt is being submitted automatically.'}
           </span>
+          {!submitting ? (
+            <Button variant="outline" size="sm" onClick={() => void submit()}>
+              Submit now
+            </Button>
+          ) : (
+            <Loader2 className="size-3.5 animate-spin" />
+          )}
         </div>
       ) : null}
 
@@ -224,7 +300,14 @@ export function QuizRunner({ initial }: Props) {
           className="border-destructive/30 bg-destructive/10 text-destructive flex items-start gap-2 rounded-lg border px-3 py-2 text-[12.5px]"
         >
           <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
-          {error}
+          <span className="flex-1">{error}</span>
+          <button
+            type="button"
+            onClick={() => void submit()}
+            className="hover:text-foreground font-medium underline underline-offset-2"
+          >
+            Retry
+          </button>
         </div>
       ) : null}
 
@@ -373,13 +456,48 @@ export function QuizRunner({ initial }: Props) {
 
           <Card>
             <CardContent className="space-y-2 py-4">
-              <Button className="w-full" size="sm" disabled title="Grading lands in Day 8">
-                <Send />
-                Submit quiz
-              </Button>
+              {confirming ? (
+                <div className="space-y-2">
+                  <p className="text-[11.5px] leading-relaxed">
+                    {unanswered === 0
+                      ? 'Submit and get your score?'
+                      : `${unanswered} question${unanswered === 1 ? '' : 's'} still unanswered — they score zero. Submit anyway?`}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => void submit()}
+                      disabled={submitting}
+                      className="flex-1"
+                    >
+                      {submitting ? <Loader2 className="animate-spin" /> : <Send />}
+                      {submitting ? 'Grading…' : 'Submit now'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setConfirming(false)}
+                      disabled={submitting}
+                    >
+                      Keep working
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  className="w-full"
+                  size="sm"
+                  onClick={() => setConfirming(true)}
+                  disabled={submitting || expired}
+                >
+                  <Send />
+                  Submit quiz
+                </Button>
+              )}
+
               <p className="text-muted-foreground text-[11px] leading-relaxed">
-                Submission, automatic expiry and scoring are Day 8. Your answers are already stored
-                server-side, so nothing is lost in the meantime.
+                Submitting locks the paper and grades it on the server. Running out of time submits
+                it for you.
               </p>
               <Link
                 href="/student/quizzes"

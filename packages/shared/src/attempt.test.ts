@@ -175,6 +175,7 @@ describe('attemptSessionSchema', () => {
       expiresAt: '2026-01-01T12:20:00.000Z',
       secondsRemaining: 1200,
       expired: false,
+      result: null,
       serverNow: '2026-01-01T12:00:00.000Z',
     },
     quiz: {
@@ -202,6 +203,41 @@ describe('attemptSessionSchema', () => {
 
   it('accepts a well-formed payload', () => {
     expect(attemptSessionSchema.safeParse(session).success).toBe(true);
+  });
+
+  it('carries a graded result once the paper is finished', () => {
+    const graded = {
+      ...session,
+      attempt: {
+        ...session.attempt,
+        status: 'PASSED',
+        secondsRemaining: 0,
+        expired: false,
+        result: {
+          score: 2,
+          totalMarks: 2,
+          percentage: 100,
+          correctAnswers: 1,
+          incorrectAnswers: 0,
+          unanswered: 0,
+          passingScore: 60,
+          passed: true,
+          status: 'PASSED',
+          timeTakenSeconds: 90,
+          startedAt: '2026-01-01T12:00:00.000Z',
+          completedAt: '2026-01-01T12:01:30.000Z',
+          autoSubmitted: false,
+        },
+      },
+    };
+
+    expect(attemptSessionSchema.safeParse(graded).success).toBe(true);
+    expect(
+      attemptSessionSchema.safeParse({
+        ...graded,
+        attempt: { ...graded.attempt, result: undefined },
+      }).success,
+    ).toBe(false);
   });
 
   it('rejects an unknown attempt status', () => {

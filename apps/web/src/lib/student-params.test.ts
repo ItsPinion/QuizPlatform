@@ -1,19 +1,27 @@
 import type { StudentQuiz } from '@quiz/shared/attempt';
+import type { AttemptResult } from '@quiz/shared/submission';
 import { describe, expect, it } from 'vitest';
 
 import {
   attemptsLabel,
+  autoSubmitNote,
   bestScoreLabel,
   clockLabel,
   describeClock,
   describeStudentFilters,
+  formatPercentage,
   hasStudentFilters,
   optionLetter,
   parseStudentFilters,
   progressPercent,
   quizzesHref,
+  resultHeadline,
+  resultSummary,
+  resultTone,
+  scoreFraction,
   startLabel,
   startState,
+  timeTakenLabel,
   timerClass,
   toStudentQuery,
 } from './student-params';
@@ -194,5 +202,59 @@ describe('timerClass', () => {
     expect(timerClass(240, false)).toContain('text-warning');
     expect(timerClass(30, false)).toContain('text-destructive');
     expect(timerClass(0, true)).toContain('text-destructive');
+  });
+});
+
+describe('result presentation', () => {
+  const passed: AttemptResult = {
+    score: 8,
+    totalMarks: 10,
+    percentage: 80,
+    correctAnswers: 16,
+    incorrectAnswers: 3,
+    unanswered: 1,
+    passingScore: 60,
+    passed: true,
+    status: 'PASSED',
+    timeTakenSeconds: 861,
+    startedAt: '2026-01-01T12:00:00.000Z',
+    completedAt: '2026-01-01T12:14:21.000Z',
+    autoSubmitted: false,
+  };
+
+  it('formats a percentage without trailing zeros', () => {
+    expect(formatPercentage(80)).toBe('80%');
+    expect(formatPercentage(66.67)).toBe('66.67%');
+    expect(formatPercentage(0)).toBe('0%');
+    expect(formatPercentage(33.333)).toBe('33.33%');
+  });
+
+  it('turns pass/fail into a headline and a badge tone', () => {
+    expect(resultHeadline(passed)).toBe('You passed');
+    expect(resultHeadline({ passed: false })).toBe('Not this time');
+    expect(resultTone(true)).toBe('success');
+    expect(resultTone(false)).toBe('destructive');
+  });
+
+  it('shows the marks behind the percentage', () => {
+    expect(scoreFraction(passed)).toBe('8 of 10 marks');
+    expect(scoreFraction({ score: 0, totalMarks: 1 })).toBe('0 of 1 mark');
+  });
+
+  it('only mentions auto-submission when the clock ended the attempt', () => {
+    expect(autoSubmitNote(false)).toBeNull();
+    expect(autoSubmitNote(true)).toContain('Time ran out');
+  });
+
+  it('formats the time taken as a clock', () => {
+    expect(timeTakenLabel(861)).toBe('14:21');
+    expect(timeTakenLabel(0)).toBe('00:00');
+  });
+
+  it('summarises the verdict in one sentence', () => {
+    expect(resultSummary(passed)).toBe('Passed with 80% — 8 of 10 marks');
+    expect(resultSummary({ ...passed, passed: false, percentage: 40, score: 4 })).toBe(
+      'Failed with 40% — 4 of 10 marks',
+    );
   });
 });

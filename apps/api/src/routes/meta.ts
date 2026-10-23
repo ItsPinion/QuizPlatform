@@ -49,10 +49,11 @@ export const metaRoutes = new Hono().get('/', (c) =>
         'POST /api/student/quizzes/:id/start': 'Start an attempt, or resume the one in flight',
         'GET /api/student/attempts/:id': 'Questions and saved answers, with no answer key',
         'PUT /api/student/attempts/:id/answers/:questionId': 'Save or clear one answer',
+        'POST /api/student/attempts/:id/submit': 'Grade the paper (manual or at the deadline)',
         'GET /api/meta': 'This document',
       },
       roadmap: [
-        { day: 8, area: 'submission & scoring', endpoints: ['submit', 'auto-submit', 'grading'] },
+        { day: 9, area: 'results & review', endpoints: ['result page', 'answer review'] },
         { day: 11, area: 'analytics', endpoints: ['GET /api/admin/analytics'] },
         { day: 12, area: 'leaderboard', endpoints: ['GET /api/leaderboard'] },
       ],

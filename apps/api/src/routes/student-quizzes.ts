@@ -8,6 +8,7 @@ import {
   studentQuizListQuerySchema,
   studentQuizListResponseSchema,
 } from '@quiz/shared/attempt';
+import { submitAttemptResponseSchema } from '@quiz/shared/submission';
 import { Hono } from 'hono';
 
 import { ApiError, jsonBody } from '../lib/errors';
@@ -21,6 +22,7 @@ import {
   saveAnswer,
   startAttempt,
 } from '../lib/student-quizzes';
+import { submitAttempt } from '../lib/submissions';
 import type { AppEnv } from '../lib/types';
 
 /** `?status=`-style cleared filters arrive as empty strings; treat them as absent. */
@@ -42,8 +44,9 @@ function queryObject(url: string): Record<string, string> {
  * inherited rather than repeated — and so a student's attempts can only ever be
  * their own.
  *
- * Day 8 adds submission and grading; today the attempt can be started, read,
- * resumed and answered, and the clock is enforced on every write.
+ * Day 8 adds `POST /attempts/:id/submit`: the same call serves a student's
+ * click and an attempt whose clock ran out, is idempotent, and is the only
+ * place a score is ever computed.
  */
 export const studentQuizRoutes = new Hono<AppEnv>()
   /** Only categories with at least one published quiz — the catalogue filter. */
@@ -91,6 +94,21 @@ export const studentQuizRoutes = new Hono<AppEnv>()
     const result = await saveAnswer(attemptId, questionId, c.req.valid('json').optionId, user.id);
 
     return c.json(saveAnswerResponseSchema.parse(result), 200);
+  })
+
+  /**
+   * Submit — or hand back the result of an attempt already submitted.
+   *
+   * No body: the server decides whether this was a manual submit or the
+   * deadline, from `expiresAt`. A late call is accepted and recorded as
+   * finishing at the deadline rather than rejected, because losing a answered
+   * paper to a slow network would be the worse failure.
+   */
+  .post('/attempts/:id/submit', async (c) => {
+    const user = c.get('user');
+    const id = idSchema.parse(c.req.param('id'));
+
+    return c.json(submitAttemptResponseSchema.parse(await submitAttempt(id, user.id)), 200);
   })
 
   .all('*', (c) => {

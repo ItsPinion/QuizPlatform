@@ -103,8 +103,8 @@ POST (again, same quiz)               → 201 { attemptId: same, resumed: true, 
   `status = IN_PROGRESS`, `score = 0` and `totalMarks` snapshotted from the quiz.
 - A second call returns the attempt already in flight. **Resuming never costs a try**, so a
   refresh, a closed tab or a double click is harmless.
-- An expired `IN_PROGRESS` attempt is not resumable; the next start creates a new row if
-  attempts remain, and the old one is left for the submission sweep (Day 8).
+- An attempt past its deadline is not resumable. Since Day 8 the next student read settles it
+  (grades it, auto-submitted), and starting again creates a new row if attempts remain.
 
 ---
 
@@ -149,12 +149,12 @@ PUT /api/student/attempts/:id/answers/:questionId
 | ------------------------------- | ------------------------ |
 | attempt belongs to someone else | `404 ATTEMPT_NOT_FOUND`  |
 | attempt already finished        | `409 ATTEMPT_NOT_ACTIVE` |
-| deadline passed                 | `409 ATTEMPT_EXPIRED`    |
+| deadline passed, still open     | `409 ATTEMPT_EXPIRED`    |
 | question not in this attempt    | `422 QUESTION_NOT_FOUND` |
 | option not in that question     | `422 OPTION_NOT_FOUND`   |
 
 Writes are one question at a time, so a closed tab loses at most one click. `is_correct`
-is left `null` — grading belongs to Day 8 and is never accepted from the client.
+is left `null` until submission: grading is never accepted from the client.
 
 ---
 
@@ -176,17 +176,19 @@ The taker (`components/quiz-runner.tsx`) has:
   rejected the previous choice comes back with the API's message;
 - **re-sync on tab focus** — when the tab becomes visible again it re-reads the attempt, so a
   throttled background timer cannot silently drift;
-- **a locked state** at zero: options disabled, a banner explaining that saved answers are
-  kept, and no way to write more (the API would refuse anyway).
+- **a locked state** at zero: options disabled, a banner saying the attempt is being submitted,
+  and no way to write more (the API would refuse anyway). The countdown submitting itself is
+  [Day 8](submission-and-scoring.md).
 
 Answers survive a refresh because the page is server-rendered from the API on every load —
 there is no client cache to lose.
 
-### What is intentionally not here
+### Where Day 8 takes over
 
-Submission, automatic submission at expiry and scoring are **Day 8**. The submit button is
-rendered disabled with that explanation, and the attempt stays `IN_PROGRESS` until then.
-Nothing is lost: the answers are already stored server-side.
+**Submit quiz** and the countdown both post to `POST /api/student/attempts/:id/submit`; the
+attempt screen swaps to a result card once a result exists, and a finished attempt loads
+straight into that card. The grading rules, the lazy expiry sweep and the result payload are in
+[`submission-and-scoring.md`](submission-and-scoring.md).
 
 ---
 
@@ -200,17 +202,17 @@ Nothing is lost: the answers are already stored server-side.
 | E2E    | `scripts/e2e-smoke.ts`                           | 8 Day-7 checks over real HTTP: published-only list, draft 404, start + resume, no `isCorrect` in the payload, answer round-trip, cross-student 404, admin 403                                                                                                                                             |
 
 ```bash
-bun run test        # 489 Vitest tests
-bun run test:e2e    # 53 checks against a live API + throwaway database
+bun run test        # 523 Vitest tests
+bun run test:e2e    # 58 checks against a live API + throwaway database
 ```
 
 ---
 
 ## Known trade-offs
 
-- **Expired attempts are frozen, not graded.** Day 7 marks nothing; an attempt past its
-  deadline refuses writes and stops being resumable. The sweep that grades it — with the
-  answers the student actually saved — arrives with submission.
+- **Expiry is lazy, not scheduled.** An attempt past its deadline refuses writes; it is graded
+  by the next student read (or the client's auto-submit), which is covered in
+  [`submission-and-scoring.md`](submission-and-scoring.md).
 - **No question randomisation yet.** The spec's §"Question Randomization" is an enhancement;
   questions are shown in the admin's order today.
 - **Answers are written one at a time.** A bulk "save all" endpoint would cut requests, but

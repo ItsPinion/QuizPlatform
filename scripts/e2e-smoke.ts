@@ -1016,6 +1016,9 @@ try {
   let attemptId = '';
   let firstQuestionId = '';
   let firstOptionId = '';
+  let studentQuestionCount = 0;
+  let submittedPercentage = 0;
+  let submittedCompletedAt = '';
 
   await check('GET /api/student/quizzes lists only published quizzes', async () => {
     const res = await fetch(`${baseUrl}/api/student/quizzes?pageSize=24`, {
@@ -1121,6 +1124,7 @@ try {
 
     firstQuestionId = body.questions[0]?.id ?? '';
     firstOptionId = body.questions[0]?.options[0]?.id ?? '';
+    studentQuestionCount = body.questions.length;
 
     return `200 · ${body.questions.length} questions · no isCorrect`;
   });
@@ -1202,6 +1206,174 @@ try {
     expectStatus(start, 403);
 
     return '403 · FORBIDDEN';
+  });
+
+  /* ------------------------------- Day 8 --------------------------------- */
+
+  await check('POST /api/student/attempts/:id/submit grades the paper', async () => {
+    const res = await fetch(`${baseUrl}/api/student/attempts/${attemptId}/submit`, {
+      method: 'POST',
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(res, 200);
+
+    const raw = await res.text();
+    if (/isCorrect|is_correct|"explanation"/i.test(raw)) {
+      throw new Error('the submission leaks the answer key');
+    }
+
+    const body = JSON.parse(raw) as {
+      alreadySubmitted: boolean;
+      result: {
+        score: number;
+        totalMarks: number;
+        percentage: number;
+        correctAnswers: number;
+        incorrectAnswers: number;
+        unanswered: number;
+        passed: boolean;
+        status: string;
+        timeTakenSeconds: number;
+        completedAt: string;
+        autoSubmitted: boolean;
+      };
+    };
+
+    const { result } = body;
+
+    if (body.alreadySubmitted) throw new Error('the first submit must grade');
+    if (
+      result.correctAnswers + result.incorrectAnswers + result.unanswered !==
+      studentQuestionCount
+    ) {
+      throw new Error('the counts do not add up to the paper');
+    }
+    if (result.totalMarks <= 0) throw new Error('expected marks on the paper');
+    if (result.percentage < 0 || result.percentage > 100) {
+      throw new Error(`percentage out of range: ${result.percentage}`);
+    }
+    if (result.status !== (result.passed ? 'PASSED' : 'FAILED')) {
+      throw new Error('status and passed disagree');
+    }
+    if (result.timeTakenSeconds < 0) throw new Error('negative time taken');
+    if (!result.completedAt) throw new Error('a graded attempt needs completedAt');
+
+    submittedPercentage = result.percentage;
+    submittedCompletedAt = result.completedAt;
+
+    return `200 · ${result.percentage}% · ${result.status}`;
+  });
+
+  await check('submitting twice returns the stored result', async () => {
+    const res = await fetch(`${baseUrl}/api/student/attempts/${attemptId}/submit`, {
+      method: 'POST',
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as {
+      alreadySubmitted: boolean;
+      result: { percentage: number; completedAt: string };
+    };
+
+    if (!body.alreadySubmitted) throw new Error('a retry should not grade again');
+    if (body.result.percentage !== submittedPercentage) throw new Error('percentage changed');
+    if (body.result.completedAt !== submittedCompletedAt) throw new Error('completedAt changed');
+
+    return '200 · alreadySubmitted: true';
+  });
+
+  await check('the graded attempt is locked and reports its result', async () => {
+    const session = await fetch(`${baseUrl}/api/student/attempts/${attemptId}`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(session, 200);
+
+    const raw = await session.text();
+    if (/isCorrect|is_correct|"explanation"/i.test(raw)) {
+      throw new Error('a graded attempt leaks the answer key');
+    }
+
+    const body = JSON.parse(raw) as {
+      attempt: { status: string; expired: boolean; result: { percentage: number } | null };
+    };
+
+    if (body.attempt.status === 'IN_PROGRESS') throw new Error('the attempt is still open');
+    if (body.attempt.expired) throw new Error('a graded attempt is finished, not expired');
+    if (body.attempt.result?.percentage !== submittedPercentage) {
+      throw new Error('the session result disagrees with the submission');
+    }
+
+    const write = await fetch(
+      `${baseUrl}/api/student/attempts/${attemptId}/answers/${firstQuestionId}`,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', cookie: studentCookie },
+        body: JSON.stringify({ optionId: null }),
+      },
+    );
+    expectStatus(write, 409);
+
+    const failure = (await write.json()) as { error: { code: string } };
+    if (failure.error.code !== 'ATTEMPT_NOT_ACTIVE') {
+      throw new Error(`unexpected code ${failure.error.code}`);
+    }
+
+    return '409 · ATTEMPT_NOT_ACTIVE';
+  });
+
+  await check('the catalogue reflects the graded attempt', async () => {
+    const res = await fetch(`${baseUrl}/api/student/quizzes?pageSize=24`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as {
+      quizzes: {
+        id: string;
+        bestPercentage: number | null;
+        inProgressAttemptId: string | null;
+        attemptsUsed: number;
+      }[];
+    };
+
+    const quiz = body.quizzes.find((candidate) => candidate.id === studentQuizId);
+    if (!quiz) throw new Error('the quiz vanished from the catalogue');
+    if (quiz.inProgressAttemptId) throw new Error('a finished attempt must not be resumable');
+    if (quiz.bestPercentage !== submittedPercentage) {
+      throw new Error(`best percentage ${quiz.bestPercentage} !== ${submittedPercentage}`);
+    }
+    if (quiz.attemptsUsed < 1) throw new Error('the attempt was not counted');
+
+    return `200 · best ${quiz.bestPercentage}% · ${quiz.attemptsUsed} used`;
+  });
+
+  await check('another student cannot submit this attempt', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'priya@quiz.dev', password: 'Password123' }),
+    });
+    expectStatus(res, 200);
+
+    const cookie = res.headers
+      .getSetCookie()
+      .find((value) => value.startsWith('quiz_session='))
+      ?.split(';')[0];
+
+    if (!cookie) throw new Error('login did not issue a cookie');
+
+    const submit = await fetch(`${baseUrl}/api/student/attempts/${attemptId}/submit`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+    expectStatus(submit, 404);
+
+    const body = (await submit.json()) as { error: { code: string } };
+    if (body.error.code !== 'ATTEMPT_NOT_FOUND')
+      throw new Error(`unexpected code ${body.error.code}`);
+
+    return '404 · ATTEMPT_NOT_FOUND';
   });
 
   await check('POST /api/auth/logout clears the cookie', async () => {
