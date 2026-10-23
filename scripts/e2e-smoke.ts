@@ -2043,6 +2043,76 @@ try {
     return '200 · Max-Age=0';
   });
 
+  /* ------------------------------- Day 14 -------------------------------- */
+
+  await check('GET /api/admin/system reports the deployment self-check', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/system`, { headers: { cookie: adminCookie } });
+
+    expectStatus(res, 200);
+
+    interface SystemBody {
+      service: { name: string; runtime: string; nodeEnv: string; uptimeSeconds: number };
+      database: {
+        target: string;
+        urlHint: string;
+        connected: boolean;
+        latencyMs: number | null;
+        counts: { users: number; quizzes: number } | null;
+      };
+      settings: { authRateLimitMax: number; maxBodyBytes: number; trustedOrigins: string[] };
+      summary: {
+        verdict: string;
+        pass: number;
+        warn: number;
+        fail: number;
+        checks: { id: string; status: string; detail: string }[];
+      };
+    }
+
+    const raw = await res.text();
+    const body = JSON.parse(raw) as SystemBody;
+
+    if (!['ready', 'attention', 'blocked'].includes(body.summary.verdict)) {
+      throw new Error(`unexpected verdict ${body.summary.verdict}`);
+    }
+    if (body.summary.checks.length !== 8) {
+      throw new Error(`expected 8 checks, got ${body.summary.checks.length}`);
+    }
+    if (!body.database.connected || !body.database.counts) {
+      throw new Error('expected a connected database with counts');
+    }
+    if (body.database.counts.users < 2) throw new Error('expected the seeded accounts');
+    if (body.settings.trustedOrigins.length < 1) throw new Error('no trusted origins reported');
+
+    // Nothing secret may cross the wire, even to an administrator.
+    for (const forbidden of ['authToken', 'jwtSecret', 'passwordHash', 'TURSO_AUTH_TOKEN']) {
+      if (raw.includes(forbidden)) throw new Error(`response leaked ${forbidden}`);
+    }
+
+    if (res.headers.get('cache-control') !== 'no-store') throw new Error('response was cacheable');
+
+    return `200 · ${body.summary.verdict} · ${body.summary.checks.length} checks · ${body.database.target}`;
+  });
+
+  await check('GET /api/admin/system is closed to students and anonymous callers', async () => {
+    const login = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-forwarded-for': '203.0.113.31',
+      },
+      body: JSON.stringify({ email: 'rahul@quiz.dev', password: 'Password123' }),
+    });
+
+    expectStatus(login, 200);
+    const cookie = cookieFrom(login);
+
+    expectStatus(await fetch(`${baseUrl}/api/admin/system`, { headers: { cookie } }), 403);
+    expectStatus(await fetch(`${baseUrl}/api/admin/system`), 401);
+
+    return '403 · FORBIDDEN · 401';
+  });
+
   await check('unknown routes answer with the error envelope', async () => {
     const res = await fetch(`${baseUrl}/api/nope`);
     expectStatus(res, 404);

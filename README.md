@@ -3,7 +3,7 @@
 Quiz Management & Online Assessment Platform — a Turborepo monorepo with a **Next.js** web app,
 a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 
-> **Status: Day 13 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
+> **Status: Day 14 complete — feature complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
 > authentication (register / login / logout / `/me`, scrypt hashes, httpOnly JWT cookies), role-scoped
 > API namespaces, guarded `/admin` + `/student` areas, an admin console with dashboard statistics,
 > user management, quiz management with a guarded publish/unpublish lifecycle, category CRUD,
@@ -17,8 +17,12 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 > completed, over all time, this month or this week, with competition ranking and the caller's own
 > position always resolved — and a hardening pass: rate-limited sign-ins that cannot lock the real
 > owner out, a same-origin guard on every write, scoped JWTs, a body-size cap, `no-store` and a CSP —
-> with an adversarial suite that attacks each of the nine areas the spec names.
-> 800 automated tests and a 73-check end-to-end smoke run. Deployment & docs are next.
+> with an adversarial suite that attacks each of the nine areas the spec names — and, last, a
+> deployment that can be checked rather than remembered: eight environment rules with one verdict,
+> a redacted system screen an operator can read, a `bun run deploy:check` gate that runs the same
+> rules locally and eight live probes against a real URL, one Dockerfile with two targets, and the
+> runbook for migrate, verify and roll back.
+> **844 automated tests and a 75-check end-to-end smoke run.** Feature complete: all fourteen days shipped.
 
 ---
 
@@ -245,12 +249,13 @@ quizplatform/
 │  │  ├─ src/middleware/origin.ts  CSRF guard for state-changing requests
 │  │  ├─ src/lib/admin-users.ts  directory query + guarded role/status writes
 │  │  ├─ src/lib/admin-quizzes.ts  quiz CRUD, derived slugs, lifecycle rules
+│  │  ├─ src/lib/system-status.ts  redacted self-report for /api/admin/system
 │  │  ├─ src/lib/auth.ts       JWT signing, session cookie, claim mapping
 │  │  ├─ src/__tests__/        Vitest suite + test-database setup
 │  │  └─ src/lib/              env parsing, error envelope
 │  └─ web/                     Next.js app (port 3000)
 │     ├─ src/app/              landing, /login, /register, /admin, /student
-│     ├─ src/app/admin/        layout · overview · analytics · users · quizzes
+│     ├─ src/app/admin/        layout · overview · analytics · users · quizzes · system
 │     ├─ src/app/student/      dashboard · quizzes · attempt/[id] · results · review · leaderboard
 │     ├─ src/lib/session.ts    server-side session lookup (cookie → API)
 │     ├─ src/lib/api-server.ts cookie-forwarding RPC client for admin pages
@@ -260,6 +265,7 @@ quizplatform/
 │     ├─ src/lib/analytics-params.ts  window parsing, change copy, caption helpers
 │     ├─ src/lib/leaderboard-params.ts  metric/period filters, ranks, gaps, hrefs
 │     ├─ src/lib/security-headers.ts    CSP + hardening headers, tested without Next
+│     ├─ src/lib/deployment-params.ts   verdict/status/runtime labels for /admin/system
 │     ├─ src/components/score-trend-chart.tsx  server-rendered SVG trend line
 │     ├─ src/components/activity-chart.tsx     fourteen-day CSS bar chart
 │     ├─ src/components/category-breakdown.tsx per-category averages
@@ -283,7 +289,7 @@ quizplatform/
 │  │  ├─ src/seed.ts           rich demo dataset
 │  │  ├─ src/__tests__/        schema + seed integrity tests
 │  │  └─ migrations/           drizzle-kit generated SQL (checked in)
-│  ├─ shared/                  Zod enums and every contract: auth, admin, quiz, question, attempts, dashboard, analytics, leaderboard
+│  ├─ shared/                  Zod enums and every contract: auth, admin, quiz, question, attempts, dashboard, analytics, leaderboard, deployment
 │  └─ test-utils/              package-manager-agnostic test runner helper
 ├─ docs/
 │  ├─ admin-dashboard.md       stats definitions, directory API, console rules
@@ -296,10 +302,13 @@ quizplatform/
 │  ├─ admin-analytics.md         windows, definitions, queries, the cross-user sweep, charts
 │  ├─ leaderboard.md            metrics, periods, ranking rules, the screen, tests
 │  ├─ security.md               threat model, controls, rate limits, CSP, trade-offs
+│  ├─ deployment.md            env matrix, the eight checks, deploy order, rollback, runbook
 │  ├─ authorization.md         role model, guards, redirect rules, failure modes
 │  └─ testing.md               test inventory, manual QA, security trade-offs
 ├─ scripts/
-│  └─ e2e-smoke.ts             boots the real API and walks the auth flow
+│  ├─ e2e-smoke.ts             boots the real API and walks every flow
+│  └─ deploy-check.ts          the deployment gate (env rules · live probes)
+├─ Dockerfile                  deps → build → api / web runtime stages
 ├─ turbo.json                  task graph + caching
 ├─ package.json                 workspaces + trustedDependencies (Bun)
 └─ .env.example                credential template
@@ -342,22 +351,23 @@ Design notes:
 
 Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 
-| Command               | Scope      | Description                                     |
-| --------------------- | ---------- | ----------------------------------------------- |
-| `bun dev`             | root       | Run web + API together through Turbo            |
-| `bun run dev:web`     | root       | Web only                                        |
-| `bun run dev:api`     | root       | API only                                        |
-| `bun run build`       | root       | `next build` + API typecheck                    |
-| `bun run typecheck`   | root       | TypeScript across every package                 |
-| `bun run test`        | root       | Vitest across shared, db, api and web           |
-| `bun run test:e2e`    | root       | Real HTTP smoke run against a throwaway DB      |
-| `bun run lint`        | root       | Alias of typecheck (ESLint is not wired up yet) |
-| `bun run format`      | root       | Prettier write                                  |
-| `bun run db:generate` | `@quiz/db` | Generate SQL migrations from the Drizzle schema |
-| `bun run db:migrate`  | `@quiz/db` | Apply pending migrations with drizzle-kit       |
-| `bun run db:push`     | `@quiz/db` | Push schema without migration files (dev)       |
-| `bun run db:studio`   | `@quiz/db` | Open Drizzle Studio                             |
-| `bun run db:seed`     | `@quiz/db` | Seed demo data (`-- --force` to reset)          |
+| Command                | Scope      | Description                                          |
+| ---------------------- | ---------- | ---------------------------------------------------- |
+| `bun dev`              | root       | Run web + API together through Turbo                 |
+| `bun run dev:web`      | root       | Web only                                             |
+| `bun run dev:api`      | root       | API only                                             |
+| `bun run build`        | root       | `next build` + API typecheck                         |
+| `bun run typecheck`    | root       | TypeScript across every package                      |
+| `bun run test`         | root       | Vitest across shared, db, api and web                |
+| `bun run test:e2e`     | root       | Real HTTP smoke run against a throwaway DB           |
+| `bun run deploy:check` | root       | Deployment gate: env rules, or live probes (`--url`) |
+| `bun run lint`         | root       | Alias of typecheck (ESLint is not wired up yet)      |
+| `bun run format`       | root       | Prettier write                                       |
+| `bun run db:generate`  | `@quiz/db` | Generate SQL migrations from the Drizzle schema      |
+| `bun run db:migrate`   | `@quiz/db` | Apply pending migrations with drizzle-kit            |
+| `bun run db:push`      | `@quiz/db` | Push schema without migration files (dev)            |
+| `bun run db:studio`    | `@quiz/db` | Open Drizzle Studio                                  |
+| `bun run db:seed`      | `@quiz/db` | Seed demo data (`-- --force` to reset)               |
 
 > Use `bun run <script>` for scripts. Bare `bun test` launches Bun's own test runner instead of the
 > Vitest suites, which is not what this repo uses.
@@ -367,19 +377,23 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 800 tests, all workspaces through Turbo
+bun run test                    # 844 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
-bun run test:e2e                # 73 checks against a live server + throwaway DB
+bun run test:e2e                # 75 checks against a live server + throwaway DB
+bun run deploy:check            # the deployment gate (see docs/deployment.md)
 ```
 
-**800 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
+**844 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
 
-**`@quiz/shared`** (240) — scrypt record format, unique salts, correct/wrong passwords, unicode
+**`@quiz/shared`** (262) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
 auth contracts (trimming, lowercased emails, stripped unknown keys, the exact password policy,
 session constants), plus the Day 4 admin contracts: query coercion and defaults, the
 `updateUserSchema` refine that rejects an empty body while stripping fields the dashboard must
-never write, the credential-free user row shape, and the stats/list response schemas.
+never write, the credential-free user row shape, and the stats/list response schemas. Day 14 adds the
+deployment gate (`deployment.test.ts`, 22): each of the eight environment rules in both production and
+development, every verdict path (a warning never outranks a failure), the fixed check order, and the
+summary arithmetic behind `5 of 6 checks pass · 1 warning`.
 
 **`@quiz/db`** (62) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
 and the uniqueness/lookup indexes; column defaults; millisecond timestamp precision; unique email,
@@ -391,9 +405,12 @@ integrity (quiz/question/option counts, one correct option each, attempt percent
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
 
-**`@quiz/api`** (313) — service banner, health payload shape, request IDs, security headers, CORS
+**`@quiz/api`** (320) — service banner, health payload shape, request IDs, security headers, CORS
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
-the database is unreachable, `/api/meta` roadmap, and the 404 error envelope.
+the database is unreachable, `/api/meta` roadmap, and the 404 error envelope. Day 14 adds the system
+report: the schema-validated document, counts that match the tables, checks that are honest about a
+`file:` database, no secret anywhere in the payload, the limits matching what is enforced, and
+`401`/`403` on the guard.
 
 Authentication adds: registration (hash stored, distinct salt per user, cookie issued, email
 normalised, role escalation ignored, duplicate → 409 even when only the casing differs, weak or
@@ -505,7 +522,7 @@ email search, empty values, unknown roles), pagination, both sorts, 422s for bad
 lookups, 404/422 handling, promotion/demotion, deactivation lockout and restoration, `SELF_LOCKOUT`
 for self-demotion and self-deactivation, and 401/403 on every admin route.
 
-**`@quiz/web`** (185) — the error-envelope narrowing every auth form relies on (API error codes,
+**`@quiz/web`** (200) — the error-envelope narrowing every auth form relies on (API error codes,
 Zod issue extraction, fallbacks for malformed bodies, network-error mapping), the Day 3 page guard
 rules, the Day 4 directory parameters, the Day 5 quiz helpers, the Day 6 question-form helpers, and
 the Day 7–9 student helpers: catalogue filter parsing with `toStudentQuery`/`quizzesHref` round-trips
@@ -516,11 +533,13 @@ the auto-submit note and the time-taken clock), and the review/history view help
 href round-trips, verdict labels and tones, marks and selection copy, history timestamps), and the
 dashboard/analytics view helpers (percent and coverage labels, trend deltas, bar widths, analytics
 window parsing and href round-trips, change wording and tones, outcome labels and the timeline's
-screen-reader summary).
+screen-reader summary), plus the Day 14 deployment helpers: verdict and status labels and tones,
+runtime and latency formatting, the counts line with its no-counts fallback, the actionable-check
+filter and host shortening.
 
 Beyond Vitest, `bun run test:e2e` boots the real API process against a throwaway database and walks
 the whole auth flow, the admin console, content authoring, quiz taking, grading and review over HTTP
-(73 checks, including cookie flags, a tampered-cookie replay, both role denials, dashboard aggregates,
+(75 checks, including cookie flags, a tampered-cookie replay, both role denials, dashboard aggregates,
 filtered user listing, a promote/demote round trip, `SELF_LOCKOUT`, a deactivation lockout, quiz
 creation, slug stability across a rename, the publish rules, the delete rules, category
 create/rename/delete, question authoring, reordering, `PUT` with retained option ids, the
@@ -532,7 +551,8 @@ dashboard's 401/403 and cross-student scoping, the platform analytics payload wi
 the analytics window validation plus both refusals, the leaderboard's ordering and count
 invariants, no email leak, metric/period/category handling and its `422`/`404`/`401`, the hardening
 headers on the wire, a foreign origin blocked while the app origin passes, a `413` for an oversized
-body, and a `429` with `Retry-After` after ten bad passwords). See
+body, a `429` with `Retry-After` after ten bad passwords, and the admin system report with its eight
+checks and no leaked secret). See
 [`docs/testing.md`](docs/testing.md) for the full inventory, a manual QA checklist and the known
 security trade-offs.
 
@@ -546,7 +566,7 @@ The Turso-only rule applies to the running application, not to tests.
 
 ---
 
-## API surface (Day 13)
+## API surface (Day 14)
 
 | Method | Path                                            | Description                                         |
 | ------ | ----------------------------------------------- | --------------------------------------------------- |
@@ -560,6 +580,7 @@ The Turso-only rule applies to the running application, not to tests.
 | GET    | `/api/auth/me`                                  | Current user + session expiry (requires a session)  |
 | GET    | `/api/admin/stats`                              | Dashboard aggregates + newest accounts and attempts |
 | GET    | `/api/admin/analytics`                          | Platform charts over a 7/14/30/90-day window        |
+| GET    | `/api/admin/system`                             | Deployment self-report: checks, database, limits    |
 | GET    | `/api/admin/users`                              | Paged, filtered, sorted user directory              |
 | GET    | `/api/admin/users/:id`                          | One user with attempt statistics                    |
 | PATCH  | `/api/admin/users/:id`                          | Change a role and/or status                         |
@@ -1144,17 +1165,94 @@ Full detail is in [`docs/security.md`](docs/security.md).
 
 ---
 
+## Deployment (Day 14)
+
+The platform is meant to leave the laptop, so the last milestone makes shipping a thing you can check.
+Every fact below is produced by the code, not by this document.
+
+### The gate: eight rules, one verdict
+
+`packages/shared/src/deployment.ts` exports `evaluateEnvironment(snapshot)` — a pure function over a
+plain object, so it runs before a build, inside the API and in a test with no process involved.
+
+| #   | Check              | Fails when                                 | Warns when                                        |
+| --- | ------------------ | ------------------------------------------ | ------------------------------------------------- |
+| 1   | Database URL       | unset, or a `file:` URL in production      | a `file:` URL outside production                  |
+| 2   | Database token     | a remote URL with no `TURSO_AUTH_TOKEN`    | — (skipped for `file:`)                           |
+| 3   | Session secret     | unset or under 32 characters in production | unset or short in development                     |
+| 4   | Web origin         | not a valid http(s) URL                    | unset, or plain `http` in production              |
+| 5   | API proxy target   | not a valid http(s) URL                    | unset, so the localhost default stays             |
+| 6   | Runtime mode       | —                                          | `NODE_ENV` is not `production`                    |
+| 7   | Sign-in rate limit | —                                          | the limiter is disabled (`AUTH_RATE_LIMIT_MAX=0`) |
+| 8   | Request body cap   | —                                          | outside 1 KB – 5 MB                               |
+
+Any failure → `blocked`, otherwise any warning → `attention`, otherwise `ready`. The asymmetry is the
+point: the same missing secret must stop a release and must not stop `bun dev`.
+
+### Three surfaces, one implementation
+
+```bash
+bun run deploy:check                              # before the build: the env, exit 1 when blocked
+bun run deploy:check --url https://quiz.example.com   # after: eight live probes
+bun run deploy:check --url https://quiz.example.com --admin admin@quiz.dev:'<password>'
+                                                  # … plus the server's own self-report
+```
+
+- **Before** — reads `.env.local`, `.env`, then the process; prints each check with its detail and
+  exit code; never fails on a warning, so it is safe as a CI gate.
+- **After** — probes `/api/health`, `/api/health/db` (a deployed API answering `target: 'file'` is a
+  failure), the 401 session guard, the hardening headers, the error envelope, the web app, the CSP and
+  the web→API proxy. `--admin` adds a sign-in and reads `/api/admin/system`.
+- **From inside** — `GET /api/admin/system` (admin-only, `no-store`) returns the service, the
+  redacted database, the effective limits, the counts and the same eight checks. It still answers when
+  the database is down (`connected: false`, `counts: null`), because that is when you need it.
+  `/admin/system` renders it as the operator console.
+
+### Deploy order
+
+```bash
+turso db create quizplatform && turso db show quizplatform --url  # 1. database
+bun run db:migrate                                               # 2. schema — a release step
+bun run db:seed                                                  # 3. optional: demo data
+bun run --filter=@quiz/api start                                 # 4. API on 3001
+bun run --filter=@quiz/web build && bun run --filter=@quiz/web start  # 5. web on 3000
+bun run deploy:check --url https://quiz.example.com              # 6. verify from outside
+```
+
+The API never migrates at boot — two instances starting together would race the same DDL, and a
+migration on a request path is one you cannot roll back. Seeds are demo data with public passwords;
+reseeding invalidates every existing session.
+
+`Dockerfile` packages the same commands: a `deps` stage with Bun, a `build` stage, then `--target api`
+and `--target web` runtime stages on Node 22, non-root, each with a health check. The web target takes
+`API_INTERNAL_URL` as a **build arg**, because `rewrites()` is compiled into the Next server.
+
+Rollback is redeploying the previous tag: both processes are stateless (the cookie is a signed JWT and
+the database row is the authority), and every migration in this repo is additive, so a previous API
+can read the current schema. Reverting a migration means writing a new one.
+
+Environment matrix, verification checklists, the operator screen, rollback and the operational limits
+are in [`docs/deployment.md`](docs/deployment.md).
+
 ## Environment variables
 
-| Variable             | Required | Default                 | Used by                 |
-| -------------------- | -------- | ----------------------- | ----------------------- |
-| `TURSO_DATABASE_URL` | yes      | —                       | db, api, drizzle-kit    |
-| `TURSO_AUTH_TOKEN`   | yes      | —                       | db, api, drizzle-kit    |
-| `DATABASE_URL`       | no       | —                       | alias for the URL above |
-| `API_PORT`           | no       | `3001`                  | api                     |
-| `API_INTERNAL_URL`   | no       | `http://localhost:3001` | web rewrite target      |
-| `WEB_ORIGIN`         | no       | `http://localhost:3000` | API CORS origin         |
-| `JWT_SECRET`         | in prod  | dev fallback + warning  | session JWT signing     |
+`.env.example` is the canonical list with comments; this is the summary.
+
+| Variable                         | Required | Default                 | Used by                 |
+| -------------------------------- | -------- | ----------------------- | ----------------------- |
+| `NODE_ENV`                       | in prod  | `development`           | both                    |
+| `TURSO_DATABASE_URL`             | yes      | —                       | db, api, drizzle-kit    |
+| `TURSO_AUTH_TOKEN`               | yes      | —                       | db, api, drizzle-kit    |
+| `DATABASE_URL`                   | no       | —                       | alias for the URL above |
+| `JWT_SECRET`                     | in prod  | dev fallback + warning  | session JWT signing     |
+| `WEB_ORIGIN`                     | in prod  | `http://localhost:3000` | CORS + origin guard     |
+| `API_INTERNAL_URL`               | in prod  | `http://localhost:3001` | web rewrite target      |
+| `API_PORT`                       | no       | `3001`                  | api                     |
+| `AUTH_RATE_LIMIT_MAX`            | no       | `10`                    | api (`0` disables)      |
+| `AUTH_RATE_LIMIT_WINDOW_SECONDS` | no       | `300`                   | api                     |
+| `REGISTER_RATE_LIMIT_MAX`        | no       | `10`                    | api                     |
+| `MAX_BODY_BYTES`                 | no       | `65536`                 | api                     |
+| `NEXT_PUBLIC_API_BASE_URL`       | no       | `''` (same origin)      | web, split deployments  |
 
 ---
 
@@ -1193,6 +1291,13 @@ the Submit button and the countdown; `completedAt` clamped to the deadline so a 
 change the time taken; lazy expiry on every student read; the attempt row stores the full result and
 `answers.is_correct` is stamped for the review; the attempt screen becomes a result card. 523 Vitest
 tests and a 58-check end-to-end smoke run.
+
+Day 14 (done): deployment & docs. Eight environment rules in one pure function, evaluated in three
+places — `bun run deploy:check` before a build, `GET /api/admin/system` from inside the process, and
+`deploy:check --url` over the wire after the deploy — with a verdict of `ready`, `attention` or
+`blocked`; a redacted system screen at `/admin/system`; one `Dockerfile` with `api` and `web` targets;
+and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 844 Vitest tests
+and a 75-check end-to-end smoke run.
 
 Day 13 (done): testing & security. Rate limiting on the auth routes (a hard per-address block and a
 soft per-account one that can never lock the owner out), a same-origin guard on every state-changing
@@ -1246,7 +1351,7 @@ and a 25-check end-to-end smoke run.
 | 11  | ✅ Admin analytics — charts, windows, pass/fail                   |
 | 12  | ✅ Leaderboard — metrics, periods, categories, ranks              |
 | 13  | ✅ Testing & security — hardened and attacked                     |
-| 14  | Deployment & docs — next                                          |
+| 14  | ✅ Deployment & docs — gate, containers, runbook, smoke test      |
 
 ---
 

@@ -15,7 +15,8 @@
     "./review": "./src/review.ts",
     "./dashboard": "./src/dashboard.ts",
     "./analytics": "./src/analytics.ts",
-    "./leaderboard": "./src/leaderboard.ts"
+    "./leaderboard": "./src/leaderboard.ts",
+    "./deployment": "./src/deployment.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

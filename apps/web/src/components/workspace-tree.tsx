@@ -6,7 +6,7 @@ const tree = `quizplatform/
 ├─ apps/
 │  ├─ web/            Next.js 16 · App Router · Tailwind v4
 │  │  ├─ src/app/              landing, /login, /register, /admin, /student
-│  │  ├─ src/app/admin/        layout · overview · users · quizzes · categories
+│  │  ├─ src/app/admin/        layout · overview · users · quizzes · categories · system
 │  │  ├─ src/app/student/      dashboard · quizzes · attempt/[id] · review · results · leaderboard
 │  │  ├─ src/lib/session.ts    server-side session lookup (cookie → API)
 │  │  ├─ src/lib/api-server.ts cookie-forwarding RPC client for pages
@@ -17,6 +17,7 @@ const tree = `quizplatform/
 │  │  ├─ src/lib/student-params.ts   catalogue filters, timer + start labels
 │  │  ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
 │  │  ├─ src/lib/security-headers.ts  CSP + hardening headers
+│  │  ├─ src/lib/deployment-params.ts  verdict, status and runtime labels
 │  │  ├─ src/components/       admin nav, users table, combobox, question editor
 │  │  └─ next.config.ts        /api/* → Hono rewrite · security headers
 │  └─ api/            Hono 4 · @hono/node-server
@@ -35,6 +36,7 @@ const tree = `quizplatform/
 │     ├─ src/lib/admin-analytics.ts   platform aggregates: timeline, ratios, popularity
 │     ├─ src/lib/leaderboard.ts       ranked board: metrics, periods, ties, caller's row
 │     ├─ src/lib/rate-limit.ts        brute-force guards with an injectable clock
+│     ├─ src/lib/system-status.ts     redacted self-report: env, DB, counts, verdict
 │     ├─ src/routes/admin-quizzes.ts  /api/admin/quizzes (mounted under the guard)
 │     ├─ src/middleware/origin.ts     CSRF guard on state-changing requests
 │     ├─ src/lib/auth.ts       JWT signing + session cookies
@@ -46,10 +48,13 @@ const tree = `quizplatform/
 │  │  ├─ src/__tests__/        schema + seed integrity
 │  │  └─ migrations/           drizzle-kit SQL (checked in)
 │  ├─ shared/         Zod enums, auth + admin + quiz + question + attempt contracts
+│  │  └─ src/deployment.ts     the eight environment rules, shared by both apps
 │  └─ test-utils/     package-manager-agnostic test helpers
 ├─ turbo.json         task graph + cache
 ├─ package.json       Bun workspaces + scripts (pins Bun)
-├─ scripts/           end-to-end smoke run (real HTTP)
+├─ scripts/           e2e smoke run · deployment gate (deploy-check.ts)
+├─ Dockerfile         one file, two targets: api and web
+├─ docs/              one page per milestone, testing.md, deployment.md
 └─ .env.example       Turso credentials template`;
 
 const highlights = [
@@ -149,7 +154,20 @@ const highlights = [
   { path: 'apps/web/src/lib/api.ts', note: 'hc<AppType>() — zero codegen RPC' },
   { path: 'packages/db/src/schema.ts', note: 'users → attempts → answers relations' },
   { path: 'packages/shared/src/auth.ts', note: 'login schemas + role permissions, both apps' },
-  { path: '.env.example', note: 'Turso URL + token template, never committed' },
+  {
+    path: 'packages/shared/src/deployment.ts',
+    note: 'eight ordered checks → one verdict, tested without a process',
+  },
+  {
+    path: 'apps/api/src/lib/system-status.ts',
+    note: 'redacted self-report that still answers when the DB does not',
+  },
+  {
+    path: 'scripts/deploy-check.ts',
+    note: 'same rules locally, eight live probes with --url',
+  },
+  { path: 'Dockerfile', note: 'deps → build → api / web, non-root, healthchecked' },
+  { path: '.env.example', note: 'every variable the two apps read, with defaults' },
 ];
 
 export function WorkspaceTree() {

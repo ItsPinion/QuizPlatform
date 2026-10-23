@@ -3,8 +3,9 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test       # 800 unit + integration tests across the four workspaces
-bun run test:e2e   # 73 checks against a real HTTP server (own process, own port)
+bun run test         # 844 unit + integration tests across the four workspaces
+bun run test:e2e     # 75 checks against a real HTTP server (own process, own port)
+bun run deploy:check # the deployment gate (see docs/deployment.md)
 ```
 
 Neither touches Turso. Every suite builds a throwaway `file:` database in `.data/` with the project's
@@ -16,12 +17,12 @@ tests.
 
 ## What runs where
 
-| Workspace      | Tests | Focus                                                                                        |
-| -------------- | ----- | -------------------------------------------------------------------------------------------- |
-| `@quiz/shared` | 240   | auth + content contracts, attempt clocks, the grader, dashboard, analytics and ranking       |
-| `@quiz/db`     | 62    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring     |
-| `@quiz/api`    | 313   | health/readiness, auth, guards, content, taking, grading, reviewing, stats, analytics, board |
-| `@quiz/web`    | 185   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers |
+| Workspace      | Tests | Focus                                                                                                 |
+| -------------- | ----- | ----------------------------------------------------------------------------------------------------- |
+| `@quiz/shared` | 262   | auth + content contracts, attempt clocks, the grader, dashboard, analytics, ranking, deployment rules |
+| `@quiz/db`     | 62    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring              |
+| `@quiz/api`    | 320   | health/readiness, auth, guards, content, taking, grading, reviewing, stats, analytics, board, system  |
+| `@quiz/web`    | 200   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers          |
 
 Run one workspace at a time when you are iterating:
 
@@ -345,6 +346,32 @@ areas. Every one assumes a hostile caller; none of them re-asserts a happy path 
   limited to self plus the preview hosts, HSTS only in production, and the deliberate absence of
   `X-Frame-Options`.
 
+### Deployment coverage (Day 14)
+
+The deployment gate is a pure function, so it is tested as one — no process, no database, no HTTP.
+`packages/shared/src/deployment.test.ts` has **22** cases; the API and the page add **7** and **15**.
+
+- **Every verdict path** — all eight checks passing → `ready`; a single warning → `attention`; a single
+  failure → `blocked` (a warning never outranks a failure).
+- **The environment rules, one test each** — a missing database URL fails; a `file:` URL fails in
+  production and warns in development; a remote URL with an empty token fails; the token check is
+  skipped for `file:`; a missing `JWT_SECRET` fails in production and warns locally; a secret under 32
+  characters fails only in production; a malformed `WEB_ORIGIN` or `API_INTERNAL_URL` fails; plain
+  `http` in production warns; `NODE_ENV` other than `production` warns (`test` skips); a disabled rate
+  limit and an out-of-range body cap warn while their defaults pass.
+- **The contract** — the id order is fixed (`database-url` … `body-limit`), every result carries a
+  label, a detail and a nullable hint, `summarizeChecks` counts per status, and `summaryLabel` reads
+  `8 of 8 checks pass` / `7 of 8 checks pass · 1 warning`.
+- **The system report** (`@quiz/api`, 7) — `/api/admin/system` returns the schema-validated document,
+  its counts equal the five table counts, the checks are honest about a `file:` database (verdict
+  `attention` in a test process), no token/secret/hash appears anywhere in the serialised body, the
+  reported limits equal the enforced ones, students get `403` and anonymous callers `401`, and the
+  response is `no-store`.
+- **The presentation helpers** (`@quiz/web`, 15) — verdict and status labels/tones, `runtimeLabel`
+  across minutes/hours/days, `latencyLabel` with `null`, `countsLabel` singular/plural and its
+  no-counts fallback, `actionableChecks` ordering (warnings and failures only), and `hostLabel`
+  for a full URL, a bare host and `null`.
+
 ---
 
 ## End-to-end smoke run
@@ -442,6 +469,10 @@ then asserts:
     credentials from another address still → 200
 72. logout → 200 with `Max-Age=0`
 73. unknown route → 404 `NOT_FOUND`
+74. `GET /api/admin/system` → 200, a valid verdict, eight checks, a connected database with counts,
+    trusted origins reported, `no-store`, and none of `authToken`/`jwtSecret`/`passwordHash` anywhere
+    in the raw body
+75. the same endpoint for a student → `403`, and anonymously → `401`
 
 It prints a pass/fail table, exits non-zero on failure, and removes the database afterwards.
 
@@ -597,6 +628,22 @@ QUIZ_WOULD_HAVE_NO_QUESTIONS`; unpublish and the delete goes through.
 - [ ] Sign out and reuse the old cookie via `curl` → the session no longer resolves to a user.
 - [ ] In the admin console, create a new category, then reload `/student/leaderboard` → the new name is
       in the filter row immediately (dimmed, `attempts: 0`), with no rebuild and no code change.
+- [ ] `bun run deploy:check` on a production-shaped environment → `8 passed · 0 failures`, exit `0`;
+      on a bare checkout → `blocked` with "TURSO_DATABASE_URL is not set", exit `1`.
+- [ ] `NODE_ENV=production` with no `JWT_SECRET` → the API refuses to boot and the gate says `blocked`.
+- [ ] `/admin/system` opens from the console sidebar: the verdict banner matches the CLI, the database
+      card names Turso, the counts match `/api/health/db`, and no token or secret is on the page.
+- [ ] Stop the database (or point at a bad token) and reload `/admin/system` → the page still renders,
+      with `connected: false` and no counts, instead of a 500.
+- [ ] `bun run deploy:check --url <host>` against a running production build → all eight probes pass.
+      With `--admin <email>:<wrong-password>` the self-report probe fails while the other seven still
+      pass — each probe is independent.
+- [ ] Point `--url` at a stopped web app → the web probes fail, the API probes still pass, and the
+      command exits `1` rather than throwing.
+- [ ] Check the response headers of a deployed page: `Content-Security-Policy` is present,
+      `Strict-Transport-Security` is present on the https build, and the console shows no violation.
+- [ ] Two API instances behind a load balancer: the rate limit is per instance (documented), the
+      session works on both, and `/api/admin/system` on each reports its own uptime.
 
 ---
 

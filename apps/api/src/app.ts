@@ -119,6 +119,7 @@ export const app = new Hono<AppEnv>()
           '/api/student/attempts/:id/review',
           '/api/student/attempts/:id/submit',
           '/api/admin/analytics',
+          '/api/admin/system',
           '/api/leaderboard',
         ],
       },

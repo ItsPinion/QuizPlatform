@@ -3,8 +3,11 @@ import { Hono } from 'hono';
 import { APP_VERSION } from '../lib/env';
 
 /**
- * Discovery endpoint: what this API exposes today and what the roadmap adds.
- * Handy while the platform is being built day by day.
+ * Discovery endpoint: what this API exposes today.
+ *
+ * Every day of the build plan has shipped, so `roadmap` is empty. It stays in the
+ * payload because clients already read it, and the `deployment` block points at
+ * the rules and the runbook instead.
  */
 export const metaRoutes = new Hono().get('/', (c) =>
   c.json(
@@ -22,6 +25,7 @@ export const metaRoutes = new Hono().get('/', (c) =>
         'GET /api/admin/access': 'ADMIN-only scope descriptor (role guard)',
         'GET /api/admin/stats': 'Dashboard aggregates for the admin console',
         'GET /api/admin/analytics': 'Platform analytics: timeline, pass/fail, popularity',
+        'GET /api/admin/system': 'Deployment self-report: config checks, database, limits',
         'GET /api/admin/users': 'Paged, filtered user directory',
         'GET /api/admin/users/:id': 'One user with attempt statistics',
         'PATCH /api/admin/users/:id': 'Change a user role or status (self-protection included)',
@@ -65,7 +69,16 @@ export const metaRoutes = new Hono().get('/', (c) =>
         cache: 'every response is no-store',
         docs: 'docs/security.md',
       },
-      roadmap: [{ day: 14, area: 'deployment & docs', endpoints: [] }],
+      deployment: {
+        gate: 'GET /api/admin/system evaluates the eight environment rules',
+        check: 'bun run deploy:check — the same rules locally, live probes with --url',
+        containers: 'Dockerfile targets: api (port 3001) and web (port 3000)',
+        migrate: 'drizzle-kit migrate is a release step, never a request path',
+        docs: 'docs/deployment.md',
+      },
+      // Kept at the top level: clients already read it, and an empty list says
+      // "feature complete" more clearly than removing the field.
+      roadmap: [],
     },
     200,
   ),

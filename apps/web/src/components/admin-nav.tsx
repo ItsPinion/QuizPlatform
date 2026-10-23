@@ -5,6 +5,7 @@ import {
   FolderTree,
   LayoutDashboard,
   ListChecks,
+  Server,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -30,6 +31,7 @@ const ITEMS: NavItem[] = [
   { href: '/admin/quizzes', label: 'Quizzes', icon: ListChecks, prefix: true },
   { href: '/admin/categories', label: 'Categories', icon: FolderTree },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/admin/system', label: 'System', icon: Server },
 ];
 
 /**

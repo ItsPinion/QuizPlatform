@@ -8,9 +8,11 @@ import {
   userListResponseSchema,
 } from '@quiz/shared/admin';
 import { PERMISSIONS, type AccessDescriptor } from '@quiz/shared/auth';
+import { systemStatusSchema } from '@quiz/shared/deployment';
 import { Hono } from 'hono';
 
 import { buildAdminAnalytics } from '../lib/admin-analytics';
+import { getSystemStatus } from '../lib/system-status';
 import { buildDashboardStats } from '../lib/admin-stats';
 import { getUserById, listUsers, updateUser } from '../lib/admin-users';
 import { adminCategoryRoutes } from './admin-categories';
@@ -55,6 +57,18 @@ export const adminRoutes = new Hono<AppEnv>()
       { scope: 'ADMIN', user, permissions: [...PERMISSIONS.ADMIN] },
       200,
     );
+  })
+
+  /**
+   * Deployment self-report (Day 14).
+   *
+   * The same rules the CLI runs, answered by the live process: what mode it is
+   * in, what it is connected to, and whether its configuration is fit to serve
+   * traffic. Secrets are never echoed — only facts about them.
+   */
+  .get('/system', async (c) => {
+    const status = await getSystemStatus();
+    return c.json(systemStatusSchema.parse(status), 200);
   })
 
   /* ------------------------------- dashboard ------------------------------ */

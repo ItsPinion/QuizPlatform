@@ -33,9 +33,12 @@
     "db:push": "bun run --filter @quiz/db db:push",
     "db:studio": "bun run --filter @quiz/db db:studio",
     "db:seed": "bun run --filter @quiz/db db:seed",
-    "test:e2e": "bun run scripts/e2e-smoke.ts"
+    "test:e2e": "bun run scripts/e2e-smoke.ts",
+    "deploy:check": "bun run scripts/deploy-check.ts"
   },
   "devDependencies": {
+    "@quiz/db": "workspace:*",
+    "@quiz/shared": "workspace:*",
     "@types/node": "^22.15.0",
     "prettier": "^3.9.10",
     "prettier-plugin-tailwindcss": "^0.8.1",

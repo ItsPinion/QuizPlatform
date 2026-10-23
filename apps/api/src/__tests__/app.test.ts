@@ -129,10 +129,11 @@ describe('GET /api/health/db', () => {
 });
 
 describe('GET /api/meta', () => {
-  it('documents the shipped endpoints and the remaining roadmap', async () => {
+  it('documents the shipped endpoints and an empty roadmap', async () => {
     const { res, body } = await getJson<{
       version: string;
       docs: Record<string, string>;
+      deployment: { gate: string; check: string; migrate: string; docs: string };
       roadmap: { day: number; area: string }[];
     }>('/api/meta');
 
@@ -153,6 +154,7 @@ describe('GET /api/meta', () => {
         'PUT /api/student/attempts/:id/answers/:questionId',
         'POST /api/student/attempts/:id/submit',
         'GET /api/admin/analytics',
+        'GET /api/admin/system',
         'GET /api/leaderboard',
         'GET /api/student/dashboard',
         'GET /api/student/attempts',
@@ -160,8 +162,15 @@ describe('GET /api/meta', () => {
       ]),
     );
 
+    // Every milestone has shipped, so nothing is still promised.
     const areas = body.roadmap.map((entry) => entry.area);
-    expect(areas).toEqual(['deployment & docs']);
+    expect(areas).toEqual([]);
+
+    // The deployment story is documented where a client can find it.
+    expect(body.deployment.gate).toContain('/api/admin/system');
+    expect(body.deployment.check).toContain('deploy:check');
+    expect(body.deployment.migrate).toContain('release step');
+    expect(body.deployment.docs).toBe('docs/deployment.md');
     // Shipped days drop off the roadmap: auth (2), quizzes (5), categories &
     // questions (6), the quiz-taking interface (7) and submission & scoring (8)
     // are all live.

@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   ListChecks,
   Radio,
+  ServerCog,
   ShieldCheck,
   TerminalSquare,
   Timer,
@@ -19,6 +20,7 @@ import {
 
 import { AccessAreas } from '@/components/access-areas';
 import { AdminAnalyticsPreview } from '@/components/admin-analytics-preview';
+import { DeploymentPreview } from '@/components/deployment-preview';
 import { LeaderboardPreview } from '@/components/leaderboard-preview';
 import { AdminConsole } from '@/components/admin-console';
 import { QuestionManagement } from '@/components/question-management';
@@ -100,7 +102,7 @@ export default function HomePage() {
             <div>
               <Badge className="border-primary/30 bg-primary/10 gap-2 py-1">
                 <span className="bg-primary size-1.5 rounded-full" />
-                Milestone · Day 13 of 14 complete
+                Milestone · Day 14 of 14 complete
               </Badge>
 
               <h1 className="mt-6 text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-[3.4rem]">
@@ -117,8 +119,10 @@ export default function HomePage() {
                 areas are separated by role guards on both sides, the admin console reports live
                 statistics, quizzes can be created, edited, published and retired — and students can
                 take them: a server-timed attempt, a server-graded submission, a result you can
-                learn from, and now a dashboard that turns those rows into averages, a score trend,
-                category strengths and a fortnight of activity.
+                learn from, a dashboard that turns those rows into averages, a score trend and
+                category strengths — and it is ready to leave the machine: one Dockerfile, two
+                runtimes, a deployment gate that refuses an unsafe configuration and a health screen
+                that says what the process is actually connected to.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -419,6 +423,20 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* ----------------------------- deployment --------------------------- */}
+        <section id="deployment" className="border-border/60 w-full border-y">
+          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
+            <SectionHeading
+              eyebrow="Day 14 · deployment & docs"
+              title="Shipping is a check, not a hope"
+              description="Eight rules over the environment decide whether this process may serve traffic: a Turso URL and token, a secret long enough to sign with, a trusted origin, a known proxy target, production mode, and limits inside their bounds. The same rules run before a build, over the wire after a deploy, and on the admin health screen — one implementation, three places to read it."
+            />
+            <div className="mt-8">
+              <DeploymentPreview />
+            </div>
+          </div>
+        </section>
+
         {/* ----------------------------- workspace ---------------------------- */}
         <section id="workspace" className="border-border/60 bg-card/20 w-full border-y">
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
@@ -438,8 +456,8 @@ export default function HomePage() {
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
             <SectionHeading
               eyebrow="Two-week plan"
-              title="Thirteen days shipped, one to go"
-              description="The spec's build schedule, tracked in the repo. Day 13 hardens the platform: rate limiting on the auth routes, a CSRF origin guard, a body-size cap, scoped JWTs, a CSP on every page — and an adversarial suite that attacks each area the spec names."
+              title="Fourteen days, all of them shipped"
+              description="The spec's build schedule, tracked in the repo. Day 14 takes it off the laptop: a deployment gate over the environment, a health screen that reports what the process is really connected to, a production smoke test, and the runbook that covers migrate, roll back and verify. Day 13 is still the floor it stands on — rate limits, a CSRF origin guard, a body cap, scoped JWTs and a CSP on every page."
             />
             <div className="mt-8">
               <Roadmap />
@@ -449,7 +467,7 @@ export default function HomePage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <LayoutDashboard className="text-primary size-4" />
-                  Shipped in Days 2–13
+                  Shipped in Days 2–14
                 </CardTitle>
                 <CardDescription>
                   Everything below is covered by the test suite and live on this deployment.
@@ -567,6 +585,18 @@ export default function HomePage() {
                   Rate-limited sign-ins that cannot lock the owner out, a same-origin guard on every
                   write, scoped JWTs, a body-size cap and a CSP — each one covered by an attack
                   test.
+                </div>
+                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
+                  <div className="text-foreground flex items-center gap-1.5 font-medium">
+                    <ServerCog className="text-success size-3.5" />
+                    Deployment gate
+                  </div>
+                  Eight environment rules become one verdict, reported before a build, over the wire
+                  after a deploy and on{' '}
+                  <code className="bg-muted rounded px-1 py-0.5 font-mono text-[11px]">
+                    /admin/system
+                  </code>{' '}
+                  — with a Dockerfile and a runbook behind it.
                 </div>
               </CardContent>
             </Card>
