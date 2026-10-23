@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { hashPassword } from '@quiz/shared/crypto';
 
+import { diagnoseDatabaseError, fetchRawResponse, formatDiagnosis } from './diagnostics';
 import { db } from './index';
 import { loadEnvFiles } from './load-env';
 import { resolveDatabaseConfig } from './env';
@@ -362,7 +363,22 @@ function quizBySlug(slug: string) {
 
 main()
   .then(() => process.exit(0))
-  .catch((error) => {
-    console.error('✖ Seed failed:', error);
+  .catch(async (error) => {
+    const config = (() => {
+      try {
+        return resolveDatabaseConfig();
+      } catch {
+        return undefined;
+      }
+    })();
+
+    const diagnosis = diagnoseDatabaseError(error);
+    if (config && (diagnosis.kind === 'rejected' || diagnosis.kind === 'auth')) {
+      diagnosis.rawBody = await fetchRawResponse(config);
+    }
+
+    console.error(formatDiagnosis(diagnosis, config));
+
+    if (process.env.DEBUG === '1') console.error(error);
     process.exit(1);
   });

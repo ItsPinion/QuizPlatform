@@ -2,7 +2,7 @@ import { db, getDatabaseConfig, schema } from '@quiz/db';
 import type { DatabaseStatus, Health } from '@quiz/shared';
 import { Hono } from 'hono';
 
-import { classifyDatabaseError, describeError } from '../lib/db-errors';
+import { classifyDatabaseError, describeError, isRejectedRequest } from '../lib/db-errors';
 import { APP_VERSION } from '../lib/env';
 import { errorBody } from '../lib/errors';
 
@@ -82,15 +82,19 @@ export const healthRoutes = new Hono()
         );
       }
 
+      const rejected = isRejectedRequest(error);
+      const hint = rejected
+        ? 'Turso rejected the request for this database. Confirm TURSO_DATABASE_URL matches `turso db show <db> --url`, then issue a fresh token with `turso db tokens create <db>`.'
+        : 'Check TURSO_DATABASE_URL and TURSO_AUTH_TOKEN, then run `bun run db:migrate`.';
+
       return c.json(
         {
           ...errorBody(
             'DATABASE_UNAVAILABLE',
-            'The API is running but cannot reach the database.',
-            {
-              hint: 'Check TURSO_DATABASE_URL and TURSO_AUTH_TOKEN, then run `bun run db:migrate`.',
-              reason,
-            },
+            rejected
+              ? 'The API is running but Turso rejected its credentials.'
+              : 'The API is running but cannot reach the database.',
+            { hint, reason },
           ),
           ...(process.env.NODE_ENV === 'production' ? {} : { target: config.target }),
         },

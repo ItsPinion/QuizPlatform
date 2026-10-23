@@ -22,6 +22,87 @@ function looksRemote(url: string): boolean {
 }
 
 /**
+ * Normalise a pasted connection URL.
+ *
+ * Chat apps and rich-text editors add noise that looks harmless but produces a
+ * host Turso rejects: markdown links, smart quotes, angle brackets, trailing
+ * slashes, zero-width characters. Anything that survives cleaning but is still
+ * not a valid URL is rejected here with a readable message.
+ */
+export function normalizeDatabaseUrl(raw: string): { url: string; repaired: boolean } {
+  let value = raw.trim();
+  let repaired = false;
+
+  // Markdown link: [label](https://host) or [https://host](https://host)
+  const markdown = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(value);
+  if (markdown) {
+    const label = markdown[1]?.trim() ?? '';
+    const target = markdown[2]?.trim() ?? '';
+    value = /^(libsql|https?|wss?):\/\//i.test(label) ? label : target;
+    repaired = true;
+  }
+
+  // Strip wrapping quotes / backticks / angle brackets.
+  const unwrapped = value.replace(/^[`'"<\[]+/, '').replace(/[`'">\]]+$/, '');
+  if (unwrapped !== value) {
+    value = unwrapped;
+    repaired = true;
+  }
+
+  // Remove invisible characters (zero-width space/joiners, NBSP, BOM).
+  const cleaned = value.replace(/[\u200b-\u200d\u2060\ufeff\u00a0]/g, '');
+  if (cleaned !== value) {
+    value = cleaned;
+    repaired = true;
+  }
+
+  // Trailing slashes are meaningless on both libsql:// and file: URLs.
+  const trimmedSlashes = value.replace(/\/+$/, '');
+  if (trimmedSlashes !== value) {
+    value = trimmedSlashes;
+    repaired = true;
+  }
+
+  if (/\s/.test(value)) {
+    throw new Error(
+      `TURSO_DATABASE_URL contains whitespace: ${JSON.stringify(raw)}. It must be a single URL such as libsql://<db>-<org>.turso.io`,
+    );
+  }
+
+  if (!/^(libsql|https?|wss?):\/\/|^file:/.test(value)) {
+    throw new Error(
+      `TURSO_DATABASE_URL must start with libsql://, https:// or file:. Received ${JSON.stringify(raw)}.`,
+    );
+  }
+
+  if (/^[a-z]+:\/\//i.test(value)) {
+    try {
+      // eslint-disable-next-line no-new
+      new URL(value);
+    } catch {
+      throw new Error(
+        `TURSO_DATABASE_URL is not a valid URL: ${JSON.stringify(raw)}. Expected libsql://<db>-<org>.turso.io`,
+      );
+    }
+  }
+
+  return { url: value, repaired };
+}
+
+/** Tokens are pasted with quotes and line breaks surprisingly often. */
+export function normalizeAuthToken(raw: string): string {
+  return (
+    raw
+      .trim()
+      .replace(/^[`'"\s]+/, '')
+      .replace(/[`'"\s]+$/, '')
+      .replace(/[\u200b-\u200d\u2060\ufeff\u00a0]/g, '')
+      // Pasted from docs: the client adds the scheme itself, so a stray prefix breaks auth.
+      .replace(/^bearer\s+/i, '')
+  );
+}
+
+/**
  * Resolve the Turso Cloud connection from the environment.
  *
  * The application always talks to Turso Cloud:
@@ -37,9 +118,9 @@ function looksRemote(url: string): boolean {
 export function resolveDatabaseConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): ResolvedDatabaseConfig {
-  const rawUrl = (env.TURSO_DATABASE_URL ?? env.DATABASE_URL)?.trim();
+  const rawUrlInput = (env.TURSO_DATABASE_URL ?? env.DATABASE_URL)?.trim();
 
-  if (!rawUrl) {
+  if (!rawUrlInput) {
     throw new Error(
       [
         'TURSO_DATABASE_URL is not set.',
@@ -54,8 +135,15 @@ export function resolveDatabaseConfig(
     );
   }
 
+  const { url: rawUrl, repaired } = normalizeDatabaseUrl(rawUrlInput);
+
+  if (repaired) {
+    console.warn(`[db] cleaned up TURSO_DATABASE_URL → ${redactUrl(rawUrl)}`);
+  }
+
   const target: DatabaseTarget = looksRemote(rawUrl) ? 'turso' : 'file';
-  const authToken = env.TURSO_AUTH_TOKEN?.trim();
+  const rawToken = env.TURSO_AUTH_TOKEN;
+  const authToken = rawToken ? normalizeAuthToken(rawToken) : undefined;
 
   if (target === 'turso' && !authToken) {
     throw new Error(

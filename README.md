@@ -295,12 +295,12 @@ bun run test                    # all workspaces through Turbo
 bun run test --filter=@quiz/db  # one package
 ```
 
-42 tests cover the scaffolding end to end:
+88 tests cover the scaffolding end to end:
 
 **`@quiz/shared`** (8) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, and the seed credential contract.
 
-**`@quiz/db`** (22) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
+**`@quiz/db`** (58) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
 and the uniqueness/lookup indexes; column defaults; millisecond timestamp precision; unique email,
 slug and per-attempt answer constraints; quiz → questions/options/attempts/answers cascade;
 category-with-quizzes protected by `restrict`; user deletion cascading while nulling the quiz author;
@@ -310,7 +310,7 @@ integrity (quiz/question/option counts, one correct option each, attempt percent
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
 
-**`@quiz/api`** (12) — service banner, health payload shape, request IDs, security headers, CORS
+**`@quiz/api`** (22) — service banner, health payload shape, request IDs, security headers, CORS
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
 the database is unreachable, `/api/meta` roadmap, and the 404 error envelope.
 
@@ -385,6 +385,30 @@ Day 1 (done): monorepo, API, Drizzle schema, migrations, seed, env config, tests
 | `DATABASE_NOT_CONFIGURED` | No `TURSO_DATABASE_URL`, or a `libsql://` URL without a token      | Fill in `.env`                        |
 | `DATABASE_SCHEMA_MISSING` | Credentials and connectivity are fine, but the tables do not exist | `bun run db:migrate` (then `db:seed`) |
 | `DATABASE_UNAVAILABLE`    | The network or driver failed (`fetch failed → ECONNRESET`, …)      | Check connectivity / credentials      |
+
+**`SERVER_ERROR: Server returned HTTP status 400` from `db:migrate` / `db:seed`** — Turso accepted
+the TCP connection but rejected the statement. Migrations and seeding print a diagnosis before
+exiting, including Turso's own response body, so the real reason is never hidden:
+
+```
+✖ Turso accepted the connection but rejected the query (HTTP 400).
+  reason: SERVER_ERROR: Server returned HTTP status 400
+  Raw response from Turso:
+  HTTP 400 {"error":"..."}
+```
+
+That is almost always a token belonging to a different database (or a URL pasted with stray
+characters). Confirm the pair and issue a fresh token:
+
+```bash
+turso db show <db> --url        # must match TURSO_DATABASE_URL exactly
+turso db tokens create <db>     # put it in TURSO_AUTH_TOKEN
+turso db list                    # is the database still there?
+```
+
+`TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are normalised before use (quotes, backticks,
+markdown links and zero-width characters are stripped, and a warning is printed when a value had
+to be repaired), so a mangled paste is reported instead of failing later.
 
 The reason is also printed in the API server log, e.g.
 `[db] readiness check failed against libsql://…: … → SQLITE_ERROR: no such table: users`.
