@@ -7,6 +7,7 @@ import {
   GitBranch,
   KeyRound,
   LayoutDashboard,
+  ListChecks,
   Radio,
   ShieldCheck,
   TerminalSquare,
@@ -14,6 +15,7 @@ import {
 
 import { AccessAreas } from '@/components/access-areas';
 import { AdminConsole } from '@/components/admin-console';
+import { QuizManagement } from '@/components/quiz-management';
 import { Roadmap } from '@/components/roadmap';
 import { SectionHeading } from '@/components/section-heading';
 import { SetupStatus } from '@/components/setup-status';
@@ -43,6 +45,9 @@ const TERMINAL_LINES: { prompt?: boolean; text: string; tone?: 'muted' | 'accent
   { prompt: true, text: 'curl -b jar.txt /api/admin/stats' },
   { text: '200 ▸ 4 users · 10 quizzes · 47 questions', tone: 'ok' },
   { text: 'PATCH /api/admin/users/:id ▸ 409 SELF_LOCKOUT', tone: 'muted' },
+  { prompt: true, text: 'curl -b jar.txt -X POST /api/admin/quizzes' },
+  { text: '201 ▸ DRAFT · slug derived from title', tone: 'ok' },
+  { text: 'publish ▸ 409 · QUIZ_HAS_NO_QUESTIONS', tone: 'muted' },
 ];
 
 const HIGHLIGHTS = [
@@ -78,7 +83,7 @@ export default function HomePage() {
             <div>
               <Badge className="border-primary/30 bg-primary/10 gap-2 py-1">
                 <span className="bg-primary size-1.5 rounded-full" />
-                Milestone · Day 4 of 14 complete
+                Milestone · Day 5 of 14 complete
               </Badge>
 
               <h1 className="mt-6 text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-[3.4rem]">
@@ -92,8 +97,8 @@ export default function HomePage() {
               <p className="text-muted-foreground mt-5 max-w-xl text-[15px] leading-relaxed">
                 Turborepo monorepo with a Next.js 16 web app, a Hono RPC API and a Drizzle schema on
                 Turso. Sign-in is real — scrypt hashes, httpOnly JWT cookies — the admin and student
-                areas are separated by role guards on both sides, and the admin console now reports
-                live statistics and manages accounts.
+                areas are separated by role guards on both sides, the admin console reports live
+                statistics, and quizzes can be created, edited, published and retired.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -268,6 +273,20 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* ------------------------------ quizzes ------------------------------ */}
+        <section id="quizzes" className="border-border/60 w-full border-y">
+          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
+            <SectionHeading
+              eyebrow="Day 5 · quiz management"
+              title="Create it, shape it, decide when it goes live"
+              description="Full CRUD for quizzes behind the same ADMIN guard as the rest of the console — with two rules that keep the platform honest: nothing publishes without questions, and nothing with student history gets deleted."
+            />
+            <div className="mt-8">
+              <QuizManagement />
+            </div>
+          </div>
+        </section>
+
         {/* ----------------------------- workspace ---------------------------- */}
         <section id="workspace" className="border-border/60 bg-card/20 w-full border-y">
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
@@ -287,8 +306,8 @@ export default function HomePage() {
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
             <SectionHeading
               eyebrow="Two-week plan"
-              title="Four days shipped, ten to go"
-              description="The spec's build schedule, tracked in the repo. Day 4 adds the admin dashboard shell, aggregate statistics and user management on top of the Day 3 role guards."
+              title="Five days shipped, nine to go"
+              description="The spec's build schedule, tracked in the repo. Day 5 adds quiz CRUD with a guarded lifecycle, on top of the Day 4 dashboard and the Day 3 role guards."
             />
             <div className="mt-8">
               <Roadmap />
@@ -298,13 +317,13 @@ export default function HomePage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <LayoutDashboard className="text-primary size-4" />
-                  Shipped in Days 2–4
+                  Shipped in Days 2–5
                 </CardTitle>
                 <CardDescription>
                   Everything below is covered by the test suite and live on this deployment.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="text-muted-foreground grid gap-3 text-[12.5px] sm:grid-cols-2 lg:grid-cols-4">
+              <CardContent className="text-muted-foreground grid gap-3 text-[12.5px] sm:grid-cols-2 lg:grid-cols-3">
                 <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
                   <div className="text-foreground flex items-center gap-1.5 font-medium">
                     <KeyRound className="text-success size-3.5" />
@@ -342,6 +361,14 @@ export default function HomePage() {
                   </div>
                   Six aggregates, newest accounts and attempts, plus a searchable directory where
                   role and status changes are one guarded PATCH away.
+                </div>
+                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
+                  <div className="text-foreground flex items-center gap-1.5 font-medium">
+                    <ListChecks className="text-success size-3.5" />
+                    Quiz management
+                  </div>
+                  Create, edit and delete quizzes, derive slugs on the server, and publish or
+                  unpublish only when the rules allow it.
                 </div>
               </CardContent>
             </Card>

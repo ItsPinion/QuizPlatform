@@ -7,10 +7,13 @@ import {
   userListResponseSchema,
 } from '@quiz/shared/admin';
 import { PERMISSIONS, type AccessDescriptor } from '@quiz/shared/auth';
+import { categoryListResponseSchema } from '@quiz/shared/quiz';
 import { Hono } from 'hono';
 
 import { buildDashboardStats } from '../lib/admin-stats';
 import { getUserById, listUsers, updateUser } from '../lib/admin-users';
+import { listCategories } from '../lib/admin-quizzes';
+import { adminQuizRoutes } from './admin-quizzes';
 import { ApiError, jsonBody } from '../lib/errors';
 import type { AppEnv } from '../lib/types';
 import { requireAdmin } from '../middleware/auth';
@@ -85,6 +88,18 @@ export const adminRoutes = new Hono<AppEnv>()
 
     return c.json(userDetailResponseSchema.parse({ user }), 200);
   })
+
+  /* ------------------------------- quizzes -------------------------------- */
+  /**
+   * Read-only for now: Day 6 adds create/update/delete for categories, and the
+   * quiz form needs the list to populate its select today.
+   */
+  .get('/categories', async (c) => {
+    const categories = await listCategories();
+    return c.json(categoryListResponseSchema.parse({ categories }), 200);
+  })
+
+  .route('/quizzes', adminQuizRoutes)
 
   /** Explicit fallback so a wrong method or unknown path answers as an envelope. */
   .all('*', (c) => {

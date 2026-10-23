@@ -183,13 +183,22 @@ export default async function AdminOverviewPage() {
                   value={stats.attempts.learners}
                   total={stats.users.students}
                 />
-                <Link
-                  href="/admin/users"
-                  className="text-primary inline-flex items-center gap-1.5 pt-1 text-[12.5px] font-medium hover:underline"
-                >
-                  Manage users
-                  <ArrowRight className="size-3.5" />
-                </Link>
+                <div className="flex flex-wrap items-center gap-4 pt-1">
+                  <Link
+                    href="/admin/users"
+                    className="text-primary inline-flex items-center gap-1.5 text-[12.5px] font-medium hover:underline"
+                  >
+                    Manage users
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                  <Link
+                    href="/admin/quizzes"
+                    className="text-primary inline-flex items-center gap-1.5 text-[12.5px] font-medium hover:underline"
+                  >
+                    Manage quizzes
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                </div>
               </CardContent>
             </Card>
 

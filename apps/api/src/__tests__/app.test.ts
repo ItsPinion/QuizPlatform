@@ -131,9 +131,12 @@ describe('GET /api/meta', () => {
     );
 
     const areas = body.roadmap.map((entry) => entry.area);
-    expect(areas).toEqual(expect.arrayContaining(['quizzes', 'attempts', 'leaderboard']));
-    // Day 2 shipped, so auth must no longer be listed as upcoming work.
+    expect(areas).toEqual(
+      expect.arrayContaining(['categories & questions', 'attempts', 'leaderboard']),
+    );
+    // Shipped days drop off the roadmap: auth (Day 2) and quizzes (Day 5) are live.
     expect(areas).not.toContain('auth');
+    expect(areas).not.toContain('quizzes');
   });
 });
 

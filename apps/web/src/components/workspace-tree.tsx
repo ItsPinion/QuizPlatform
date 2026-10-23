@@ -6,11 +6,12 @@ const tree = `quizplatform/
 ├─ apps/
 │  ├─ web/            Next.js 16 · App Router · Tailwind v4
 │  │  ├─ src/app/              landing, /login, /register, /admin, /student
-│  │  ├─ src/app/admin/        layout + console overview + /admin/users
+│  │  ├─ src/app/admin/        layout · overview · users · quizzes (list/new/[id])
 │  │  ├─ src/lib/session.ts    server-side session lookup (cookie → API)
 │  │  ├─ src/lib/api-server.ts cookie-forwarding RPC client for pages
 │  │  ├─ src/lib/guards.ts     role decision for /admin and /student
 │  │  ├─ src/lib/admin-params.ts  filters ⇄ ?search=&role=&page=
+│  │  ├─ src/lib/quiz-params.ts   quiz filters, badges, lifecycle hints
 │  │  ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
 │  │  ├─ src/components/       admin nav, users table, stat cards, auth forms
 │  │  └─ next.config.ts        /api/* → Hono rewrite
@@ -20,6 +21,8 @@ const tree = `quizplatform/
 │     ├─ src/middleware/       requireAuth · requireAdmin · requireStudent
 │     ├─ src/lib/admin-stats.ts   dashboard aggregates (one per section)
 │     ├─ src/lib/admin-users.ts   directory query + guarded role/status writes
+│     ├─ src/lib/admin-quizzes.ts CRUD, derived slugs, publish/delete rules
+│     ├─ src/routes/admin-quizzes.ts  /api/admin/quizzes (mounted under the guard)
 │     ├─ src/lib/auth.ts       JWT signing + session cookies
 │     └─ src/lib/              env, jsonBody validator, error envelope
 ├─ packages/
@@ -28,7 +31,7 @@ const tree = `quizplatform/
 │  │  ├─ src/seed.ts           rich demo dataset
 │  │  ├─ src/__tests__/        schema + seed integrity
 │  │  └─ migrations/           drizzle-kit SQL (checked in)
-│  ├─ shared/         Zod enums, auth + admin contracts, scrypt hashing
+│  ├─ shared/         Zod enums, auth + admin + quiz contracts, scrypt hashing
 │  └─ test-utils/     package-manager-agnostic test helpers
 ├─ turbo.json         task graph + cache
 ├─ package.json       Bun workspaces + scripts (pins Bun)
@@ -53,6 +56,14 @@ const highlights = [
     note: 'server-rendered directory, filters live in the URL',
   },
   { path: 'packages/shared/src/admin.ts', note: 'stats + user contracts, API and UI' },
+  {
+    path: 'packages/shared/src/quiz.ts',
+    note: 'slug derivation + the publish/delete rules, shared',
+  },
+  {
+    path: 'apps/api/src/lib/admin-quizzes.ts',
+    note: 'one place for CRUD and the lifecycle guards',
+  },
   { path: 'apps/web/src/lib/api.ts', note: 'hc<AppType>() — zero codegen RPC' },
   { path: 'packages/db/src/schema.ts', note: 'users → attempts → answers relations' },
   { path: 'packages/shared/src/auth.ts', note: 'login schemas + role permissions, both apps' },

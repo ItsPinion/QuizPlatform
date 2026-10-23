@@ -76,6 +76,8 @@ export const app = new Hono<AppEnv>()
           '/api/admin/access',
           '/api/admin/stats',
           '/api/admin/users',
+          '/api/admin/categories',
+          '/api/admin/quizzes',
           '/api/student/access',
         ],
       },

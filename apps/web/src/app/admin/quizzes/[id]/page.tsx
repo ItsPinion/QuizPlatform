@@ -1,0 +1,176 @@
+import type { CategoryListResponse, QuizDetailResponse } from '@quiz/shared/quiz';
+import { ArrowLeft, CalendarClock, HelpCircle, ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
+import { notFound, redirect } from 'next/navigation';
+
+import { QuizActions } from '@/components/quiz-actions';
+import { QuizForm } from '@/components/quiz-form';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { serverApi } from '@/lib/api-server';
+import { decideAccess } from '@/lib/guards';
+import { formatDuration, statusTone } from '@/lib/quiz-params';
+import { getSession } from '@/lib/session';
+
+export const metadata = { title: 'Quiz — Admin console' };
+
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
+
+export default async function AdminQuizPage({ params }: PageProps) {
+  const { id } = await params;
+  const decision = decideAccess(await getSession(), 'ADMIN', `/admin/quizzes/${id}`);
+  if (!decision.allowed) redirect(decision.redirectTo);
+
+  let quiz: QuizDetailResponse['quiz'] | null = null;
+  let categories: CategoryListResponse['categories'] = [];
+  let unreachable = false;
+
+  try {
+    const api = await serverApi();
+    const [quizRes, categoryRes] = await Promise.all([
+      api.api.admin.quizzes[':id'].$get({ param: { id } }),
+      api.api.admin.categories.$get(),
+    ]);
+
+    // The RPC type only knows the declared 200; error statuses arrive at runtime.
+    if ((quizRes.status as number) === 404) notFound();
+    if (quizRes.ok) quiz = (await quizRes.json()).quiz;
+    if (categoryRes.ok) categories = (await categoryRes.json()).categories;
+  } catch {
+    unreachable = true;
+  }
+
+  if (unreachable || !quiz) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center">
+          <p className="text-sm font-medium">This quiz could not be loaded.</p>
+          <p className="text-muted-foreground mt-1 text-[12.5px]">
+            Check the API on port 3001, then{' '}
+            <Link href="/admin/quizzes" className="text-primary hover:underline">
+              return to the list
+            </Link>
+            .
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <header className="space-y-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge variant="warning" className="gap-1.5">
+            <ShieldCheck />
+            ADMIN
+          </Badge>
+          <Badge variant={statusTone(quiz.status)}>{quiz.status}</Badge>
+        </div>
+
+        <Link
+          href="/admin/quizzes"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-[12.5px]"
+        >
+          <ArrowLeft className="size-3.5" />
+          Quizzes
+        </Link>
+
+        <h1 className="text-2xl font-semibold tracking-tight">{quiz.title}</h1>
+        <p className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px]">
+          <span className="font-mono">{quiz.slug}</span>
+          <span aria-hidden="true">·</span>
+          <span>{quiz.categoryName}</span>
+          <span aria-hidden="true">·</span>
+          <span>{formatDuration(quiz.durationMinutes)}</span>
+          <span aria-hidden="true">·</span>
+          <span>pass at {quiz.passingScore}%</span>
+          <span aria-hidden="true">·</span>
+          <span>
+            {quiz.questionCount} question{quiz.questionCount === 1 ? '' : 's'}
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            {quiz.attemptCount} attempt{quiz.attemptCount === 1 ? '' : 's'}
+          </span>
+        </p>
+      </header>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Quiz details</CardTitle>
+            <CardDescription>
+              Changes save through <code className="bg-muted rounded px-1">PATCH</code> and are
+              validated by the same schema the API uses.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <QuizForm categories={categories} quiz={quiz} />
+          </CardContent>
+        </Card>
+
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Lifecycle</CardTitle>
+              <CardDescription>
+                Published quizzes are visible to students; drafts and unpublished ones are not.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <QuizActions quiz={quiz} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <HelpCircle className="text-primary size-4" />
+                Questions
+              </CardTitle>
+              <CardDescription>
+                Question and option editing is Day 6. The count above is live: a quiz needs at least
+                one question before it can be published.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <CalendarClock className="text-primary size-4" />
+                Record
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-muted-foreground space-y-1.5 text-[12px]">
+              <p>
+                Created{' '}
+                <span className="text-foreground">
+                  {new Date(quiz.createdAt).toLocaleString(undefined, {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                  })}
+                </span>
+              </p>
+              <p>
+                Updated{' '}
+                <span className="text-foreground">
+                  {new Date(quiz.updatedAt).toLocaleString(undefined, {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                  })}
+                </span>
+              </p>
+              <p className="truncate font-mono text-[11px]">{quiz.id}</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -3,8 +3,8 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test       # 258 unit + integration tests across the four workspaces
-bun run test:e2e   # 25 checks against a real HTTP server (own process, own port)
+bun run test       # 338 unit + integration tests across the four workspaces
+bun run test:e2e   # 34 checks against a real HTTP server (own process, own port)
 ```
 
 Neither touches Turso. Every suite builds a throwaway `file:` database in `.data/` with the project's
@@ -16,12 +16,12 @@ tests.
 
 ## What runs where
 
-| Workspace      | Tests | Focus                                                                                       |
-| -------------- | ----- | ------------------------------------------------------------------------------------------- |
-| `@quiz/shared` | 42    | scrypt + auth contracts, session constants, Day 4 admin schemas                             |
-| `@quiz/db`     | 58    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring    |
-| `@quiz/api`    | 111   | health/readiness, auth flows, session forgery/expiry, guards, admin stats & user management |
-| `@quiz/web`    | 47    | API error-envelope narrowing, page guards, user-directory parameter parsing                 |
+| Workspace      | Tests | Focus                                                                                    |
+| -------------- | ----- | ---------------------------------------------------------------------------------------- |
+| `@quiz/shared` | 67    | scrypt + auth contracts, admin schemas, quiz slugs and lifecycle rules                   |
+| `@quiz/db`     | 58    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring |
+| `@quiz/api`    | 147   | health/readiness, auth flows, session forgery/expiry, guards, stats/users/quizzes        |
+| `@quiz/web`    | 66    | error envelopes, page guards, user-directory and quiz-screen parameter helpers           |
 
 Run one workspace at a time when you are iterating:
 
@@ -78,6 +78,25 @@ bun run test --filter=@quiz/web
 - **Web parameters** — filter parsing with fallbacks, `toUserQuery`, `usersHref` round-trips and
   percent-encoding, filter summaries, `rangeLabel` past the end, initials, and relative-day labels.
 
+### Quiz management coverage (Day 5)
+
+- **Directory** — status/difficulty/category filters, case-insensitive title search, both sorts,
+  pagination, cleared filters, and 422s for unknown statuses, difficulties and page sizes.
+- **Aggregates** — `questionCount` and `attemptCount` are counted `distinct`, so two joins do not
+  multiply each other; the test compares the API's number with the rows actually in the table.
+- **Creation** — derived slug, `-2` suffix on a duplicate title, create-time defaults, blank
+  description/thumbnail becoming `null`, unknown category → 422, and the whole validation matrix
+  (short title, duration 0/181, score 101, attempts 0/11, bad URL).
+- **Editing** — partial updates leave other columns alone, the slug survives a rename, a quiz can
+  move category, `{}` → 422, unknown category → 422, unknown quiz → 404.
+- **Lifecycle** — publish needs a question, publishing twice is idempotent, unpublishing a draft is
+  409, republishing works, and all of it is 403 for a student.
+- **Deletion** — cascades questions for an untouched quiz, refuses with `QUIZ_HAS_ATTEMPTS` when
+  attempts exist (and leaves the quiz in place), 404 for unknown ids.
+- **Contracts** — `slugify` (case, punctuation, accents, length cap), `uniqueSlug` (suffixes, `quiz`
+  fallback, `Set` input), create defaults, update-without-defaults, list query defaults, and the
+  `canPublish` / `canDelete` helpers.
+
 ---
 
 ## End-to-end smoke run
@@ -111,8 +130,17 @@ then asserts:
 21. admin demoting themselves → 409 `SELF_LOCKOUT`
 22. deactivation → the victim's next request is 403 `ACCOUNT_INACTIVE`, and reactivation restores it
 23. `/api/admin/users` → 403 for the student
-24. logout → 200 with `Max-Age=0`
-25. unknown route → 404 `NOT_FOUND`
+24. `/api/admin/categories` → 200 with the seeded categories
+25. `/api/admin/quizzes` → 200 with joined aggregates
+26. create a quiz → 201, `DRAFT`, slug derived from the title
+27. `PATCH` it → 200, title and duration updated, slug unchanged
+28. publish it → 409 `QUIZ_HAS_NO_QUESTIONS`
+29. a seeded draft publishes and then unpublishes
+30. deleting an attempted quiz → 409 `QUIZ_HAS_ATTEMPTS`
+31. deleting the created quiz → 200, then `GET` → 404
+32. quiz management → 403 for the student
+33. logout → 200 with `Max-Age=0`
+34. unknown route → 404 `NOT_FOUND`
 
 It prints a pass/fail table, exits non-zero on failure, and removes the database afterwards.
 
@@ -152,6 +180,15 @@ Useful after changing auth, the proxy, or the cookie. Start with `bun dev`, then
       `curl` answers `409 SELF_LOCKOUT`.
 - [ ] Promote a student to `ADMIN`, open `/admin` in their browser → it now renders; demote them and
       the next request is `403 FORBIDDEN`.
+- [ ] `/admin/quizzes` lists ten seeded quizzes; filtering by `DRAFT` and by a category narrows the
+      table, and the URL keeps the filters across a reload.
+- [ ] Create a quiz → it lands on its edit page as a `DRAFT` with a derived slug; the **Publish**
+      button is disabled with "Add at least one question first".
+- [ ] Rename the quiz → the title changes, the slug in the header does not.
+- [ ] Publish a seeded draft with questions → the badge turns green; unpublish → it turns grey.
+- [ ] Try to delete a quiz that has attempts → the button is disabled and says why; `curl` the same
+      `DELETE` and get `409 QUIZ_HAS_ATTEMPTS`.
+- [ ] Delete a freshly created quiz → it disappears and the API then answers `404`.
 
 ---
 

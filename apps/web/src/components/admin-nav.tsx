@@ -20,12 +20,14 @@ interface NavItem {
   icon: LucideIcon;
   /** Set for modules that are still on the roadmap — rendered, not clickable. */
   day?: number;
+  /** Highlight on nested routes too (`/admin/quizzes/:id`). */
+  prefix?: boolean;
 }
 
 const ITEMS: NavItem[] = [
   { href: '/admin', label: 'Overview', icon: LayoutDashboard },
   { href: '/admin/users', label: 'Users', icon: Users },
-  { href: '/admin/quizzes', label: 'Quizzes', icon: ListChecks, day: 5 },
+  { href: '/admin/quizzes', label: 'Quizzes', icon: ListChecks, prefix: true },
   { href: '/admin/categories', label: 'Categories', icon: FolderTree, day: 6 },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3, day: 11 },
 ];
@@ -44,7 +46,9 @@ export function AdminNav() {
     <nav aria-label="Admin sections" className="lg:sticky lg:top-24">
       <ul className="flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:gap-1 lg:overflow-visible lg:pb-0">
         {ITEMS.map((item) => {
-          const active = pathname === item.href;
+          const active =
+            pathname === item.href ||
+            (item.prefix === true && pathname.startsWith(`${item.href}/`));
           const upcoming = item.day !== undefined;
 
           if (upcoming) {

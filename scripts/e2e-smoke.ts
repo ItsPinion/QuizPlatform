@@ -471,6 +471,193 @@ try {
     return '403 · FORBIDDEN';
   });
 
+  /* ------------------------------- Day 5 --------------------------------- */
+
+  let createdQuizId = '';
+  let createdQuizSlug = '';
+
+  await check('GET /api/admin/categories lists categories with counts', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/categories`, {
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as { categories: { id: string; quizCount: number }[] };
+    if (body.categories.length < 5) throw new Error('expected the seeded categories');
+
+    return `200 · ${body.categories.length} categories`;
+  });
+
+  await check('GET /api/admin/quizzes returns aggregates', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/quizzes?pageSize=5`, {
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as {
+      quizzes: { questionCount: number; categoryName: string; status: string }[];
+      pagination: { total: number };
+    };
+
+    if (body.pagination.total < 10) throw new Error('expected the seeded quizzes');
+    if (!body.quizzes.every((quiz) => quiz.categoryName && quiz.status)) {
+      throw new Error('quiz rows are missing their joined fields');
+    }
+    if (!body.quizzes.some((quiz) => quiz.questionCount > 0)) {
+      throw new Error('expected question counts');
+    }
+
+    return `200 · ${body.pagination.total} quizzes`;
+  });
+
+  await check('POST /api/admin/quizzes creates a draft with a derived slug', async () => {
+    const categories = (await (
+      await fetch(`${baseUrl}/api/admin/categories`, { headers: { cookie: adminCookie } })
+    ).json()) as { categories: { id: string }[] };
+
+    const res = await fetch(`${baseUrl}/api/admin/quizzes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({
+        title: 'E2E Smoke Quiz',
+        categoryId: categories.categories[0]?.id,
+        durationMinutes: 15,
+        passingScore: 50,
+        maxAttempts: 1,
+      }),
+    });
+    expectStatus(res, 201);
+
+    const body = (await res.json()) as {
+      quiz: { id: string; slug: string; status: string; questionCount: number };
+    };
+
+    if (body.quiz.status !== 'DRAFT') throw new Error('new quizzes must start as DRAFT');
+    if (body.quiz.slug !== 'e2e-smoke-quiz') throw new Error(`unexpected slug ${body.quiz.slug}`);
+    if (body.quiz.questionCount !== 0) throw new Error('a new quiz has no questions');
+
+    createdQuizId = body.quiz.id;
+    createdQuizSlug = body.quiz.slug;
+
+    return `201 · DRAFT · ${createdQuizSlug}`;
+  });
+
+  await check('PATCH /api/admin/quizzes/:id edits without moving the slug', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/quizzes/${createdQuizId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({ title: 'E2E Smoke Quiz (edited)', durationMinutes: 25 }),
+    });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as {
+      quiz: { title: string; durationMinutes: number; slug: string };
+    };
+
+    if (body.quiz.title !== 'E2E Smoke Quiz (edited)') throw new Error('title did not change');
+    if (body.quiz.durationMinutes !== 25) throw new Error('duration did not change');
+    if (body.quiz.slug !== createdQuizSlug) throw new Error('slug must stay stable');
+
+    return '200 · title + duration updated, slug kept';
+  });
+
+  await check('publishing a quiz with no questions is refused', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/quizzes/${createdQuizId}/publish`, {
+      method: 'POST',
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(res, 409);
+
+    const body = (await res.json()) as { error: { code: string } };
+    if (body.error.code !== 'QUIZ_HAS_NO_QUESTIONS') {
+      throw new Error(`unexpected code ${body.error.code}`);
+    }
+
+    return '409 · QUIZ_HAS_NO_QUESTIONS';
+  });
+
+  await check('a seeded draft can be published and unpublished', async () => {
+    const list = (await (
+      await fetch(`${baseUrl}/api/admin/quizzes?status=DRAFT&pageSize=50`, {
+        headers: { cookie: adminCookie },
+      })
+    ).json()) as { quizzes: { id: string; questionCount: number }[] };
+
+    const draft = list.quizzes.find((quiz) => quiz.questionCount > 0);
+    if (!draft) throw new Error('expected a seeded draft with questions');
+
+    const publish = await fetch(`${baseUrl}/api/admin/quizzes/${draft.id}/publish`, {
+      method: 'POST',
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(publish, 200);
+    if (((await publish.json()) as { quiz: { status: string } }).quiz.status !== 'PUBLISHED') {
+      throw new Error('publish did not apply');
+    }
+
+    const unpublish = await fetch(`${baseUrl}/api/admin/quizzes/${draft.id}/unpublish`, {
+      method: 'POST',
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(unpublish, 200);
+    if (((await unpublish.json()) as { quiz: { status: string } }).quiz.status !== 'UNPUBLISHED') {
+      throw new Error('unpublish did not apply');
+    }
+
+    return 'PUBLISHED → UNPUBLISHED';
+  });
+
+  await check('deleting a quiz with attempts is refused', async () => {
+    const list = (await (
+      await fetch(`${baseUrl}/api/admin/quizzes?pageSize=50`, { headers: { cookie: adminCookie } })
+    ).json()) as { quizzes: { id: string; attemptCount: number }[] };
+
+    const attempted = list.quizzes.find((quiz) => quiz.attemptCount > 0);
+    if (!attempted) throw new Error('expected an attempted quiz in the seed');
+
+    const res = await fetch(`${baseUrl}/api/admin/quizzes/${attempted.id}`, {
+      method: 'DELETE',
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(res, 409);
+
+    const body = (await res.json()) as { error: { code: string } };
+    if (body.error.code !== 'QUIZ_HAS_ATTEMPTS') throw new Error(`unexpected ${body.error.code}`);
+
+    return '409 · QUIZ_HAS_ATTEMPTS';
+  });
+
+  await check('deleting a quiz without attempts removes it', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/quizzes/${createdQuizId}`, {
+      method: 'DELETE',
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(res, 200);
+
+    const after = await fetch(`${baseUrl}/api/admin/quizzes/${createdQuizId}`, {
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(after, 404);
+
+    return '200 · then 404';
+  });
+
+  await check('quiz management rejects a student', async () => {
+    const list = await fetch(`${baseUrl}/api/admin/quizzes`, {
+      headers: { cookie: studentCookie },
+    });
+    expectStatus(list, 403);
+
+    const create = await fetch(`${baseUrl}/api/admin/quizzes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: studentCookie },
+      body: JSON.stringify({ title: 'Nope', categoryId: 'nope' }),
+    });
+    expectStatus(create, 403);
+
+    return '403 · FORBIDDEN';
+  });
+
   await check('POST /api/auth/logout clears the cookie', async () => {
     const res = await fetch(`${baseUrl}/api/auth/logout`, {
       method: 'POST',
