@@ -265,6 +265,7 @@ bun run deploy:check --url https://quiz.example.com --admin admin@quiz.dev:'<pas
 | Content-Security-Policy  | present, `default-src 'self'`, and no `'unsafe-eval'`                               |
 | Landing data             | `/api/landing` → 200, at least one published quiz, no `unavailableReason`           |
 | Web → API proxy          | `/api/health` through the **web** origin → 200 (the rewrite is wired)               |
+| Sign-in screen           | `/login` → 200 with labelled fields, autofill hints and the skip link               |
 | Server self-report       | optional: sign in as an admin, read `/api/admin/system`, refuse a `blocked` verdict |
 
 The last probe is the important one: it is the server's own opinion of its configuration, not the

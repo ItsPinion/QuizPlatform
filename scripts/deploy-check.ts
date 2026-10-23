@@ -207,6 +207,20 @@ async function liveChecks(webUrl: string, apiUrl: string, admin?: string): Promi
     return `200 · ${body.counts.publishedQuizzes} published · ${demos} demo logins`;
   });
 
+  await add('Sign-in screen', async () => {
+    const res = await fetchWithTimeout(`${webUrl}/login`);
+    if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+
+    const html = await res.text();
+    const missing = ['for="email"', 'for="password"', 'autocomplete', 'Skip to the form'].filter(
+      (needle) => !html.toLowerCase().includes(needle.toLowerCase()),
+    );
+
+    if (missing.length > 0) throw new Error(`missing ${missing.join(', ')}`);
+
+    return '200 · labelled fields · skip link · autofill hints';
+  });
+
   await add('Web → API proxy', async () => {
     const res = await fetchWithTimeout(`${webUrl}/api/health`);
     if (res.status !== 200) throw new Error(`HTTP ${res.status}`);

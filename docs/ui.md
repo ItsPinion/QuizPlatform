@@ -194,17 +194,74 @@ case — the pointer tracking without the theatre.
 
 ---
 
-## 7. Next
+## 7. The auth screens
 
-- The hero's live pill is the only client-side call on the page; if a second one
-  appears, they should share one fetch rather than each polling.
-- The login and register pages still print a version they were built with. They
-  pass no `version` prop to `SiteHeader`, so it is simply absent — better a blank
-  than a stale claim, but a shared shell fetch would fix it properly.
+`/login` and `/register` are the only two pages every visitor has to get through,
+so they are the largest type and the biggest targets in the app. Both share
+`components/auth/auth-shell.tsx`:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ header                                                       │
+├───────────────────────────┬──────────────────────────────────┤
+│ story column (desktop)    │ the form card                    │
+│ h2 4xl · live stats       │ h1 2.6rem                        │
+│ three promises            │ 56px fields, 56px button         │
+│ live pill                 │ demo accounts, or the links      │
+└───────────────────────────┴──────────────────────────────────┘
+```
+
+**The form comes first.** It is first in the DOM and first on a phone; the story
+column (`order-2 lg:order-1`) is the argument for signing in, not the reason you
+are on the page. Its numbers — papers graded, categories, quizzes open — are
+`sections` of `/api/landing`, so the panel cannot advertise a catalogue the
+database does not have. No API, no stat row: it hides rather than printing zero.
+
+### The controls
+
+`components/auth/auth-fields.tsx` is the whole inventory:
+
+| Element                                | Why it is that element                                                                             |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `<label for>` above the field          | Visible at all times. A placeholder is not a label — it disappears exactly when you need it.       |
+| `<input>` 56px tall, 16px text         | 16px stops iOS zooming the page on focus; 56px is a comfortable thumb target.                      |
+| `autoComplete` on every field          | `email`, `current-password`, `new-password`, `name` — password managers fill this without a fight. |
+| `<button aria-pressed>` for the reveal | 44×44, labelled "Show password" / "Hide password", not a 14px eye you have to hit.                 |
+| Caps Lock notice                       | Read from `getModifierState`, attached with `aria-describedby`.                                    |
+| `aria-invalid` + `aria-describedby`    | Set only when something is wrong, and the message is the description.                              |
+
+### What a failure does
+
+1. The message goes into a `role="alert"` region — announced, not just coloured red.
+2. Focus moves to the field that caused it (the password, for a rejected sign-in).
+3. The field itself is marked `aria-invalid`, so a screen reader says "invalid"
+   while the message stays attached.
+
+Validation runs on submit, so the button is never a disabled mystery. The
+register form shows the three password rules as you type, with a `role="progressbar"`
+strength bar and a spoken "met / not met yet" for each rule.
+
+### Demo accounts
+
+The list comes from `/api/landing`'s `demo.accounts` — the seeded accounts that
+exist in _this_ database — never from a constant in the page. Each is a button
+that fills the form and moves focus to **Sign in**; it deliberately does not
+submit for you. `DEMO_ACCOUNTS=0` and the section does not render.
+
+After signing in, the destination is `?next=` when the URL asked for one, and
+otherwise the role's home (`/admin` for an administrator, `/student` for a
+student). Registration lands in `/student/quizzes`, because an empty dashboard is
+not what you signed up for.
+
+---
+
+## 8. Next
+
 - The admin shell (`/admin`) and the student dashboard are still on the flat card.
   Same primitives, different grid: stat cards become bento cells with a
   spotlight, charts stay static.
-- Auth pages (`/login`, `/register`) are the natural place for a single spotlight
-  card rather than a grid.
+- The sign-in form is the app's first `<form>` with this much behaviour; the quiz
+  runner and the authoring forms still use the 40px shadcn defaults. Promoting
+  the 56px field into `components/ui` would make the whole app match.
 - Once a second screen uses it, `BentoCard` should grow an `asChild` escape hatch
   instead of the `href` shortcut, so it can wrap a `next/link` or a button.

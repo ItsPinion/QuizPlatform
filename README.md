@@ -22,7 +22,7 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 > a redacted system screen an operator can read, a `bun run deploy:check` gate that runs the same
 > rules locally and eight live probes against a real URL, one Dockerfile with two targets, and the
 > runbook for migrate, verify and roll back.
-> **866 automated tests and a 77-check end-to-end smoke run.** Feature complete: all fourteen days shipped.
+> **876 automated tests and a 77-check end-to-end smoke run.** Feature complete: all fourteen days shipped.
 
 ---
 
@@ -279,8 +279,10 @@ quizplatform/
 │     ├─ src/components/leaderboard-podium.tsx      the top three
 │     ├─ src/lib/quiz-params.ts   quiz filters, badge tones, lifecycle hints
 │     ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
+│     ├─ src/components/auth/     shell, 56px fields, password reveal, caps-lock notice
+│     ├─ src/lib/auth-params.ts  password rules, strength, role labels, demo copy
 │     ├─ src/components/landing/  hero · live status · bento · product shots · tour · CTA
-│     ├─ src/components/       header, footer, session nav, auth forms
+│     ├─ src/components/       header, footer, session nav, the two auth forms
 │     ├─ src/components/ui/    shadcn/ui primitives (button, card, badge, input, label, bento)
 │     ├─ src/lib/api.ts        hc<AppType> RPC client
 │     └─ next.config.ts        /api/* rewrite + workspace transpilation
@@ -381,13 +383,13 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 866 tests, all workspaces through Turbo
+bun run test                    # 876 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
 bun run test:e2e                # 77 checks against a live server + throwaway DB
 bun run deploy:check            # the deployment gate (see docs/deployment.md)
 ```
 
-**866 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
+**876 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
 
 **`@quiz/shared`** (276) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
@@ -530,7 +532,7 @@ email search, empty values, unknown roles), pagination, both sorts, 422s for bad
 lookups, 404/422 handling, promotion/demotion, deactivation lockout and restoration, `SELF_LOCKOUT`
 for self-demotion and self-deactivation, and 401/403 on every admin route.
 
-**`@quiz/web`** (200) — the error-envelope narrowing every auth form relies on (API error codes,
+**`@quiz/web`** (210) — the error-envelope narrowing every auth form relies on (API error codes,
 Zod issue extraction, fallbacks for malformed bodies, network-error mapping), the Day 3 page guard
 rules, the Day 4 directory parameters, the Day 5 quiz helpers, the Day 6 question-form helpers, and
 the Day 7–9 student helpers: catalogue filter parsing with `toStudentQuery`/`quizzesHref` round-trips
@@ -543,7 +545,8 @@ dashboard/analytics view helpers (percent and coverage labels, trend deltas, bar
 window parsing and href round-trips, change wording and tones, outcome labels and the timeline's
 screen-reader summary), plus the Day 14 deployment helpers: verdict and status labels and tones,
 runtime and latency formatting, the counts line with its no-counts fallback, the actionable-check
-filter and host shortening.
+filter and host shortening, and the auth-screen helpers: the three password rules and their progress
+states, role labels, the per-screen live stats, the role home and the demo fill announcement.
 
 Beyond Vitest, `bun run test:e2e` boots the real API process against a throwaway database and walks
 the whole auth flow, the admin console, content authoring, quiz taking, grading and review over HTTP
@@ -716,6 +719,28 @@ Unknown emails still run a decoy scrypt verification, so login timing does not r
 addresses exist. In the browser, `/login` and `/register` post through the Next.js `/api/*` rewrite,
 keeping the cookie first-party; the header swaps to the signed-in user, their role and a sign-out
 button.
+
+### The two screens
+
+`/login` and `/register` share `components/auth/auth-shell.tsx`: a story column built from
+`/api/landing` (papers graded, categories, quizzes open — the argument for signing in) beside a form
+card with the largest type in the app. The form is first in the DOM and first on a phone.
+
+| Affordance        | Detail                                                                                        |
+| ----------------- | --------------------------------------------------------------------------------------------- |
+| Fields            | 56px tall, 16px text — no iOS zoom, comfortable thumb target. Always a visible `<label for>`. |
+| Autofill          | `autocomplete="email" / "current-password" / "new-password" / "name"` on every input.         |
+| Password reveal   | A 44×44 `<button aria-pressed>`, named "Show password" / "Hide password".                     |
+| Caps Lock         | Detected with `getModifierState`, attached through `aria-describedby`.                        |
+| Errors            | `role="alert"`, focus moved to the offending field, `aria-invalid` set on it.                 |
+| Register strength | The three server rules, live: a `role="progressbar"`, "met / not met yet" per rule.           |
+| Skip link         | "Skip to the form", visible on focus, because the sticky header sits above it.                |
+| Demo logins       | Read from `/api/landing`, one button fills the form — it never submits for you.               |
+
+Sign-in goes to `?next=` when the URL asked for somewhere, otherwise to the role's home
+(`/admin` or `/student`). Registration lands in `/student/quizzes`, not an empty dashboard.
+`bun run deploy:check --url …` asserts the sign-in screen still serves labelled fields, the skip
+link and autofill hints.
 
 Guards live in `apps/api/src/middleware/auth.ts`: `requireAuth` (session → user row),
 `requireRole(...roles)`, and the composed `requireAdmin` / `requireStudent` used by the Day 3
@@ -1351,7 +1376,7 @@ Day 14 (done): deployment & docs. Eight environment rules in one pure function, 
 places — `bun run deploy:check` before a build, `GET /api/admin/system` from inside the process, and
 `deploy:check --url` over the wire after the deploy — with a verdict of `ready`, `attention` or
 `blocked`; a redacted system screen at `/admin/system`; one `Dockerfile` with `api` and `web` targets;
-and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 866 Vitest tests
+and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 876 Vitest tests
 and a 75-check end-to-end smoke run.
 
 Day 13 (done): testing & security. Rate limiting on the auth routes (a hard per-address block and a

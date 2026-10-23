@@ -1,22 +1,18 @@
-import { ShieldCheck, UserRound } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { AuthShell } from '@/components/auth/auth-shell';
 import { LoginForm } from '@/components/login-form';
-import { SiteHeader } from '@/components/site-header';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
+import { fetchLanding } from '@/lib/landing';
 import { safeNextPath } from '@/lib/redirect';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Sign in — QuizPlatform',
-  description: 'Sign in to your QuizPlatform account.',
+  description: 'Sign in to your QuizPlatform account to sit quizzes and read your results.',
 };
-
-const DEMO_ACCOUNTS = [
-  { email: 'admin@quiz.dev', password: 'Admin12345', role: 'ADMIN' as const },
-  { email: 'rahul@quiz.dev', password: 'Password123', role: 'STUDENT' as const },
-];
 
 export default async function LoginPage({
   searchParams,
@@ -25,56 +21,49 @@ export default async function LoginPage({
 }) {
   const params = await searchParams;
   const next = safeNextPath(params.next);
+
+  // The demo accounts are the ones this deployment actually has — read from the
+  // database, not typed into the page. `DEMO_ACCOUNTS=0` turns them off.
+  const payload = await fetchLanding();
+  const demo = payload?.demo.enabled ? payload.demo.accounts : [];
+  const continuing = next !== '/';
+
   return (
-    <div className="flex min-h-dvh flex-col">
-      <SiteHeader />
+    <AuthShell payload={payload} kind="login">
+      <div className="border-border/70 bg-card/70 card-sheen relative rounded-2xl border p-6 shadow-[0_40px_120px_-70px] shadow-black sm:p-8">
+        <h1
+          id="sign-in-heading"
+          className="text-[2.1rem] leading-[1.05] font-semibold tracking-tight sm:text-[2.6rem]"
+        >
+          Sign in
+        </h1>
+        <p className="text-muted-foreground mt-2.5 text-[15px] leading-relaxed">
+          {continuing
+            ? 'Sign in to carry on where you were headed.'
+            : 'Your attempts, results and rank are waiting.'}
+        </p>
 
-      <main className="flex flex-1 items-center justify-center px-5 py-12 sm:px-8">
-        <div className="w-full max-w-md">
-          <Card>
-            <CardHeader>
-              <h1 className="text-xl leading-none font-semibold tracking-tight">Welcome back</h1>
-              <CardDescription>
-                Sign in to keep your attempts, results and progress.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="flex flex-col gap-6">
-              <LoginForm next={next} />
-
-              <p className="text-muted-foreground text-sm">
-                New here?{' '}
-                <Link href="/register" className="text-primary underline-offset-4 hover:underline">
-                  Create an account
-                </Link>
-              </p>
-            </CardContent>
-          </Card>
-
-          <div className="border-border/60 bg-card/40 mt-4 rounded-xl border px-4 py-3">
-            <p className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
-              Seeded demo accounts
-            </p>
-            <ul className="flex flex-col gap-1.5">
-              {DEMO_ACCOUNTS.map((account) => (
-                <li key={account.email} className="flex items-center gap-2 text-xs">
-                  {account.role === 'ADMIN' ? (
-                    <ShieldCheck className="text-warning size-3.5" />
-                  ) : (
-                    <UserRound className="text-primary size-3.5" />
-                  )}
-                  <code className="font-mono">{account.email}</code>
-                  <span className="text-muted-foreground">/</span>
-                  <code className="font-mono">{account.password}</code>
-                  <Badge variant="outline" className="ml-auto text-[10px]">
-                    {account.role}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          </div>
+        <div className="mt-7">
+          <LoginForm next={next} demo={demo} />
         </div>
-      </main>
-    </div>
+
+        <p className="border-border/60 text-muted-foreground mt-7 border-t pt-5 text-[13.5px]">
+          New here?{' '}
+          <Link
+            href="/register"
+            className="text-foreground focus-visible:ring-ring/60 inline-flex items-center gap-1 font-medium underline underline-offset-4 outline-none hover:underline focus-visible:ring-[3px]"
+          >
+            Create an account
+            <ArrowRight aria-hidden className="size-3.5" />
+          </Link>
+        </p>
+      </div>
+
+      <p className="text-muted-foreground/80 mt-4 px-1 text-[11.5px] leading-relaxed">
+        {demo.length > 0
+          ? 'The demo buttons fill the form with accounts that exist in this database. Nothing is submitted until you press Sign in.'
+          : 'No demo accounts are published on this deployment. Use the account you registered with.'}
+      </p>
+    </AuthShell>
   );
 }
