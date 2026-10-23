@@ -18,9 +18,29 @@ function findLocalBinary(bin: string, searchDirs: string[]): string | null {
   return null;
 }
 
-/** Detects the package manager from the lockfile that is actually present. */
+/**
+ * Detects the package manager.
+ *
+ * `packageManager` in the root package.json is authoritative — lockfiles are
+ * gitignored here, so a fresh clone has none until `bun install` runs.
+ */
 export function detectPackageManager(): 'bun' | 'pnpm' | 'npm' {
-  if (fs.existsSync(path.join(REPO_ROOT, 'bun.lock'))) return 'bun';
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8')) as {
+      packageManager?: string;
+    };
+    const name = pkg.packageManager?.split('@')[0];
+    if (name === 'bun' || name === 'pnpm' || name === 'npm') return name;
+  } catch {
+    // fall through to the lockfile heuristics
+  }
+
+  if (
+    fs.existsSync(path.join(REPO_ROOT, 'bun.lock')) ||
+    fs.existsSync(path.join(REPO_ROOT, 'bun.lockb'))
+  ) {
+    return 'bun';
+  }
   if (fs.existsSync(path.join(REPO_ROOT, 'pnpm-lock.yaml'))) return 'pnpm';
   return 'npm';
 }

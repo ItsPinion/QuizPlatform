@@ -25,10 +25,9 @@ const tree = `quizplatform/
 │  │  └─ migrations/           drizzle-kit SQL (checked in)
 │  ├─ shared/         Zod enums, auth contracts, scrypt hashing
 │  └─ test-utils/     package-manager-agnostic test helpers
-├─ scripts/           end-to-end smoke run (real HTTP)
 ├─ turbo.json         task graph + cache
-├─ package.json       Bun workspaces + scripts
-├─ bun.lock           committed lockfile
+├─ package.json       Bun workspaces + scripts (pins Bun)
+├─ scripts/           end-to-end smoke run (real HTTP)
 └─ .env.example       Turso credentials template`;
 
 const highlights = [
