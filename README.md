@@ -278,7 +278,7 @@ quizplatform/
 │     ├─ src/lib/quiz-params.ts   quiz filters, badge tones, lifecycle hints
 │     ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
 │     ├─ src/components/       header, session nav, auth forms, status panels
-│     ├─ src/components/ui/    shadcn/ui primitives (button, card, badge, input, label)
+│     ├─ src/components/ui/    shadcn/ui primitives (button, card, badge, input, label, bento)
 │     ├─ src/lib/api.ts        hc<AppType> RPC client
 │     └─ next.config.ts        /api/* rewrite + workspace transpilation
 ├─ packages/
@@ -303,6 +303,7 @@ quizplatform/
 │  ├─ leaderboard.md            metrics, periods, ranking rules, the screen, tests
 │  ├─ security.md               threat model, controls, rate limits, CSP, trade-offs
 │  ├─ deployment.md            env matrix, the eight checks, deploy order, rollback, runbook
+│  ├─ ui.md                    the bento surface: primitives, motion rules, what was left out
 │  ├─ authorization.md         role model, guards, redirect rules, failure modes
 │  └─ testing.md               test inventory, manual QA, security trade-offs
 ├─ scripts/

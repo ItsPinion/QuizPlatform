@@ -25,6 +25,7 @@ import { LeaderboardPreview } from '@/components/leaderboard-preview';
 import { AdminConsole } from '@/components/admin-console';
 import { QuestionManagement } from '@/components/question-management';
 import { QuizManagement } from '@/components/quiz-management';
+import { PlatformBento } from '@/components/platform-bento';
 import { Roadmap } from '@/components/roadmap';
 import { SecurityPosture } from '@/components/security-posture';
 import { SectionHeading } from '@/components/section-heading';
@@ -37,6 +38,7 @@ import { SiteHeader } from '@/components/site-header';
 import { StackGrid } from '@/components/stack-grid';
 import { WorkspaceTree } from '@/components/workspace-tree';
 import { Badge } from '@/components/ui/badge';
+import { BentoCard } from '@/components/ui/bento';
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -211,6 +213,24 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* ----------------------------- platform ----------------------------- */}
+        <section id="platform" className="mx-auto w-full max-w-6xl px-5 pt-16 pb-4 sm:px-8">
+          <div className="flex flex-wrap items-end justify-between gap-6">
+            <SectionHeading
+              eyebrow="Platform map"
+              title="The whole product, in one grid"
+              description="Six surfaces, one session and one typed contract behind them. Every number on a card is a fact about this repository — point at one and it answers."
+            />
+            <p className="text-muted-foreground/80 max-w-[15rem] text-[11px] leading-relaxed">
+              Spotlight, border glow and a three-degree tilt. No animation on touch, and none at all
+              if your system asks for reduced motion.
+            </p>
+          </div>
+          <div className="mt-8">
+            <PlatformBento />
+          </div>
+        </section>
+
         {/* ------------------------------- stack ------------------------------ */}
         <section id="stack" className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
           <SectionHeading
@@ -236,18 +256,20 @@ export default function HomePage() {
               <SetupStatus />
             </div>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
-              {HIGHLIGHTS.map((item) => (
-                <div
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {HIGHLIGHTS.map((item, index) => (
+                <BentoCard
                   key={item.title}
-                  className="border-border/70 bg-background/40 rounded-xl border p-4"
+                  interactive={false}
+                  tone={(['primary', 'sky', 'success'] as const)[index] ?? 'primary'}
+                  className="p-4"
                 >
                   <item.icon className="text-primary size-4" />
                   <h3 className="mt-3 text-[13px] font-medium">{item.title}</h3>
                   <p className="text-muted-foreground mt-1.5 text-[12px] leading-relaxed">
                     {item.body}
                   </p>
-                </div>
+                </BentoCard>
               ))}
             </div>
 

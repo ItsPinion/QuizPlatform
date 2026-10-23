@@ -18,6 +18,7 @@ const tree = `quizplatform/
 │  │  ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
 │  │  ├─ src/lib/security-headers.ts  CSP + hardening headers
 │  │  ├─ src/lib/deployment-params.ts  verdict, status and runtime labels
+│  │  ├─ src/components/ui/bento.tsx   pointer spotlight · border glow · 3° tilt
 │  │  ├─ src/components/       admin nav, users table, combobox, question editor
 │  │  └─ next.config.ts        /api/* → Hono rewrite · security headers
 │  └─ api/            Hono 4 · @hono/node-server
