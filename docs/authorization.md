@@ -42,8 +42,10 @@ export const adminRoutes = new Hono<AppEnv>();
 adminRoutes.use('*', requireAdmin);
 ```
 
-That ordering matters. A new route added in Day 4 (`adminRoutes.get('/users', …)`) is protected the
-moment it exists — there is no decorator to forget. It also means guards run **before** route
+That ordering matters. The Day 4 routes (`GET /api/admin/stats`, `GET`/`PATCH
+/api/admin/users/:id`) were added without touching the guard and were protected the moment they
+existed — there is no decorator to forget. See
+[`admin-dashboard.md`](admin-dashboard.md) for what they do. It also means guards run **before** route
 matching: an unauthorised caller asking for `/api/admin/does-not-exist` gets `401`/`403`, not a `404`
 that would confirm which paths exist.
 

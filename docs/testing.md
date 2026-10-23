@@ -3,8 +3,8 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test       # 184 unit + integration tests across the four workspaces
-bun run test:e2e   # 17 checks against a real HTTP server (own process, own port)
+bun run test       # 258 unit + integration tests across the four workspaces
+bun run test:e2e   # 25 checks against a real HTTP server (own process, own port)
 ```
 
 Neither touches Turso. Every suite builds a throwaway `file:` database in `.data/` with the project's
@@ -16,12 +16,12 @@ tests.
 
 ## What runs where
 
-| Workspace      | Tests | Focus                                                                                    |
-| -------------- | ----- | ---------------------------------------------------------------------------------------- |
-| `@quiz/shared` | 24    | scrypt record format & verification, auth Zod contracts, session constants               |
-| `@quiz/db`     | 58    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring |
-| `@quiz/api`    | 66    | health/readiness, auth flows, session forgery/expiry, guards, error envelopes            |
-| `@quiz/web`    | 6     | API error-envelope narrowing used by every form (`parseApiFailure`, `toApiFailure`)      |
+| Workspace      | Tests | Focus                                                                                       |
+| -------------- | ----- | ------------------------------------------------------------------------------------------- |
+| `@quiz/shared` | 42    | scrypt + auth contracts, session constants, Day 4 admin schemas                             |
+| `@quiz/db`     | 58    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring    |
+| `@quiz/api`    | 111   | health/readiness, auth flows, session forgery/expiry, guards, admin stats & user management |
+| `@quiz/web`    | 47    | API error-envelope narrowing, page guards, user-directory parameter parsing                 |
 
 Run one workspace at a time when you are iterating:
 
@@ -57,6 +57,27 @@ bun run test --filter=@quiz/web
 - **Cookie attributes** — `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age=604800`; `Secure` is
   asserted in both branches (absent in development, present when TLS is in play).
 
+### Admin console coverage (Day 4)
+
+- **Statistics** — counts agree with the database, `active + inactive = total`,
+  `admins + students = total`, quiz statuses add up, the pass rate and average score stay inside
+  0–100 with one decimal, the newest-five strips are ordered, and a freshly created account shows up
+  in the next read.
+- **Directory** — pagination metadata, both sorts (name and attempt count), role and status filters,
+  case-insensitive name _and_ email search, an empty page for a search with no matches, empty values
+  treated as absent, `422` for an out-of-range `pageSize` and for an unknown role, and a raw-body
+  assertion that no payload contains `passwordHash`.
+- **Detail & mutation** — single-user lookup with attempt stats, `404 USER_NOT_FOUND`, `422` for a
+  non-UUID id, promote → demote round trip, deactivate → reactivate (including the session lockout in
+  between), role + status in one request, `409 SELF_LOCKOUT` for self-demotion and self-deactivation,
+  an admin deactivating a _different_ admin, `422` for an empty body or a bad enum, `400 INVALID_JSON`
+  for a malformed body, and 401/403 on every route.
+- **Contracts** — `userListQuerySchema` defaults/coercion/clamping, `updateUserSchema` refusing an
+  empty body while stripping fields it must not write, the credential-free user shape, and the list
+  and stats response schemas (including rejecting an unknown attempt status).
+- **Web parameters** — filter parsing with fallbacks, `toUserQuery`, `usersHref` round-trips and
+  percent-encoding, filter summaries, `rangeLabel` past the end, initials, and relative-day labels.
+
 ---
 
 ## End-to-end smoke run
@@ -82,8 +103,16 @@ then asserts:
 13. `/api/student/access` → 403 for the admin
 14. `/api/student/access` → 200 for the student
 15. role-scoped routes → 401 anonymously
-16. logout → 200 with `Max-Age=0`
-17. unknown route → 404 `NOT_FOUND`
+16. `/api/admin/stats` → 200 with consistent aggregates and a 0–100 pass rate
+17. `/api/admin/stats` → 403 for the student
+18. `/api/admin/users?search=rahul&role=STUDENT` → 200, one match, no `passwordHash` in the body
+19. `/api/admin/users?pageSize=500` → 422 `VALIDATION_ERROR`
+20. promote → demote the e2e account through `PATCH` → 200 and 200
+21. admin demoting themselves → 409 `SELF_LOCKOUT`
+22. deactivation → the victim's next request is 403 `ACCOUNT_INACTIVE`, and reactivation restores it
+23. `/api/admin/users` → 403 for the student
+24. logout → 200 with `Max-Age=0`
+25. unknown route → 404 `NOT_FOUND`
 
 It prints a pass/fail table, exits non-zero on failure, and removes the database afterwards.
 
@@ -113,6 +142,16 @@ Useful after changing auth, the proxy, or the cookie. Start with `bun dev`, then
       `401` without a cookie.
 - [ ] `/login?next=https://evil.example` still redirects to `/` after signing in.
 - [ ] The landing page **Runtime checks** card shows the user, role and expiry for a signed-in session.
+- [ ] Sign in as the admin → `/admin` shows six stat cards, the account mix and the recent attempts;
+      `/api/admin/stats` in a second tab returns the same numbers.
+- [ ] `/admin/users` lists four seeded accounts; searching `priya` narrows to one, and the URL keeps
+      `?search=priya` so a reload reproduces the view.
+- [ ] Filter by `INACTIVE` → empty state with a working **Clear** link.
+- [ ] Deactivate a student → their row flips to `INACTIVE`, then reactivate it.
+- [ ] Try to deactivate or demote your own row → the buttons are disabled, and forcing the PATCH with
+      `curl` answers `409 SELF_LOCKOUT`.
+- [ ] Promote a student to `ADMIN`, open `/admin` in their browser → it now renders; demote them and
+      the next request is `403 FORBIDDEN`.
 
 ---
 

@@ -18,7 +18,7 @@ import {
   toAuthSession,
   toAuthUser,
 } from '../lib/auth';
-import { ApiError, readJsonBody } from '../lib/errors';
+import { ApiError, jsonBody } from '../lib/errors';
 import type { AppEnv } from '../lib/types';
 import { requireAuth } from '../middleware/auth';
 
@@ -43,8 +43,8 @@ function isUniqueViolation(error: unknown): boolean {
 
 export const authRoutes = new Hono<AppEnv>()
   /** Student self-registration. The role is always STUDENT — never client-chosen. */
-  .post('/register', async (c) => {
-    const input = registerSchema.parse(await readJsonBody(c));
+  .post('/register', jsonBody(registerSchema), async (c) => {
+    const input = c.req.valid('json');
 
     const existing = await db
       .select({ id: schema.users.id })
@@ -90,8 +90,8 @@ export const authRoutes = new Hono<AppEnv>()
   })
 
   /** Exchange email + password for a session cookie. */
-  .post('/login', async (c) => {
-    const input = loginSchema.parse(await readJsonBody(c));
+  .post('/login', jsonBody(loginSchema), async (c) => {
+    const input = c.req.valid('json');
 
     const [row] = await db
       .select()

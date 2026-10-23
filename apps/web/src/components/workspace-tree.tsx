@@ -6,24 +6,29 @@ const tree = `quizplatform/
 ├─ apps/
 │  ├─ web/            Next.js 16 · App Router · Tailwind v4
 │  │  ├─ src/app/              landing, /login, /register, /admin, /student
+│  │  ├─ src/app/admin/        layout + console overview + /admin/users
 │  │  ├─ src/lib/session.ts    server-side session lookup (cookie → API)
+│  │  ├─ src/lib/api-server.ts cookie-forwarding RPC client for pages
 │  │  ├─ src/lib/guards.ts     role decision for /admin and /student
+│  │  ├─ src/lib/admin-params.ts  filters ⇄ ?search=&role=&page=
 │  │  ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
-│  │  ├─ src/components/       session nav, auth forms, access matrix, status
+│  │  ├─ src/components/       admin nav, users table, stat cards, auth forms
 │  │  └─ next.config.ts        /api/* → Hono rewrite
 │  └─ api/            Hono 4 · @hono/node-server
 │     ├─ src/app.ts            chained routes → AppType
 │     ├─ src/routes/           auth · admin · student · health · meta
 │     ├─ src/middleware/       requireAuth · requireAdmin · requireStudent
+│     ├─ src/lib/admin-stats.ts   dashboard aggregates (one per section)
+│     ├─ src/lib/admin-users.ts   directory query + guarded role/status writes
 │     ├─ src/lib/auth.ts       JWT signing + session cookies
-│     └─ src/lib/              env, error envelope
+│     └─ src/lib/              env, jsonBody validator, error envelope
 ├─ packages/
 │  ├─ db/             Drizzle ORM · libSQL / Turso
 │  │  ├─ src/schema.ts         7 tables + relations
 │  │  ├─ src/seed.ts           rich demo dataset
 │  │  ├─ src/__tests__/        schema + seed integrity
 │  │  └─ migrations/           drizzle-kit SQL (checked in)
-│  ├─ shared/         Zod enums, auth contracts, scrypt hashing
+│  ├─ shared/         Zod enums, auth + admin contracts, scrypt hashing
 │  └─ test-utils/     package-manager-agnostic test helpers
 ├─ turbo.json         task graph + cache
 ├─ package.json       Bun workspaces + scripts (pins Bun)
@@ -39,6 +44,15 @@ const highlights = [
     note: 'requireAdmin mounted on the router, not handlers',
   },
   { path: 'apps/web/src/lib/guards.ts', note: 'no session → sign in · wrong role → own area' },
+  {
+    path: 'apps/api/src/lib/admin-users.ts',
+    note: 'paged search + the 409 that stops self-lockout',
+  },
+  {
+    path: 'apps/web/src/app/admin/users/page.tsx',
+    note: 'server-rendered directory, filters live in the URL',
+  },
+  { path: 'packages/shared/src/admin.ts', note: 'stats + user contracts, API and UI' },
   { path: 'apps/web/src/lib/api.ts', note: 'hc<AppType>() — zero codegen RPC' },
   { path: 'packages/db/src/schema.ts', note: 'users → attempts → answers relations' },
   { path: 'packages/shared/src/auth.ts', note: 'login schemas + role permissions, both apps' },

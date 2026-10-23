@@ -6,12 +6,14 @@ import {
   Database,
   GitBranch,
   KeyRound,
+  LayoutDashboard,
   Radio,
   ShieldCheck,
   TerminalSquare,
 } from 'lucide-react';
 
 import { AccessAreas } from '@/components/access-areas';
+import { AdminConsole } from '@/components/admin-console';
 import { Roadmap } from '@/components/roadmap';
 import { SectionHeading } from '@/components/section-heading';
 import { SetupStatus } from '@/components/setup-status';
@@ -38,6 +40,9 @@ const TERMINAL_LINES: { prompt?: boolean; text: string; tone?: 'muted' | 'accent
   { prompt: true, text: 'curl -X POST /api/auth/login -c jar.txt' },
   { text: '200 ▸ role STUDENT · httpOnly JWT · 7d', tone: 'accent' },
   { text: 'GET /api/admin/access ▸ 403 · FORBIDDEN', tone: 'muted' },
+  { prompt: true, text: 'curl -b jar.txt /api/admin/stats' },
+  { text: '200 ▸ 4 users · 10 quizzes · 47 questions', tone: 'ok' },
+  { text: 'PATCH /api/admin/users/:id ▸ 409 SELF_LOCKOUT', tone: 'muted' },
 ];
 
 const HIGHLIGHTS = [
@@ -73,7 +78,7 @@ export default function HomePage() {
             <div>
               <Badge className="border-primary/30 bg-primary/10 gap-2 py-1">
                 <span className="bg-primary size-1.5 rounded-full" />
-                Milestone · Day 3 of 14 complete
+                Milestone · Day 4 of 14 complete
               </Badge>
 
               <h1 className="mt-6 text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-[3.4rem]">
@@ -86,8 +91,9 @@ export default function HomePage() {
 
               <p className="text-muted-foreground mt-5 max-w-xl text-[15px] leading-relaxed">
                 Turborepo monorepo with a Next.js 16 web app, a Hono RPC API and a Drizzle schema on
-                Turso. Sign-in is real — scrypt hashes, httpOnly JWT cookies — and the admin and
-                student areas are separated by role guards on both the API and the page.
+                Turso. Sign-in is real — scrypt hashes, httpOnly JWT cookies — the admin and student
+                areas are separated by role guards on both sides, and the admin console now reports
+                live statistics and manages accounts.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -248,6 +254,20 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* ------------------------------ console ------------------------------ */}
+        <section id="console" className="border-border/60 bg-card/20 relative border-y">
+          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
+            <SectionHeading
+              eyebrow="Day 4 · admin console"
+              title="Statistics that come from the database, not the browser"
+              description="The admin area grew from a role probe into a working console: a dashboard of aggregates and a user directory you can actually operate — with the API as the only decision maker."
+            />
+            <div className="mt-8">
+              <AdminConsole />
+            </div>
+          </div>
+        </section>
+
         {/* ----------------------------- workspace ---------------------------- */}
         <section id="workspace" className="border-border/60 bg-card/20 w-full border-y">
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
@@ -267,8 +287,8 @@ export default function HomePage() {
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8">
             <SectionHeading
               eyebrow="Two-week plan"
-              title="Three days shipped, eleven to go"
-              description="The spec's build schedule, tracked in the repo. Day 3 adds role-scoped namespaces on the API and guarded /admin and /student areas in the web app."
+              title="Four days shipped, ten to go"
+              description="The spec's build schedule, tracked in the repo. Day 4 adds the admin dashboard shell, aggregate statistics and user management on top of the Day 3 role guards."
             />
             <div className="mt-8">
               <Roadmap />
@@ -277,14 +297,14 @@ export default function HomePage() {
             <Card className="mt-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <ShieldCheck className="text-primary size-4" />
-                  Shipped in Days 2–3
+                  <LayoutDashboard className="text-primary size-4" />
+                  Shipped in Days 2–4
                 </CardTitle>
                 <CardDescription>
                   Everything below is covered by the test suite and live on this deployment.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="text-muted-foreground grid gap-3 text-[12.5px] sm:grid-cols-3">
+              <CardContent className="text-muted-foreground grid gap-3 text-[12.5px] sm:grid-cols-2 lg:grid-cols-4">
                 <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
                   <div className="text-foreground flex items-center gap-1.5 font-medium">
                     <KeyRound className="text-success size-3.5" />
@@ -314,6 +334,14 @@ export default function HomePage() {
                     /api/student
                   </code>
                   are guarded end to end, and the web pages redirect the wrong role to its own area.
+                </div>
+                <div className="border-border/60 bg-background/40 rounded-lg border p-3.5">
+                  <div className="text-foreground flex items-center gap-1.5 font-medium">
+                    <LayoutDashboard className="text-success size-3.5" />
+                    Admin console
+                  </div>
+                  Six aggregates, newest accounts and attempts, plus a searchable directory where
+                  role and status changes are one guarded PATCH away.
                 </div>
               </CardContent>
             </Card>

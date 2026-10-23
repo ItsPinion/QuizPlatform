@@ -28,7 +28,7 @@ const AREAS = [
     items: [
       { icon: ListChecks, label: 'Manage quizzes' },
       { icon: FolderTree, label: 'Categories & questions' },
-      { icon: Users, label: 'Users' },
+      { icon: Users, label: 'Users & stats' },
       { icon: BarChart3, label: 'Analytics' },
     ],
   },

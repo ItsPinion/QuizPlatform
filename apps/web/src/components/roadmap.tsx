@@ -24,7 +24,7 @@ const weekOne: Day[] = [
 ];
 
 /** Highest day that has landed in the repo — keep in sync with README + /api/meta. */
-const SHIPPED_THROUGH_DAY = 3;
+const SHIPPED_THROUGH_DAY = 4;
 
 const weekTwo: Day[] = [
   { day: 8, title: 'Submission & scoring', detail: 'Server-side grading, expiry enforcement' },

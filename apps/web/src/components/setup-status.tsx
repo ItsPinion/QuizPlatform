@@ -390,6 +390,16 @@ export function SetupStatus() {
                     </Link>
                   }
                 />
+                {session.data.user.role === 'ADMIN' ? (
+                  <Row
+                    label="Console"
+                    value={
+                      <Link href="/admin/users" className="text-primary hover:underline">
+                        /admin/users
+                      </Link>
+                    }
+                  />
+                ) : null}
               </div>
             ) : null}
           </div>

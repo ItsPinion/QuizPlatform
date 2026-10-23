@@ -326,6 +326,151 @@ try {
     return '401 · UNAUTHENTICATED';
   });
 
+  /* ------------------------------- Day 4 --------------------------------- */
+
+  let e2eUserId = '';
+
+  await check('GET /api/admin/stats reports dashboard aggregates', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/stats`, { headers: { cookie: adminCookie } });
+    expectStatus(res, 200);
+
+    const body = (await res.json()) as {
+      users: { total: number; active: number; admins: number };
+      content: { quizzes: number; questions: number };
+      attempts: { total: number; passRate: number };
+      recentUsers: unknown[];
+    };
+
+    if (body.users.total < 2) throw new Error('expected the seeded accounts');
+    if (body.users.admins < 1) throw new Error('expected at least one admin');
+    if (body.content.quizzes < 1 || body.content.questions < 1) {
+      throw new Error(`seeded content missing: ${JSON.stringify(body.content)}`);
+    }
+    if (body.attempts.passRate < 0 || body.attempts.passRate > 100) {
+      throw new Error(`pass rate out of range: ${body.attempts.passRate}`);
+    }
+
+    return `200 · ${body.users.total} users · ${body.content.quizzes} quizzes · ${body.attempts.passRate}% pass`;
+  });
+
+  await check('GET /api/admin/stats forbids a student', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/stats`, { headers: { cookie: studentCookie } });
+    expectStatus(res, 403);
+    const body = (await res.json()) as { error: { code: string } };
+    if (body.error.code !== 'FORBIDDEN') throw new Error(`unexpected code ${body.error.code}`);
+    return '403 · FORBIDDEN';
+  });
+
+  await check('GET /api/admin/users filters and never leaks hashes', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/users?search=rahul&role=STUDENT`, {
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(res, 200);
+
+    const raw = await res.text();
+    if (raw.includes('passwordHash') || raw.includes('scrypt')) {
+      throw new Error('user payload leaked a credential field');
+    }
+
+    const body = JSON.parse(raw) as {
+      users: { id: string; email: string; role: string }[];
+      pagination: { total: number };
+      filters: { search: string | null };
+    };
+
+    if (body.users.length !== 1) throw new Error(`expected 1 match, got ${body.users.length}`);
+    if (body.users[0]?.email !== 'rahul@quiz.dev') throw new Error('wrong user matched');
+    if (body.filters.search !== 'rahul') throw new Error('filter echo missing');
+
+    return `200 · ${body.pagination.total} match · no hash`;
+  });
+
+  await check('GET /api/admin/users rejects an out-of-range page size', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/users?pageSize=500`, {
+      headers: { cookie: adminCookie },
+    });
+    expectStatus(res, 422);
+    const body = (await res.json()) as { error: { code: string } };
+    if (body.error.code !== 'VALIDATION_ERROR') throw new Error('expected VALIDATION_ERROR');
+    return '422 · VALIDATION_ERROR';
+  });
+
+  await check('PATCH /api/admin/users/:id promotes and demotes an account', async () => {
+    const mine = await fetch(`${baseUrl}/api/auth/me`, { headers: { cookie: studentCookie } });
+    expectStatus(mine, 200);
+    e2eUserId = ((await mine.json()) as { user: { id: string } }).user.id;
+
+    const promote = await fetch(`${baseUrl}/api/admin/users/${e2eUserId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({ role: 'ADMIN' }),
+    });
+    expectStatus(promote, 200);
+    const promoted = (await promote.json()) as { user: { role: string } };
+    if (promoted.user.role !== 'ADMIN') throw new Error('promotion did not stick');
+
+    const demote = await fetch(`${baseUrl}/api/admin/users/${e2eUserId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({ role: 'STUDENT' }),
+    });
+    expectStatus(demote, 200);
+    const demoted = (await demote.json()) as { user: { role: string } };
+    if (demoted.user.role !== 'STUDENT') throw new Error('demotion did not stick');
+
+    return '200 · STUDENT → ADMIN → STUDENT';
+  });
+
+  await check('PATCH refuses an admin demoting themselves', async () => {
+    const me = await fetch(`${baseUrl}/api/auth/me`, { headers: { cookie: adminCookie } });
+    expectStatus(me, 200);
+    const adminId = ((await me.json()) as { user: { id: string } }).user.id;
+
+    const res = await fetch(`${baseUrl}/api/admin/users/${adminId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({ status: 'INACTIVE' }),
+    });
+    expectStatus(res, 409);
+
+    const body = (await res.json()) as { error: { code: string } };
+    if (body.error.code !== 'SELF_LOCKOUT') throw new Error(`unexpected code ${body.error.code}`);
+    return '409 · SELF_LOCKOUT';
+  });
+
+  await check('deactivation locks the account out on its next request', async () => {
+    const patch = await fetch(`${baseUrl}/api/admin/users/${e2eUserId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({ status: 'INACTIVE' }),
+    });
+    expectStatus(patch, 200);
+
+    const blocked = await fetch(`${baseUrl}/api/auth/me`, { headers: { cookie: studentCookie } });
+    expectStatus(blocked, 403);
+    const body = (await blocked.json()) as { error: { code: string } };
+    if (body.error.code !== 'ACCOUNT_INACTIVE')
+      throw new Error(`unexpected code ${body.error.code}`);
+
+    const restore = await fetch(`${baseUrl}/api/admin/users/${e2eUserId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({ status: 'ACTIVE' }),
+    });
+    expectStatus(restore, 200);
+
+    const again = await fetch(`${baseUrl}/api/auth/me`, { headers: { cookie: studentCookie } });
+    expectStatus(again, 200);
+
+    return '403 ACCOUNT_INACTIVE · restored';
+  });
+
+  await check('admin user management forbids a student', async () => {
+    const res = await fetch(`${baseUrl}/api/admin/users`, { headers: { cookie: studentCookie } });
+    expectStatus(res, 403);
+    return '403 · FORBIDDEN';
+  });
+
   await check('POST /api/auth/logout clears the cookie', async () => {
     const res = await fetch(`${baseUrl}/api/auth/logout`, {
       method: 'POST',

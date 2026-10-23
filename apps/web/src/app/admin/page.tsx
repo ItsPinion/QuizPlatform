@@ -1,137 +1,287 @@
-import { BarChart3, FolderTree, ListChecks, ShieldCheck, Users } from 'lucide-react';
-import type { Metadata } from 'next';
+import type { DashboardStats } from '@quiz/shared/admin';
+import {
+  Activity,
+  ArrowRight,
+  BookOpen,
+  Database,
+  ListChecks,
+  Percent,
+  ShieldCheck,
+  Users,
+} from 'lucide-react';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import { SiteHeader } from '@/components/site-header';
+import { StatCard } from '@/components/stat-card';
 import { Badge } from '@/components/ui/badge';
+import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { relativeDay } from '@/lib/admin-params';
+import { serverApi } from '@/lib/api-server';
 import { decideAccess } from '@/lib/guards';
 import { getSession } from '@/lib/session';
+import { cn } from '@/lib/utils';
 
-export const metadata: Metadata = {
-  title: 'Admin area — QuizPlatform',
-  description: 'Administrator workspace for managing quizzes, questions, categories and users.',
+const STATUS_STYLES: Record<string, string> = {
+  PASSED: 'text-success',
+  FAILED: 'text-destructive',
+  EXPIRED: 'text-warning',
+  IN_PROGRESS: 'text-muted-foreground',
 };
 
-const MODULES = [
-  { day: 4, title: 'User management', detail: 'List, edit and deactivate accounts.', icon: Users },
-  {
-    day: 5,
-    title: 'Quiz management',
-    detail: 'Create, edit, delete and publish quizzes.',
-    icon: ListChecks,
-  },
-  {
-    day: 6,
-    title: 'Categories & questions',
-    detail: 'Category CRUD, questions, options and correct answers.',
-    icon: FolderTree,
-  },
-  {
-    day: 11,
-    title: 'Analytics',
-    detail: 'Attempts, pass rates and popular quizzes.',
-    icon: BarChart3,
-  },
-];
+/** A labelled proportion bar — used for the account mix card. */
+function Bar({ label, value, total }: { label: string; value: number; total: number }) {
+  const percent = total === 0 ? 0 : Math.round((value / total) * 100);
 
-export default async function AdminPage() {
-  // Two different problems, two different destinations: sign in first, or go to
-  // the area your role actually owns.
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-3 text-[12.5px]">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-mono tabular-nums">
+          {value}
+          <span className="text-muted-foreground/70"> / {total}</span>
+        </span>
+      </div>
+      <div className="bg-muted/70 h-1.5 overflow-hidden rounded-full">
+        <div className="bg-primary h-full rounded-full" style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
+
+export default async function AdminOverviewPage() {
   const decision = decideAccess(await getSession(), 'ADMIN', '/admin');
   if (!decision.allowed) redirect(decision.redirectTo);
 
   const { session } = decision;
-  const permissions = [
-    'Manage quizzes',
-    'Manage questions',
-    'Manage categories',
-    'Manage users',
-    'Read analytics',
-  ];
+
+  let stats: DashboardStats | null = null;
+  try {
+    const res = await (await serverApi()).api.admin.stats.$get();
+    if (res.ok) stats = await res.json();
+  } catch {
+    // API down or database not configured yet — the page explains itself below.
+    stats = null;
+  }
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <SiteHeader />
-
-      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-12 sm:px-8">
+    <div className="space-y-8">
+      <header className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
           <Badge variant="warning" className="gap-1.5">
-            <ShieldCheck className="size-3" />
+            <ShieldCheck />
             ADMIN
           </Badge>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Welcome back, {session.user.name.split(' ')[0]}
-          </h1>
+          <Badge variant="outline">Day 4 · dashboard</Badge>
         </div>
-
-        <p className="text-muted-foreground mt-2 max-w-2xl text-sm">
-          This page is served only after{' '}
-          <code className="bg-muted rounded px-1 py-0.5">/api/admin/access</code> confirms an{' '}
-          <code className="bg-muted rounded px-1 py-0.5">ADMIN</code> session. Students who open it
-          are redirected to their own area.
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Welcome back, {session.user.name.split(' ')[0]}
+        </h1>
+        <p className="text-muted-foreground max-w-2xl text-sm">
+          Every number below comes from{' '}
+          <code className="bg-muted rounded px-1 py-0.5 text-[12px]">GET /api/admin/stats</code>,
+          which the ADMIN guard protects before the handler runs.
         </p>
+      </header>
 
-        <div className="mt-8 grid gap-4 lg:grid-cols-[1fr_2fr]">
-          <Card>
-            <CardHeader>
-              <CardTitle>Your session</CardTitle>
-              <CardDescription>Verified on the server for this request.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2.5 text-[13px]">
-              <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Email</span>
-                <span className="truncate font-mono text-[12px]">{session.user.email}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Role</span>
-                <span className="font-mono text-[12px]">{session.user.role}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Expires</span>
-                <span className="font-mono text-[12px]">
-                  {new Date(session.expiresAt).toLocaleDateString(undefined, {
-                    day: '2-digit',
-                    month: 'short',
-                  })}
-                </span>
-              </div>
+      {stats === null ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="text-warning size-4" />
+              Statistics are unavailable
+            </CardTitle>
+            <CardDescription>
+              The web app could not reach the API, or the API could not read the database. The
+              console is still guarded — this is a data problem, not an access problem.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-[13px]">
+            <p className="text-muted-foreground">
+              Check <code className="bg-muted rounded px-1">/api/health/db</code> first: it reports
+              the connection target and row counts.
+            </p>
+            <a
+              href="/api/health/db"
+              target="_blank"
+              rel="noreferrer"
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+            >
+              Open the database probe
+              <ArrowRight />
+            </a>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <section aria-label="Key statistics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              label="Accounts"
+              value={stats.users.total}
+              hint={`${stats.users.active} active · ${stats.users.inactive} inactive`}
+              icon={Users}
+            />
+            <StatCard
+              label="Quizzes"
+              value={stats.content.quizzes}
+              hint={`${stats.content.published} published · ${stats.content.drafts} draft`}
+              icon={ListChecks}
+            />
+            <StatCard
+              label="Questions"
+              value={stats.content.questions}
+              hint={`${stats.content.options} options · ${stats.content.categories} categories`}
+              icon={BookOpen}
+            />
+            <StatCard
+              label="Attempts"
+              value={stats.attempts.total}
+              hint={`${stats.attempts.learners} learners · ${stats.attempts.inProgress} in progress`}
+              icon={Activity}
+              tone="primary"
+            />
+            <StatCard
+              label="Pass rate"
+              value={`${stats.attempts.passRate}%`}
+              hint={`${stats.attempts.passed} passed · ${stats.attempts.failed} failed · ${stats.attempts.expired} expired`}
+              icon={Percent}
+              tone="success"
+            />
+            <StatCard
+              label="Average score"
+              value={`${stats.attempts.averagePercentage}%`}
+              hint="Mean percentage across graded attempts"
+              icon={Activity}
+            />
+            <StatCard
+              label="New this week"
+              value={stats.users.joinedLast7Days}
+              hint="Accounts created in the last 7 days"
+              icon={Users}
+              tone="warning"
+            />
+            <StatCard
+              label="Content mix"
+              value={`${stats.content.published}/${stats.content.quizzes}`}
+              hint="Published quizzes out of all quizzes"
+              icon={ListChecks}
+            />
+          </section>
 
-              <div className="border-border/60 mt-4 border-t pt-3">
-                <p className="text-muted-foreground mb-2 text-[11px] tracking-wide uppercase">
-                  Permissions
-                </p>
-                <ul className="space-y-1">
-                  {permissions.map((permission) => (
-                    <li key={permission} className="text-[12.5px]">
-                      · {permission}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Account mix</CardTitle>
+                <CardDescription>Who can sign in, and with which role.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Bar label="Active accounts" value={stats.users.active} total={stats.users.total} />
+                <Bar label="Administrators" value={stats.users.admins} total={stats.users.total} />
+                <Bar label="Students" value={stats.users.students} total={stats.users.total} />
+                <Bar
+                  label="Attempted at least once"
+                  value={stats.attempts.learners}
+                  total={stats.users.students}
+                />
+                <Link
+                  href="/admin/users"
+                  className="text-primary inline-flex items-center gap-1.5 pt-1 text-[12.5px] font-medium hover:underline"
+                >
+                  Manage users
+                  <ArrowRight className="size-3.5" />
+                </Link>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Newest accounts</CardTitle>
+                <CardDescription>Five most recent sign-ups.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="divide-border/60 divide-y">
+                  {stats.recentUsers.map((user) => (
+                    <li key={user.id} className="flex items-center justify-between gap-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-medium">{user.name}</p>
+                        <p className="text-muted-foreground truncate font-mono text-[11.5px]">
+                          {user.email}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Badge variant={user.role === 'ADMIN' ? 'warning' : 'secondary'}>
+                          {user.role}
+                        </Badge>
+                        <span className="text-muted-foreground w-16 text-right text-[11.5px]">
+                          {relativeDay(user.createdAt)}
+                        </span>
+                      </div>
                     </li>
                   ))}
                 </ul>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent attempts</CardTitle>
+              <CardDescription>
+                The five latest starts, straight from the attempts table.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] text-[13px]">
+                  <thead>
+                    <tr className="text-muted-foreground border-border/60 border-b text-left text-[11px] tracking-wider uppercase">
+                      <th className="py-2 pr-3 font-medium">Student</th>
+                      <th className="py-2 pr-3 font-medium">Quiz</th>
+                      <th className="py-2 pr-3 font-medium">Status</th>
+                      <th className="py-2 pr-3 text-right font-medium">Score</th>
+                      <th className="py-2 text-right font-medium">Started</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-border/60 divide-y">
+                    {stats.recentAttempts.map((attempt) => (
+                      <tr key={attempt.id}>
+                        <td className="py-2.5 pr-3">{attempt.userName}</td>
+                        <td className="text-muted-foreground py-2.5 pr-3">{attempt.quizTitle}</td>
+                        <td
+                          className={cn(
+                            'py-2.5 pr-3 font-mono text-[11.5px]',
+                            STATUS_STYLES[attempt.status] ?? 'text-muted-foreground',
+                          )}
+                        >
+                          {attempt.status}
+                        </td>
+                        <td className="py-2.5 pr-3 text-right tabular-nums">
+                          {attempt.percentage.toFixed(1)}%
+                        </td>
+                        <td className="text-muted-foreground py-2.5 text-right text-[12px]">
+                          {relativeDay(attempt.startedAt)}
+                        </td>
+                      </tr>
+                    ))}
+                    {stats.recentAttempts.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="text-muted-foreground py-6 text-center">
+                          No attempts yet.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
               </div>
             </CardContent>
           </Card>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            {MODULES.map((module) => (
-              <Card key={module.title} className="bg-card/40">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm">
-                    <module.icon className="text-primary size-4" />
-                    {module.title}
-                  </CardTitle>
-                  <CardDescription>{module.detail}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Badge variant="outline" className="text-[10px]">
-                    Day {module.day}
-                  </Badge>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </main>
+          <p className="text-muted-foreground text-[11.5px]">
+            Snapshot generated {new Date(stats.generatedAt).toLocaleString()} ·{' '}
+            <code className="bg-muted rounded px-1">no-store</code> — never cached across admins.
+          </p>
+        </>
+      )}
     </div>
   );
 }

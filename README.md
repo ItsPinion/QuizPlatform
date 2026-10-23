@@ -3,10 +3,11 @@
 Quiz Management & Online Assessment Platform — a Turborepo monorepo with a **Next.js** web app,
 a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 
-> **Status: Day 3 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
+> **Status: Day 4 complete.** Workspace, typed API contract, Drizzle schema, migrations, seed data,
 > authentication (register / login / logout / `/me`, scrypt hashes, httpOnly JWT cookies), role-scoped
-> API namespaces and guarded `/admin` + `/student` areas, 184 automated tests and a 17-check
-> end-to-end smoke run. Quiz management is next.
+> API namespaces, guarded `/admin` + `/student` areas, and a working admin console — dashboard
+> statistics plus searchable user management. 258 automated tests and a 25-check end-to-end smoke
+> run. Quiz management is next.
 
 ---
 
@@ -221,18 +222,23 @@ quizplatform/
 │  ├─ api/                     Hono API (port 3001)
 │  │  ├─ src/app.ts            chained routes → exported AppType
 │  │  ├─ src/routes/auth.ts    register / login / logout / me
-│  │  ├─ src/routes/admin.ts   ADMIN-only namespace (requireAdmin)
+│  │  ├─ src/routes/admin.ts   ADMIN-only namespace (requireAdmin) + stats & users
 │  │  ├─ src/routes/student.ts STUDENT-only namespace (requireStudent)
 │  │  ├─ src/routes/health.ts  liveness + database readiness (Drizzle $count)
 │  │  ├─ src/routes/meta.ts    API index / roadmap
 │  │  ├─ src/middleware/       requireAuth + requireRole guards
+│  │  ├─ src/lib/admin-stats.ts  dashboard aggregates (one query per section)
+│  │  ├─ src/lib/admin-users.ts  directory query + guarded role/status writes
 │  │  ├─ src/lib/auth.ts       JWT signing, session cookie, claim mapping
 │  │  ├─ src/__tests__/        Vitest suite + test-database setup
 │  │  └─ src/lib/              env parsing, error envelope
 │  └─ web/                     Next.js app (port 3000)
 │     ├─ src/app/              landing, /login, /register, /admin, /student
+│     ├─ src/app/admin/        layout + console overview + /admin/users
 │     ├─ src/lib/session.ts    server-side session lookup (cookie → API)
+│     ├─ src/lib/api-server.ts cookie-forwarding RPC client for admin pages
 │     ├─ src/lib/guards.ts     role decision used by the protected pages
+│     ├─ src/lib/admin-params.ts  filter ⇄ URL mapping for the user directory
 │     ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
 │     ├─ src/components/       header, session nav, auth forms, status panels
 │     ├─ src/components/ui/    shadcn/ui primitives (button, card, badge, input, label)
@@ -246,9 +252,10 @@ quizplatform/
 │  │  ├─ src/seed.ts           rich demo dataset
 │  │  ├─ src/__tests__/        schema + seed integrity tests
 │  │  └─ migrations/           drizzle-kit generated SQL (checked in)
-│  ├─ shared/                  Zod enums, auth contracts, scrypt helpers
+│  ├─ shared/                  Zod enums, auth + admin contracts, scrypt helpers
 │  └─ test-utils/              package-manager-agnostic test runner helper
 ├─ docs/
+│  ├─ admin-dashboard.md       stats definitions, directory API, console rules
 │  ├─ authorization.md         role model, guards, redirect rules, failure modes
 │  └─ testing.md               test inventory, manual QA, security trade-offs
 ├─ scripts/
@@ -317,17 +324,19 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 184 tests, all workspaces through Turbo
+bun run test                    # 258 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
-bun run test:e2e                # 17 checks against a live server + throwaway DB
+bun run test:e2e                # 25 checks against a live server + throwaway DB
 ```
 
-**184 tests** cover the scaffolding, authentication and authorization end to end:
+**258 tests** cover the scaffolding, authentication, authorization and the admin console:
 
-**`@quiz/shared`** (24) — scrypt record format, unique salts, correct/wrong passwords, unicode
+**`@quiz/shared`** (42) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
 auth contracts (trimming, lowercased emails, stripped unknown keys, the exact password policy,
-session constants).
+session constants), plus the Day 4 admin contracts: query coercion and defaults, the
+`updateUserSchema` refine that rejects an empty body while stripping fields the dashboard must
+never write, the credential-free user row shape, and the stats/list response schemas.
 
 **`@quiz/db`** (58) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
 and the uniqueness/lookup indexes; column defaults; millisecond timestamp precision; unique email,
@@ -339,7 +348,7 @@ integrity (quiz/question/option counts, one correct option each, attempt percent
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
 
-**`@quiz/api`** (81) — service banner, health payload shape, request IDs, security headers, CORS
+**`@quiz/api`** (111) — service banner, health payload shape, request IDs, security headers, CORS
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
 the database is unreachable, `/api/meta` roadmap, and the 404 error envelope.
 
@@ -350,11 +359,21 @@ plus wrong-password/unknown-email parity, inactive accounts, `/me` with cookie a
 tampered/expired/foreign-signed tokens, deleted and deactivated users, logout clearing the cookie,
 and the `requireRole` guard (allow, 403, 401).
 
-**`@quiz/web`** (21) — the error-envelope narrowing every auth form relies on: API error codes,
-Zod issue extraction, fallbacks for malformed bodies, and network-error mapping.
+Day 4 adds 30 API tests: statistics arithmetic that agrees with the database, the pass-rate range,
+the newest-five strips, live reflection of a new account, directory filters (role, status, name and
+email search, empty values, unknown roles), pagination, both sorts, 422s for bad queries, detail
+lookups, 404/422 handling, promotion/demotion, deactivation lockout and restoration, `SELF_LOCKOUT`
+for self-demotion and self-deactivation, and 401/403 on every admin route.
+
+**`@quiz/web`** (47) — the error-envelope narrowing every auth form relies on (API error codes,
+Zod issue extraction, fallbacks for malformed bodies, network-error mapping), the Day 3 page guard
+rules, and the Day 4 directory parameters: query parsing with defaults and clamping, `toUserQuery`,
+`usersHref` round-trips and encoding, filter summaries, pagination range labels, initials.
 
 Beyond Vitest, `bun run test:e2e` boots the real API process against a throwaway database and walks
-the whole auth flow over HTTP (17 checks, including cookie flags, a tampered-cookie replay and both role denials). See
+the whole auth flow plus the admin console over HTTP (25 checks, including cookie flags, a
+tampered-cookie replay, both role denials, dashboard aggregates, filtered user listing, a
+promote/demote round trip, `SELF_LOCKOUT` and a deactivation lockout). See
 [`docs/testing.md`](docs/testing.md) for the full inventory, a manual QA checklist and the known
 security trade-offs.
 
@@ -368,18 +387,22 @@ The Turso-only rule applies to the running application, not to tests.
 
 ---
 
-## API surface (Day 3)
+## API surface (Day 4)
 
-| Method | Path                 | Description                                        |
-| ------ | -------------------- | -------------------------------------------------- |
-| GET    | `/api`               | Service banner                                     |
-| GET    | `/api/health`        | Liveness: version, runtime, uptime                 |
-| GET    | `/api/health/db`     | Readiness: target, latency, live row counts        |
-| GET    | `/api/meta`          | API index + the spec's remaining endpoint roadmap  |
-| POST   | `/api/auth/register` | Create a STUDENT account, sign in, set the cookie  |
-| POST   | `/api/auth/login`    | Exchange email + password for a session cookie     |
-| POST   | `/api/auth/logout`   | Clear the session cookie (idempotent)              |
-| GET    | `/api/auth/me`       | Current user + session expiry (requires a session) |
+| Method | Path                   | Description                                         |
+| ------ | ---------------------- | --------------------------------------------------- |
+| GET    | `/api`                 | Service banner                                      |
+| GET    | `/api/health`          | Liveness: version, runtime, uptime                  |
+| GET    | `/api/health/db`       | Readiness: target, latency, live row counts         |
+| GET    | `/api/meta`            | API index + the spec's remaining endpoint roadmap   |
+| POST   | `/api/auth/register`   | Create a STUDENT account, sign in, set the cookie   |
+| POST   | `/api/auth/login`      | Exchange email + password for a session cookie      |
+| POST   | `/api/auth/logout`     | Clear the session cookie (idempotent)               |
+| GET    | `/api/auth/me`         | Current user + session expiry (requires a session)  |
+| GET    | `/api/admin/stats`     | Dashboard aggregates + newest accounts and attempts |
+| GET    | `/api/admin/users`     | Paged, filtered, sorted user directory              |
+| GET    | `/api/admin/users/:id` | One user with attempt statistics                    |
+| PATCH  | `/api/admin/users/:id` | Change a role and/or status                         |
 
 Responses use a consistent error envelope:
 
@@ -497,6 +520,70 @@ same endpoint — so the guards are visible without opening DevTools.
 
 ---
 
+## Admin console (Day 4)
+
+The admin namespace stopped being a probe and became a console. Two screens, both rendered on
+the server with data the API authorises per request:
+
+```
+/admin          layout (header + sidebar) → six stat cards, account mix, newest accounts, recent attempts
+/admin/users    directory: search, role/status filters, sort, pagination, inline role/status actions
+```
+
+### Statistics come from aggregates, not the browser
+
+`GET /api/admin/stats` answers in one round trip: user totals and role split, content counts by
+quiz status, attempt totals by outcome, the pass rate and the average score, plus the five newest
+accounts and attempts. Derived fields are defined once, in the API:
+
+| Field               | Definition                                                                   |
+| ------------------- | ---------------------------------------------------------------------------- |
+| `passRate`          | `passed / (passed + failed + expired)`, one decimal, `0` when nothing graded |
+| `averagePercentage` | mean stored percentage over **graded** attempts only                         |
+| `learners`          | distinct users with at least one attempt                                     |
+| `inactive`          | `total − active`, so the two can never disagree                              |
+
+In-progress attempts are excluded from both the pass rate and the average: an unfinished attempt
+has a score of zero, and counting it would make the platform look like it is failing everyone.
+
+### User management
+
+`GET /api/admin/users` pages (`pageSize` 1–50), searches name **or** email, filters by role and
+status, and sorts by `newest`, `oldest`, `name` or `attempts`. Each row carries `attempts`,
+`completedAttempts`, `bestPercentage` and `lastAttemptAt` from a single grouped join — and
+`passwordHash` is never selected, so it cannot leak into a payload.
+
+`PATCH /api/admin/users/:id` changes a role and/or status. The body goes through Hono's JSON
+validator, which is also what gives the web client an inferred `json` type:
+
+| Situation                         | Answer                                            |
+| --------------------------------- | ------------------------------------------------- |
+| `{}` or only unknown keys         | `422 VALIDATION_ERROR` — "Provide role or status" |
+| unknown id / non-UUID id          | `404 USER_NOT_FOUND` / `422 VALIDATION_ERROR`     |
+| you demote or deactivate yourself | `409 SELF_LOCKOUT`                                |
+| student or anonymous caller       | `403 FORBIDDEN` / `401 UNAUTHENTICATED`           |
+
+`SELF_LOCKOUT` is the only lockout rule, and it is sufficient: every caller is an active admin, so
+the admin making a change always remains one. It is a `409` rather than a `403` because the
+request is legal — the resulting state is not.
+
+Deactivation is immediate. Because `requireAuth` re-reads the user row on every guarded request,
+an already-issued cookie stops working on its next use: `PATCH {status: INACTIVE}` → their next
+`/api/auth/me` is `403 ACCOUNT_INACTIVE`, and reactivating restores the same cookie.
+
+### The console UI
+
+Filters live in the URL (`?search=&role=&status=&sort=&page=`), so a view is shareable and the back
+button works, and the filter form is a plain GET form that needs no JavaScript. The table itself is
+server-rendered; only the action buttons are a client component that sends the `PATCH` through
+`hc<AppType>` and then calls `router.refresh()`, which keeps counts and pagination truthful after
+a change.
+
+Full detail — every field definition, the directory query semantics, the failure states and where
+each rule is tested — is in [`docs/admin-dashboard.md`](docs/admin-dashboard.md).
+
+---
+
 ## Environment variables
 
 | Variable             | Required | Default                 | Used by                 |
@@ -523,11 +610,16 @@ Day 3 (done): `requireAdmin` / `requireStudent`, guarded `/api/admin/*` and `/ap
 namespaces with access descriptors, server-side guards on `/admin` and `/student`, `?next=` return
 paths with open-redirect protection, 184 Vitest tests and a 17-check end-to-end smoke run.
 
+Day 4 (done): admin console shell with sidebar navigation, `GET /api/admin/stats` aggregates,
+`GET /api/admin/users` with search/filter/sort/pagination, `GET` and `PATCH /api/admin/users/:id`
+with the `SELF_LOCKOUT` rule, server-rendered `/admin` and `/admin/users` screens, 258 Vitest tests
+and a 25-check end-to-end smoke run.
+
 | Day | Milestone                                                         |
 | --- | ----------------------------------------------------------------- |
 | 2   | ✅ Authentication — register, login, logout, hashing, JWT cookies |
 | 3   | ✅ Role-based authorization — admin/student guards                |
-| 4   | Admin dashboard — stats, user management                          |
+| 4   | ✅ Admin console — statistics + user management                   |
 | 5   | Quiz management — CRUD + publish/unpublish                        |
 | 6   | Categories & questions — CRUD, options, correct answers           |
 | 7   | Student quiz UI — listing, details, navigation, timer             |
@@ -550,6 +642,15 @@ paths with open-redirect protection, 184 Vitest tests and a 17-check end-to-end 
 | `DATABASE_NOT_CONFIGURED` | No `TURSO_DATABASE_URL`, or a `libsql://` URL without a token      | Fill in `.env`                        |
 | `DATABASE_SCHEMA_MISSING` | Credentials and connectivity are fine, but the tables do not exist | `bun run db:migrate` (then `db:seed`) |
 | `DATABASE_UNAVAILABLE`    | The network or driver failed (`fetch failed → ECONNRESET`, …)      | Check connectivity / credentials      |
+
+**`/admin` shows "Statistics are unavailable"** — the page rendered (so the ADMIN guard passed) but
+the API could not answer `/api/admin/stats`. Open `/api/health/db`: if that is also failing, it is the
+database, not the console. If the probe is healthy, the API on port 3001 is not running — the web
+server proxies to it.
+
+**`409 SELF_LOCKOUT` in the user directory** — you tried to demote or deactivate the account you are
+signed in with. That is deliberate, and the rule doubles as "at least one admin must remain": sign
+in as a different admin to change this one.
 
 **`SERVER_ERROR: Server returned HTTP status 400` from `db:migrate` / `db:seed`** — Turso accepted
 the TCP connection but rejected the statement. Migrations and seeding print a diagnosis before
