@@ -1,19 +1,30 @@
 /**
  * The film.
  *
- * The foundation of the page: a full-bleed loop, cropped to the frame, with the
- * two overlays the type sits on. Nothing here is fetched from a CDN — the clip
- * is rendered by `scripts/make-film.ts` and served from `/film`.
+ * The foundation of the page. Three layers, each doing one job:
+ *
+ *   - **The video** — a full-bleed loop, cropped to the frame, at the two
+ *     grades the design calls for (`brightness(0.7)`, `contrast(1.1)`).
+ *   - **The GIF** — dust drifting in the dark, composited over the video with
+ *     `mix-blend-mode: screen`, so its black reads as transparent and the motes
+ *     float in front of the lights. It is not a fallback: it runs everywhere,
+ *     always, which means the background is alive even when autoplay is
+ *     refused, the codec is missing, or the visitor asked for reduced motion.
+ *     One 217 kB image, and nothing needs re-encoding to add to it.
+ *   - **The overlays** — a vignette and a top/bottom gradient, so type can sit
+ *     on the middle of the frame and stay legible.
  *
  * Three decisions worth knowing:
  *
  *   - **The poster is also the poster.** It is the exact first frame of the
  *     video, so the handover from still to motion is invisible, and it is what
- *     a visitor on a metered connection, or with motion turned off, sees.
- *   - **`prefers-reduced-motion` does not play the video at all.** It is hidden
- *     by CSS rather than skipped in JS, so the poster is already underneath
- *     before a byte of script runs.
- *   - **The video is decorative.** `aria-hidden` and no controls: it carries no
+ *     a visitor on a metered connection sees.
+ *   - **`prefers-reduced-motion` stops the video** (hidden by CSS, before any
+ *     script runs) **but not the GIF** — a GIF cannot be paused by a media
+ *     query. It is motion, and refusing to honour the setting would be the
+ *     wrong trade for a background; so under reduced motion the GIF is dropped
+ *     too and the poster carries the page. It is `aria-hidden` either way.
+ *   - **The video is decorative.** No controls, `aria-hidden`: it carries no
  *     information, so it is not in the accessibility tree at all.
  */
 export function Film() {
@@ -37,6 +48,10 @@ export function Film() {
         <source src="/film/reading-room.webm" type="video/webm" />
         <source src="/film/reading-room.mp4" type="video/mp4" />
       </video>
+
+      {/* The dust. `screen` against the video's own black keeps the motes and
+          drops the plate they were rendered on. */}
+      <div className="pointer-events-none absolute inset-0 bg-[url('/film/reading-room.gif')] bg-cover bg-center opacity-70 mix-blend-screen motion-reduce:hidden" />
 
       {/* The vignette: focus at the centre of the frame. */}
       <div className="cine-veil cine-veil-radial" />

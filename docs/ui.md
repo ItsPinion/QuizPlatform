@@ -50,22 +50,51 @@ that darkens the corners so the centre of the frame is the brightest part) and
 `.cine-veil-linear` (dark at the top under the nav, dark at the bottom under the
 footer, clear through the middle where the headline sits).
 
-### The film
+### The film, and the dust
 
-`apps/web/public/film/reading-room.{mp4,webm}` — a 12-second loop of two warm
-lights drifting through a dark room, 0.2 MB and 70 kB. It is **generated**, by
-`bun run film` (`scripts/make-film.ts`): `ffmpeg` builds the plate from `geq`
-expressions, blurs it, adds grain at final resolution and vignettes it. Every
-motion term completes an integer number of cycles in the loop, so the last frame
-flows into the first with no seam.
+Four files in `apps/web/public/film`, all **generated** by `bun run film`
+(`scripts/make-film.ts`): `ffmpeg` builds the plates from `geq` expressions,
+blurs them, and quantises them. Every motion term completes an integer number of
+cycles in the loop, so the last frame flows into the first with no seam.
 
-Two things make it safe to ship:
+| File                | Size   | Job                                                 |
+| ------------------- | ------ | --------------------------------------------------- |
+| `reading-room.webm` | 70 kB  | The film, VP9, preferred where supported            |
+| `reading-room.mp4`  | 226 kB | The film, h264, for everything else                 |
+| `reading-room.jpg`  | 15 kB  | The poster — the exact first frame                  |
+| `reading-room.gif`  | 217 kB | The dust: 26 motes drifting on black, 6-second loop |
+
+**The GIF is a layer, not a fallback.** It sits above the video with
+`mix-blend-mode: screen`, so its black reads as transparent and the motes float
+in front of the lights. That is not a trick for its own sake — it solves three
+problems at once:
+
+1. **The background is always alive.** Where autoplay is refused, the codec is
+   missing, or the visitor is on a metered connection and the video never
+   arrives, the GIF still moves. Without it, those visitors get a still frame.
+2. **Nothing has to be re-encoded to change it.** Adding the motes to the film
+   would have meant re-rendering and re-encoding both videos; as a separate
+   layer they cost one small file and no touching of what already worked.
+3. **Nothing visibly changes when the video starts** — the two layers are the
+   same scene, so there is no moment where the background switches.
+
+It is drawn on black with no gradient in it for a reason: a GIF has 256 colours
+for the whole frame, so a smooth gradient bands into visible rings (a first
+attempt at a grainy 8 fps GIF came out at **8 MB** for exactly this reason),
+while a scatter of soft dots quantises cleanly to 24 colours and compresses to
+217 kB. Sparse content is the only way a GIF gets small enough to be worth
+serving.
+
+Two things make the whole backdrop safe to ship:
 
 - **The poster is the first frame.** The still and the video are the same image,
-  so the handover is invisible — and visitors with `prefers-reduced-motion`,
-  `Save-Data` or a blocked codec see a composed page rather than a hole.
-- **It is decorative.** `aria-hidden`, no controls, `motion-reduce:hidden`.
-  Nothing in it carries information.
+  so the handover is invisible — and a visitor with `Save-Data` or a blocked
+  codec sees a composed page rather than a hole.
+- **It is decorative.** `aria-hidden` on the block, no controls, and
+  `motion-reduce:hidden` on both moving layers. A GIF cannot be paused by a
+  media query, so under `prefers-reduced-motion` it is removed from the DOM's
+  paint entirely and the poster carries the page. Nothing in any of it carries
+  information.
 
 ### The type
 

@@ -11,10 +11,27 @@
  * blurred to 20px and crushed under two dark overlays by the time anyone sees
  * it, so detail would be wasted bytes.
  *
- * What it draws: two slow warm lights drifting through a dark room, a cool
- * sweep crossing behind them, and grain. Every motion term completes an integer
- * number of cycles in LOOP seconds, so the last frame flows back into the
- * first and the loop has no seam.
+ * It draws three layers of the same room:
+ *
+ *   1. `reading-room.mp4` / `.webm` — two slow lights drifting, a sweep crossing
+ *      behind them, grain. Every motion term completes an integer number of
+ *      cycles in LOOP seconds, so the last frame flows back into the first and
+ *      the loop has no seam.
+ *   2. `reading-room.jpg` — the first frame, used as the video's poster.
+ *   3. `reading-room.gif` — the dust: two dozen motes on black, drifting on
+ *      their own slow paths, looping every GIF_LOOP seconds.
+ *
+ * The GIF is a **separate layer, not a fallback**: it is composited over
+ * whichever base is playing with `mix-blend-mode: screen`, so black reads as
+ * transparent and the motes float in front of the film. That solves three
+ * problems at once — the background animates even where autoplay or the codec
+ * is refused, adding the motes to the video would have cost a re-encode of the
+ * whole clip, and there is nothing to see changing when the video takes over.
+ *
+ * It is also why the GIF is drawn on black with no gradient in it: a GIF has
+ * 256 colours for the whole frame, so a smooth gradient bands into visible
+ * rings while a scatter of soft dots does not. Sparse content also compresses,
+ * which is the only way a GIF becomes small enough to be worth serving.
  */
 
 import { mkdir } from 'node:fs/promises';
@@ -24,6 +41,11 @@ const OUT = join(import.meta.dir, '..', 'apps', 'web', 'public', 'film');
 
 const FPS = 24;
 const LOOP = 12;
+
+/** The GIF loops twice as often: fewer frames, and dust needs less timing. */
+const GIF_LOOP = 6;
+const GIF_FPS = 8;
+const GIF_SIZE = '256:144';
 const W = 480; // rendered small, upscaled after blurring
 const H = 270;
 const SCALE = '1280:720';
@@ -111,6 +133,61 @@ for (const [name, args] of renders) {
   }
 }
 
+/**
+ * The dust.
+ *
+ * Two dozen soft dots, each with its own fixed starting point, its own
+ * amplitude and its own whole-cycle frequency, so they never fall into step and
+ * never drift off the frame. Deterministic on purpose: re-running this script
+ * has to produce the same file.
+ */
+const MOTES = Array.from({ length: 26 }, (_, i) => {
+  const px = (i * 37) % 320;
+  const py = (i * 53) % 180;
+  const r = 2.5 + (i % 5) * 1.6;
+  const amp = 8 + (i % 7) * 4;
+  const fx = 1 + (i % 3);
+  const fy = 1 + (i % 2);
+  const phase = i * 0.7;
+  const brightness = 26 + (i % 4) * 9;
+
+  const cx = `${px}+${amp}*sin(T*${((TAU * fx) / GIF_LOOP).toFixed(6)}+${phase.toFixed(3)})`;
+  const cy = `${py}+${(amp * 0.7).toFixed(1)}*cos(T*${((TAU * fy) / GIF_LOOP).toFixed(6)}+${phase.toFixed(3)})`;
+
+  return `${brightness}*exp(-((X-(${cx}))^2+(Y-(${cy}))^2)/${(2 * r * r).toFixed(1)})`;
+}).join('+');
+
+const dust = `12+${MOTES}`;
+
+const gif = Bun.spawnSync(
+  [
+    'ffmpeg',
+    '-y',
+    '-f',
+    'lavfi',
+    '-i',
+    `nullsrc=s=320x180:r=${GIF_FPS}:d=${GIF_LOOP}`,
+    '-filter_complex',
+    [
+      // Draw, soften, darken the edges — then quantise to 24 colours with no
+      // dithering. Dithering a dark gradient produces a crawling grain that
+      // looks like a broken encode; flat dots survive the palette untouched.
+      `[0:v]geq=lum='${dust}':cb='128':cr='128',format=gray,gblur=sigma=1.6,vignette=PI/5.2,scale=${GIF_SIZE}:flags=area,split[a][b]`,
+      '[a]palettegen=max_colors=24:stats_mode=full[p]',
+      '[b][p]paletteuse=dither=none',
+    ].join(';'),
+    '-loop',
+    '0',
+    join(OUT, 'reading-room.gif'),
+  ],
+  { stdout: 'pipe', stderr: 'pipe' },
+);
+
+if (gif.exitCode !== 0) {
+  console.error(new TextDecoder().decode(gif.stderr));
+  process.exit(1);
+}
+
 // The poster is the frame the film starts on, so the still and the first frame
 // of the video are the same image and the handover is invisible.
 const poster = Bun.spawnSync(
@@ -137,7 +214,12 @@ if (poster.exitCode !== 0) {
   process.exit(1);
 }
 
-for (const file of ['reading-room.mp4', 'reading-room.webm', 'reading-room.jpg']) {
+for (const file of [
+  'reading-room.mp4',
+  'reading-room.webm',
+  'reading-room.jpg',
+  'reading-room.gif',
+]) {
   const stat = Bun.file(join(OUT, file));
   console.log(`${file}  ${(stat.size / 1024).toFixed(0)} kB`);
 }
