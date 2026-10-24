@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { questionTypeSchema } from './question-type';
+
 /**
  * The landing payload.
  *
@@ -62,6 +64,21 @@ export const landingQuizSchema = z.object({
   durationMinutes: z.number().int(),
   passingScore: z.number().int(),
   maxAttempts: z.number().int(),
+  questions: z.number().int(),
+});
+
+/**
+ * How many questions of each format the bank holds.
+ *
+ * The landing page's format section is a claim about the product, so it is
+ * answered by `SELECT type, count(*)` rather than by four hand-written numbers.
+ * Every format is listed even at zero — a format nobody has authored yet is a
+ * fact about this database, not a reason to hide the capability — and the array
+ * is always in `QUESTION_TYPES` order so the page cannot reshuffle itself
+ * between requests.
+ */
+export const landingFormatSchema = z.object({
+  type: questionTypeSchema,
   questions: z.number().int(),
 });
 
@@ -128,6 +145,8 @@ export const landingPayloadSchema = z.object({
   shape: landingShapeSchema,
   categories: z.array(landingCategorySchema),
   quizzes: z.array(landingQuizSchema),
+  /** Questions per format, in `QUESTION_TYPES` order. */
+  formats: z.array(landingFormatSchema),
   sampleQuestion: landingQuestionSchema.nullable(),
   sampleResult: landingResultSchema.nullable(),
   demo: z.object({
@@ -140,6 +159,7 @@ export const landingPayloadSchema = z.object({
 
 export type LandingCategory = z.infer<typeof landingCategorySchema>;
 export type LandingQuiz = z.infer<typeof landingQuizSchema>;
+export type LandingFormat = z.infer<typeof landingFormatSchema>;
 export type LandingQuestion = z.infer<typeof landingQuestionSchema>;
 export type LandingResult = z.infer<typeof landingResultSchema>;
 export type LandingDemoAccount = z.infer<typeof landingDemoAccountSchema>;

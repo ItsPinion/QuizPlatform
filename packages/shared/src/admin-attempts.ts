@@ -9,6 +9,8 @@
  */
 import { z } from 'zod';
 
+import { questionTypeSchema } from './question-type';
+
 import { attemptStatusSchema } from './index';
 
 /** One row of the admin attempt table. */
@@ -99,8 +101,15 @@ export const adminAttemptAnswerSchema = z.object({
   questionId: z.string(),
   questionText: z.string(),
   position: z.number(),
+  /** Which format the question asked in (§10); older payloads default to MCQ. */
+  type: questionTypeSchema.default('MCQ'),
   marks: z.number(),
   explanation: z.string().nullable(),
+  /**
+   * The question's options. For a fill-in-the-blank these **are** the accepted
+   * answers — the console shows them as the key, exactly as the student review
+   * does, because an administrator needs to see why an answer was right.
+   */
   options: z.array(
     z.object({
       id: z.string(),
@@ -108,8 +117,18 @@ export const adminAttemptAnswerSchema = z.object({
       isCorrect: z.boolean(),
     }),
   ),
+  /** The single option picked on a multiple-choice or true/false question. */
   selectedOptionId: z.string().nullable(),
-  /** Null when unanswered — the same rule the review screen uses. */
+  /** Every option ticked on a multiple-answer question; empty on the other formats. */
+  selectedOptionIds: z.array(z.string()).default([]),
+  /** What the student typed on a fill-in-the-blank question; null elsewhere. */
+  answerText: z.string().nullable().default(null),
+  /**
+   * The grader's own stamp, read back from `answers.is_correct` — null when the
+   * question was left blank, the same rule the review screen uses. It is stored
+   * rather than recomputed here so the console cannot disagree with the score
+   * that was handed out.
+   */
   isCorrect: z.boolean().nullable(),
 });
 export type AdminAttemptAnswer = z.infer<typeof adminAttemptAnswerSchema>;

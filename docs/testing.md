@@ -3,9 +3,9 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test         # 1,063 unit + integration tests across the four workspaces
+bun run test         # 1,076 unit + integration tests across the four workspaces
 bun run test:e2e     # 77 checks against a real HTTP server (own process, own port)
-bun run test:spec    # 213 probes against a running API + web (see the audit below)
+bun run test:spec    # 216 probes against a running API + web (see the audit below)
 bun run deploy:check # the deployment gate (see docs/deployment.md)
 ```
 
@@ -20,9 +20,9 @@ tests.
 
 | Workspace      | Tests | Focus                                                                                                                                                                                                                       |
 | -------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@quiz/shared` | 376   | auth + content contracts, the four question formats, attempt clocks, the grader, dashboard, analytics, ranking, deployment rules, availability, passwords, certificates, email, CSV import of every format, `.xlsx` reading |
+| `@quiz/shared` | 386   | auth + content contracts, the four question formats, attempt clocks, the grader, dashboard, analytics, ranking, deployment rules, availability, passwords, certificates, email, CSV import of every format, `.xlsx` reading |
 | `@quiz/db`     | 63    | migrations replayed from scratch, schema constraints, seed integrity (all four formats present in the seed), Drizzle Kit wiring                                                                                             |
-| `@quiz/api`    | 352   | health/readiness, auth, guards, content, the four formats end to end, taking, grading, reviewing, stats, analytics, board, system, account, import, outbox                                                                  |
+| `@quiz/api`    | 355   | health/readiness, auth, guards, content, the four formats end to end, taking, grading, reviewing, stats, analytics, board, system, account, import, outbox                                                                  |
 | `@quiz/web`    | 272   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers, question-format helpers, theming                                                                                              |
 
 Run one workspace at a time when you are iterating:
@@ -118,8 +118,8 @@ bun run test --filter=@quiz/web
 - **Category deletion** — an empty category deletes and then 404s; one with quizzes answers
   `409 CATEGORY_HAS_QUIZZES` and the row count is unchanged; the same delete succeeds once its
   quizzes are gone.
-- **Question reads** — seeded questions come back in `0..n-1` order with exactly one correct option
-  each; unknown quiz → 404; malformed id → 422.
+- **Question reads** — seeded questions come back in `0..n-1` order, each carrying the key its own
+  format needs; unknown quiz → 404; malformed id → 422.
 - **Question creation** — appends at `max + 1`, stores marks/difficulty/explanation, defaults marks to
   1 and difficulty to `MEDIUM`, and rejects too few or too many options, an out-of-range correct
   index, duplicate options (case-insensitive), a blank option, short text and marks outside 1–10.
@@ -204,7 +204,7 @@ bun run test --filter=@quiz/web
   review and history schemas (including a review that must carry `completedAt`), query defaults,
   coercion and caps, and every status label.
 - **A full review over HTTP** — a hand-built paper with one right, one wrong and the rest blank
-  returns the expected counts, exactly one correct option per question, the picked option flagged,
+  returns the expected counts, the key released for each question, the picked option flagged,
   and explanations from the seed.
 - **The stored score agrees** — the per-question `earnedMarks` sum to `result.score`, and
   `counts.correct` equals `result.correctAnswers`.
@@ -368,6 +368,14 @@ The deployment gate is a pure function, so it is tested as one — no process, n
   `attention` in a test process), no token/secret/hash appears anywhere in the serialised body, the
   reported limits equal the enforced ones, students get `403` and anonymous callers `401`, and the
   response is `no-store`.
+- **Question formats** (`@quiz/api/src/__tests__/question-formats.test.ts`, 15) — authoring each of
+  the four formats, the server-written true/false pair, a format change refused with
+  `422 QUESTION_TYPE_IMMUTABLE`, one CSV writing all four formats, the paper (type and media shipped,
+  key and fill-in-the-blank options withheld), the wrong answer shape for each format refused, a mixed
+  paper graded with its by-format breakdown, the review with the typed answer against the accepted
+  list, and the console's format-aware copy of the same attempt. The shared package carries the rest:
+  the vocabulary (`question-type.test.ts`, 28), the grader and breakdown (`attempt.test.ts`),
+  `answerVerdict` (`review.test.ts`) and every import rule (`import.test.ts`, 26).
 - **The presentation helpers** (`@quiz/web`, 15) — verdict and status labels/tones, `runtimeLabel`
   across minutes/hours/days, `latencyLabel` with `null`, `countsLabel` singular/plural and its
   no-counts fallback, `actionableChecks` ordering (warnings and failures only), and `hostLabel`
@@ -522,26 +530,31 @@ The run mutates a little, on purpose and repeatably: it registers one throwaway 
 attempt section plays the paper as that account, so a second run cannot fail for the boring reason
 that the seeded student ran out of tries), creates and then deletes an audit quiz and category, sends
 one password-reset mail, and spends its own rate-limit bucket from a fixed `X-Forwarded-For` address.
+The §10 section adds one more: it builds a four-format quiz, sits it as that student, then deletes its
+own attempt from the local file so the quiz can be deleted too — the API refuses to delete a quiz that
+has attempts, which is the product protecting history, so the audit works with the rule instead of
+adding a bypass. Run it against a remote database and it prints a note and leaves the quiz, because
+there is no file to clean up in.
 
-**Result on 2026-10-24, against the question-format work: `213 passed · 0 failed`.** The
+**Result on 2026-10-24, against the question-format work: `216 passed · 0 failed`.** The
 probes group by section as follows; each line is a count of assertions, not of features.
 
-| §     | What the probes prove                                                                                                                                                                                                                                                                                                                           | Probes |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 3.1   | both roles sign in; the admin console renders; users, quizzes, categories, attempts and one attempt's answers are readable through the API                                                                                                                                                                                                      | 10     |
-| 4     | register, logout, forgot-password for a student **and** an admin, a bad reset token refused, change-password requires the current password, the console's own account screen and its rail link, a student refused it                                                                                                                            | 11     |
-| 5     | every statistic the dashboard names — students, quizzes, published, drafts, questions, attempts, average, passed, failed — plus a 30-point timeline, popular quizzes and popular categories                                                                                                                                                     | 15     |
-| 6     | name, email, registration date, status, attempts, **average score**, highest score; a student's profile, history and performance; the profile page renders                                                                                                                                                                                      | 13     |
-| 7, 9  | create → edit → publish → unpublish → delete; every create-quiz field including the thumbnail; question text, options, one correct answer, explanation, marks, difficulty                                                                                                                                                                       | 18     |
-| 10    | every format authored through the API, a true/false pair written by the server, an image attached to any format, the malformed cases refused, one CSV carrying all four formats, a mixed paper where a fill-in-the-blank ships no options, a set and a typed answer saved and graded, the by-format breakdown on the result and the review page | 19     |
-| 8     | create, rename, delete a category; the row links to the filtered quiz list                                                                                                                                                                                                                                                                      | 4      |
-| 11–14 | start, resume without spending a try, the server-side clock, answer save, submit, the full result payload, and a review carrying question, selected answer, correct answer, explanation and verdict                                                                                                                                             | 26     |
-| 15–19 | dashboard totals and recents; search by title and by category; category, difficulty, duration and sort filters; details; history; leaderboard across three metrics, three periods and one category                                                                                                                                              | 31     |
-| 20    | every table and column the spec draws exists, and passwords are stored as scrypt hashes                                                                                                                                                                                                                                                         | 8      |
-| 25    | the endpoint list resolves — each canonical route answers rather than 404s                                                                                                                                                                                                                                                                      | 11     |
-| 26    | randomisation, negative marking (setting **and** applied penalty), max attempts, scheduling (a blocked start), certificates plus public verification, the email outbox and its transport, dark mode on both consoles, CSV parse and commit                                                                                                      | 20     |
-| 27    | a tampered session, invalid ids, missing parameters, SQL injection, a foreign origin, rate limiting, secure headers, a CSP on the web app, an error envelope with no stack, unknown routes, no secrets in `/api/health`, stored-XSS escaping, and no answer key or score in the attempt payload                                                 | 23     |
-| 28    | every console and the landing page declares a responsive viewport                                                                                                                                                                                                                                                                               | 4      |
+| §     | What the probes prove                                                                                                                                                                                                                                                                                                                                                                                                                                | Probes |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 3.1   | both roles sign in; the admin console renders; users, quizzes, categories, attempts and one attempt's answers are readable through the API                                                                                                                                                                                                                                                                                                           | 10     |
+| 4     | register, logout, forgot-password for a student **and** an admin, a bad reset token refused, change-password requires the current password, the console's own account screen and its rail link, a student refused it                                                                                                                                                                                                                                 | 11     |
+| 5     | every statistic the dashboard names — students, quizzes, published, drafts, questions, attempts, average, passed, failed — plus a 30-point timeline, popular quizzes and popular categories                                                                                                                                                                                                                                                          | 15     |
+| 6     | name, email, registration date, status, attempts, **average score**, highest score; a student's profile, history and performance; the profile page renders                                                                                                                                                                                                                                                                                           | 13     |
+| 7, 9  | create → edit → publish → unpublish → delete; every create-quiz field including the thumbnail; question text, options, one correct answer, explanation, marks, difficulty                                                                                                                                                                                                                                                                            | 18     |
+| 10    | every format authored through the API, a true/false pair written by the server, an image attached to any format, the malformed cases refused, one CSV carrying all four formats, a mixed paper where a fill-in-the-blank ships no options, a set and a typed answer saved and graded, the by-format breakdown on the result and the review page, the administrator's format-aware copy of the attempt, and the landing page's live per-format counts | 22     |
+| 8     | create, rename, delete a category; the row links to the filtered quiz list                                                                                                                                                                                                                                                                                                                                                                           | 4      |
+| 11–14 | start, resume without spending a try, the server-side clock, answer save, submit, the full result payload, and a review carrying question, selected answer, correct answer, explanation and verdict                                                                                                                                                                                                                                                  | 26     |
+| 15–19 | dashboard totals and recents; search by title and by category; category, difficulty, duration and sort filters; details; history; leaderboard across three metrics, three periods and one category                                                                                                                                                                                                                                                   | 31     |
+| 20    | every table and column the spec draws exists, and passwords are stored as scrypt hashes                                                                                                                                                                                                                                                                                                                                                              | 8      |
+| 25    | the endpoint list resolves — each canonical route answers rather than 404s                                                                                                                                                                                                                                                                                                                                                                           | 11     |
+| 26    | randomisation, negative marking (setting **and** applied penalty), max attempts, scheduling (a blocked start), certificates plus public verification, the email outbox and its transport, dark mode on both consoles, CSV parse and commit                                                                                                                                                                                                           | 20     |
+| 27    | a tampered session, invalid ids, missing parameters, SQL injection, a foreign origin, rate limiting, secure headers, a CSP on the web app, an error envelope with no stack, unknown routes, no secrets in `/api/health`, stored-XSS escaping, and no answer key or score in the attempt payload                                                                                                                                                      | 23     |
+| 28    | every console and the landing page declares a responsive viewport                                                                                                                                                                                                                                                                                                                                                                                    | 4      |
 
 One thing the audit cannot prove is wall-clock behaviour under load: a probe can show that a
 deadline is enforced, not how the platform behaves when a thousand people hit one at the same
@@ -618,6 +631,24 @@ Useful after changing auth, the proxy, or the cookie. Start with `bun dev`, then
 - [ ] Publish a quiz with one question, then try to delete that question → `409
 QUIZ_WOULD_HAVE_NO_QUESTIONS`; unpublish and the delete goes through.
 - [ ] Use ↑ / ↓ on a question → the numbering updates and survives a reload.
+- [ ] Add one question of each format: a multiple-answer with two boxes ticked, a true/false, and a
+      fill-in-the-blank with two accepted spellings. Each appears with its format badge; the
+      fill-in-the-blank shows its accepted answers instead of an option count.
+- [ ] Open one for editing → the format picker is disabled and says why; forcing a different `type`
+      with `curl` answers `422 QUESTION_TYPE_IMMUTABLE`.
+- [ ] Sit a paper containing all four: boxes on the set, one radio on the true/false, text on the
+      blank. Before submitting, confirm the blank question shows **no options at all** and the network
+      tab has no `isCorrect` anywhere.
+- [ ] Submit → the result card's **By format** strip lists all four; the review shows the typed answer
+      beside the accepted list and every option that was ticked; a missed box is marked wrong, not
+      half-right.
+- [ ] Import a CSV with one row of each `type` (see `docs/question-formats.md` §8) → the preview
+      labels the four rows, and after importing the question list shows four formats.
+- [ ] As the admin, open `/admin/attempts/:id` for that attempt → the typed answer and the accepted
+      list are shown, the ticked set is visible, and the skipped question says **Skipped**, not wrong.
+- [ ] `/admin/profile` → the rail shows **Account**, the password form asks for the current password,
+      and a wrong one is refused without signing you out.
+- [ ] On `/admin/users`, every row has a **View** button that opens that student's profile.
 - [ ] Sign in as `rahul@quiz.dev`, open `/student/quizzes` → only published quizzes; the draft and
       unpublished seeds are absent even if you paste their ids.
 - [ ] Open a quiz → the rules (questions, marks, duration, pass mark, attempts left) are stated

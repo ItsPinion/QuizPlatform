@@ -1093,7 +1093,57 @@ async function main(): Promise<void> {
     String(formatsPage.status),
   );
 
-  await admin.api(`/api/admin/quizzes/${formatsQuizId}`, 'DELETE');
+  // The administrator's copy of the same attempt: it must show what was typed
+  // and which boxes were ticked, not infer "skipped" from a missing option id.
+  const adminCopy = await admin.api(`/api/admin/attempts/${formatAttemptId}`);
+  const adminAnswers: any[] = adminCopy.body?.answers ?? [];
+  const adminBlank = adminAnswers.find((entry) => entry.type === 'FILL_BLANK');
+  const adminMulti = adminAnswers.find((entry) => entry.type === 'MULTI');
+  check(
+    '10',
+    "the console's copy of the attempt is format-aware",
+    adminCopy.status === 200 &&
+      adminBlank?.answerText === 'DEF.' &&
+      adminBlank?.isCorrect === true &&
+      adminMulti?.selectedOptionIds?.length === 2 &&
+      adminAnswers.some((entry) => entry.type === 'MCQ' && entry.isCorrect === null),
+    String(adminCopy.status),
+  );
+
+  // The landing page markets the formats, and its counts are rows, not copy.
+  const landingFormats = await anon.api('/api/landing');
+  const landingRows: any[] = landingFormats.body?.formats ?? [];
+  check(
+    '10',
+    'the landing payload counts the bank by format',
+    landingFormats.status === 200 &&
+      landingRows.length === 4 &&
+      landingRows.reduce((total, row) => total + row.questions, 0) ===
+        landingFormats.body?.counts?.questions,
+    landingRows.map((row) => `${row.type}:${row.questions}`).join(','),
+  );
+  const landingPage = await anon.page('/');
+  check(
+    '10',
+    'the landing page shows the four formats',
+    landingPage.status === 200 &&
+      /four ways to ask/i.test(textOf(landingPage.html)) &&
+      /fill in the blank/i.test(textOf(landingPage.html)),
+    String(landingPage.status),
+  );
+
+  // Clean up after ourselves. The quiz cannot be deleted while an attempt
+  // references it — that is the product protecting student history, and it is
+  // right — so the audit removes the attempt it just made first. If the audit is
+  // pointed at a remote database there is no local file to do that in, and the
+  // quiz is left for the operator; the DELETE then answers 409 and says so.
+  forgetAttempt(formatAttemptId);
+  const formatsCleanup = await admin.api(`/api/admin/quizzes/${formatsQuizId}`, 'DELETE');
+  if (formatsCleanup.status !== 200) {
+    console.log(
+      `  note  §10  left the audit formats quiz behind (${formatsCleanup.status}) — no local database to clean up in`,
+    );
+  }
 
   /* ── §25 The spec's endpoint list ──────────────────────────────────────── */
   // Canonical paths this build serves. A POST probed with an empty body proves
@@ -1319,6 +1369,28 @@ async function main(): Promise<void> {
   }
 
   process.exit(failures.length === 0 ? 0 : 1);
+}
+
+/**
+ * Delete one attempt from the local database, so the audit's own quiz can be
+ * deleted through the API.
+ *
+ * `DELETE /api/admin/quizzes/:id` refuses a quiz that has attempts, which is the
+ * console protecting student history — a rule worth keeping, so the audit works
+ * *with* it rather than adding a bypass. Answers cascade with the attempt. This
+ * is a scratch database the audit owns; a remote target simply leaves the quiz
+ * and prints a note.
+ */
+function forgetAttempt(attemptId: string): void {
+  if (!fs.existsSync(DB)) return;
+
+  try {
+    const database = new Database(DB);
+    database.run('DELETE FROM attempts WHERE id = ?', [attemptId]);
+    database.close();
+  } catch {
+    // A read-only or remote database — the caller reports the leftover quiz.
+  }
 }
 
 /**

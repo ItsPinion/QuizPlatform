@@ -3,6 +3,7 @@ import { headlineNumbers } from '@quiz/shared/landing';
 import { CinemaHero } from '@/components/cinema/hero';
 import { Film } from '@/components/cinema/film';
 import { CtaBand } from '@/components/landing/cta-band';
+import { Formats } from '@/components/landing/formats';
 import { PlatformBento } from '@/components/landing/platform-bento';
 import { SectionHeading } from '@/components/landing/section-heading';
 import { Tour } from '@/components/landing/tour';
@@ -16,14 +17,15 @@ import { fetchLanding } from '@/lib/landing';
 /**
  * The landing page.
  *
- * Six blocks, in the order a visitor asks the questions:
+ * Seven blocks, in the order a visitor asks the questions:
  *
  *   1. hero        — what is it, and can I see it?
  *   2. numbers     — how much is actually in here?
  *   3. platform    — what does it contain?
- *   4. tour        — what does using it feel like?
- *   5. call        — can I try it?
- *   6. footer      — where is the documentation?
+ *   4. formats     — how does it ask a question?
+ *   5. tour        — what does using it feel like?
+ *   6. call        — can I try it?
+ *   7. footer      — where is the documentation?
  *
  * Every figure on the page — counts, ranges, the sample question, the graded
  * paper, the demo logins — arrives in one `GET /api/landing` response, validated
@@ -52,7 +54,7 @@ export default async function HomePage() {
   const notes: Record<string, string> = payload
     ? {
         categories: 'every one a row, not an enum',
-        questions: 'multiple choice, one key',
+        questions: 'multiple choice, multi-answer, true/false, fill in the blank',
         'published quizzes': `${payload.counts.quizzes} in total, drafts included`,
         'papers graded': `${payload.counts.attempts} attempts started`,
       }
@@ -135,6 +137,9 @@ export default async function HomePage() {
             <PlatformBento payload={payload} />
           </div>
         </section>
+
+        {/* ------------------------------- formats ----------------------------- */}
+        <Formats payload={payload} />
 
         {/* -------------------------------- tour ------------------------------- */}
         <section id="tour" className="scroll-mt-32 border-y border-white/8 bg-white/[0.015]">

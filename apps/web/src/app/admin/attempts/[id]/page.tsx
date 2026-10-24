@@ -1,4 +1,5 @@
 import type { AdminAttemptDetailResponse } from '@quiz/shared/admin-attempts';
+import { QUESTION_TYPE_LABELS } from '@quiz/shared/question-type';
 import {
   ArrowLeft,
   CircleCheck,
@@ -25,7 +26,8 @@ import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
   title: 'One attempt — Admin console',
-  description: 'Every question of one attempt, the option chosen and the option that was right.',
+  description:
+    'Every question of one attempt, the answer given and the answer that was right — in whichever format the question asked.',
 };
 
 /**
@@ -172,6 +174,9 @@ export default async function AdminAttemptDetailPage({
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
                       <Badge variant="outline" className="text-[10px]">
+                        {QUESTION_TYPE_LABELS[answer.type]}
+                      </Badge>
+                      <Badge variant="outline" className="text-[10px]">
                         {answer.marks} {answer.marks === 1 ? 'mark' : 'marks'}
                       </Badge>
                       {answer.isCorrect === true ? (
@@ -193,43 +198,87 @@ export default async function AdminAttemptDetailPage({
                     </div>
                   </div>
 
-                  <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
-                    {answer.options.map((option) => {
-                      const chosen = option.id === answer.selectedOptionId;
+                  {answer.type === 'FILL_BLANK' ? (
+                    /* The options *are* the key here, so the card shows the typed
+                       answer first and the accepted list underneath it — the same
+                       order the student's review reads in. */
+                    <div className="mt-3 space-y-2">
+                      <div
+                        className={cn(
+                          'rounded-lg border px-3 py-2 text-[12.5px]',
+                          answer.isCorrect === true
+                            ? 'border-success/40 bg-success/10'
+                            : answer.isCorrect === false
+                              ? 'border-destructive/40 bg-destructive/10'
+                              : 'border-border/60',
+                        )}
+                      >
+                        <p className="text-muted-foreground text-[10px] tracking-wider uppercase">
+                          Typed answer
+                        </p>
+                        <p className="mt-0.5 font-mono">
+                          {answer.answerText && answer.answerText.trim() !== ''
+                            ? `“${answer.answerText}”`
+                            : '— nothing typed'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-[10px] tracking-wider uppercase">
+                          Accepted answers
+                        </p>
+                        <ul className="mt-1 flex flex-wrap gap-1.5">
+                          {answer.options.map((option) => (
+                            <li
+                              key={option.id}
+                              className="border-success/40 bg-success/10 rounded-full border px-2 py-0.5 font-mono text-[11.5px]"
+                            >
+                              {option.text}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  ) : (
+                    <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
+                      {answer.options.map((option) => {
+                        const chosen =
+                          option.id === answer.selectedOptionId ||
+                          answer.selectedOptionIds.includes(option.id);
 
-                      return (
-                        <li
-                          key={option.id}
-                          className={cn(
-                            'flex items-start gap-2 rounded-lg border px-2.5 py-1.5 text-[12.5px]',
-                            option.isCorrect
-                              ? 'border-success/40 bg-success/10'
-                              : chosen
-                                ? 'border-destructive/40 bg-destructive/10'
-                                : 'border-border/60',
-                          )}
-                        >
-                          <span
-                            aria-hidden
+                        return (
+                          <li
+                            key={option.id}
                             className={cn(
-                              'mt-1.5 size-1.5 shrink-0 rounded-full',
+                              'flex items-start gap-2 rounded-lg border px-2.5 py-1.5 text-[12.5px]',
                               option.isCorrect
-                                ? 'bg-success'
+                                ? 'border-success/40 bg-success/10'
                                 : chosen
-                                  ? 'bg-destructive'
-                                  : 'bg-border',
+                                  ? 'border-destructive/40 bg-destructive/10'
+                                  : 'border-border/60',
                             )}
-                          />
-                          <span className="min-w-0 flex-1">{option.text}</span>
-                          {chosen ? (
-                            <span className="text-muted-foreground text-[10px] tracking-wider uppercase">
-                              chosen
-                            </span>
-                          ) : null}
-                        </li>
-                      );
-                    })}
-                  </ul>
+                          >
+                            <span
+                              aria-hidden
+                              className={cn(
+                                'mt-1.5 size-1.5 shrink-0 rounded-full',
+                                option.isCorrect
+                                  ? 'bg-success'
+                                  : chosen
+                                    ? 'bg-destructive'
+                                    : 'bg-border',
+                              )}
+                            />
+                            <span className="min-w-0 flex-1">{option.text}</span>
+                            {chosen ? (
+                              <span className="text-muted-foreground text-[10px] tracking-wider uppercase">
+                                chosen
+                              </span>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
 
                   {answer.explanation ? (
                     <p className="text-muted-foreground border-border/60 mt-2.5 border-l pl-3 text-[12px] leading-relaxed">

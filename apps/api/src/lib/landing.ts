@@ -4,6 +4,7 @@ import {
   SEED_DEMO_ACCOUNTS,
   type LandingCategory,
   type LandingCounts,
+  type LandingFormat,
   type LandingPayload,
   type LandingQuiz,
   type LandingResult,
@@ -11,6 +12,7 @@ import {
   type LandingQuestion,
 } from '@quiz/shared/landing';
 import { db, getDatabaseConfig, schema } from '@quiz/db';
+import { QUESTION_TYPES } from '@quiz/shared/question-type';
 
 import { classifyDatabaseError } from './db-errors';
 import { APP_VERSION, env } from './env';
@@ -91,7 +93,7 @@ export async function buildLandingPayload(): Promise<LandingPayload> {
     averagePercentage,
   };
 
-  const [quizRows, categoryRows] = await Promise.all([
+  const [quizRows, categoryRows, formatRows] = await Promise.all([
     db
       .select({
         title: quizzes.title,
@@ -121,7 +123,24 @@ export async function buildLandingPayload(): Promise<LandingPayload> {
       .leftJoin(quizzes, eq(quizzes.categoryId, categories.id))
       .groupBy(categories.id)
       .orderBy(asc(categories.name)),
+    // Questions per format: the landing page's formats section is a claim about
+    // the product, so it is a count, not four numbers typed into a component.
+    db
+      .select({
+        type: questions.type,
+        questions: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(questions)
+      .groupBy(questions.type),
   ]);
+
+  const perFormat = new Map(formatRows.map((row) => [row.type, Number(row.questions)]));
+  // Always four entries, always in the enum's order — a format with no questions
+  // is a fact about this database, not a reason for the page to reshuffle.
+  const formats: LandingFormat[] = QUESTION_TYPES.map((type) => ({
+    type,
+    questions: perFormat.get(type) ?? 0,
+  }));
 
   const published: LandingQuiz[] = quizRows.map((row) => ({
     title: row.title,
@@ -162,6 +181,7 @@ export async function buildLandingPayload(): Promise<LandingPayload> {
       published: Number(row.published),
     })),
     quizzes: published,
+    formats,
     sampleQuestion,
     sampleResult,
     demo: { enabled: demoEnabled(), accounts: demoAccounts },
@@ -412,6 +432,7 @@ export function emptyLandingPayload(reason: unknown): LandingPayload {
     shape: buildShape([]),
     categories: [],
     quizzes: [],
+    formats: QUESTION_TYPES.map((type) => ({ type, questions: 0 })),
     sampleQuestion: null,
     sampleResult: null,
     demo: { enabled: demoEnabled(), accounts: [] },

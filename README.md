@@ -22,7 +22,7 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 > a redacted system screen an operator can read, a `bun run deploy:check` gate that runs the same
 > rules locally and eight live probes against a real URL, one Dockerfile with two targets, and the
 > runbook for migrate, verify and roll back.
-> **1,063 automated tests, a 77-check end-to-end smoke run and a 213-probe spec audit.** Feature complete: all fourteen days shipped.
+> **1,076 automated tests, a 77-check end-to-end smoke run and a 216-probe spec audit.** Feature complete: all fourteen days shipped.
 
 ---
 
@@ -306,6 +306,7 @@ quizplatform/
 │  ├─ admin-dashboard.md       stats definitions, directory API, console rules
 │  ├─ quiz-management.md       CRUD, slugs, lifecycle rules, screens
 │  ├─ categories-and-questions.md  category CRUD, question authoring, option rules
+│  ├─ question-formats.md      the four formats: schema, contracts, grader, screens, import
 │  ├─ student-quiz-interface.md  catalogue, attempt lifecycle, the taker, timer rules
 │  ├─ submission-and-scoring.md  grading rules, lazy expiry, idempotency, result card
 │  ├─ results-and-review.md      the key release rule, verdicts, history, screens
@@ -391,16 +392,16 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 1,063 tests, all workspaces through Turbo
+bun run test                    # 1,076 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
 bun run test:e2e                # 77 checks against a live server + throwaway DB
-bun run test:spec               # 213 probes, one per spec promise (needs both servers up)
+bun run test:spec               # 216 probes, one per spec promise (needs both servers up)
 bun run deploy:check            # the deployment gate (see docs/deployment.md)
 ```
 
-**1,063 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
+**1,076 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
 
-**`@quiz/shared`** (376) — scrypt record format, unique salts, correct/wrong passwords, unicode
+**`@quiz/shared`** (386) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
 auth contracts (trimming, lowercased emails, stripped unknown keys, the exact password policy,
 session constants), plus the Day 4 admin contracts: query coercion and defaults, the
@@ -408,7 +409,7 @@ session constants), plus the Day 4 admin contracts: query coercion and defaults,
 never write, the credential-free user row shape, and the stats/list response schemas. Day 14 adds the
 deployment gate (`deployment.test.ts`, 22): each of the eight environment rules in both production and
 development, every verdict path (a warning never outranks a failure), the fixed check order, and the
-summary arithmetic behind `5 of 6 checks pass · 1 warning`. `landing.test.ts` (14) covers the landing
+summary arithmetic behind `5 of 6 checks pass · 1 warning`. `landing.test.ts` (16) covers the landing
 payload schema, the range and duration labels (`15–25 min`, `60–70%`, `57.1%`) and the headline-number
 derivation the page renders.
 
@@ -418,18 +419,28 @@ slug and per-attempt answer constraints; quiz → questions/options/attempts/ans
 category-with-quizzes protected by `restrict`; user deletion cascading while nulling the quiz author;
 CLI behaviour for `migrate`, `seed`, skip-if-populated and `--force`; root-script wiring (arg
 forwarding and credential-free `generate`); and seeded-data
-integrity (quiz/question/option counts, one correct option each, attempt percentages consistent with
+integrity (quiz/question/option counts, the per-format key rules, attempt percentages consistent with
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
 
-**`@quiz/api`** (352) — service banner, health payload shape, request IDs, security headers, CORS
+**`@quiz/api`** (355) — service banner, health payload shape, request IDs, security headers, CORS
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
 the database is unreachable, `/api/meta` roadmap, and the 404 error envelope. Day 14 adds the system
 report: the schema-validated document, counts that match the tables, checks that are honest about a
 `file:` database, no secret anywhere in the payload, the limits matching what is enforced, and
-`401`/`403` on the guard. `landing.test.ts` (8) covers the public payload: counts that match the
-tables, a sample question with no answer key, a graded result with no student, demo accounts filtered
-against the users table, and an empty-but-valid document when the database cannot be read.
+`401`/`403` on the guard. `landing.test.ts` (13) covers the public payload: counts that match the
+tables, the bank split by question format (adding up to the total), a sample question with no answer
+key, a graded result with no student, demo accounts filtered against the users table, and an
+empty-but-valid document when the database cannot be read.
+
+`question-formats.test.ts` (15) is §10 end to end through the HTTP app: a true/false pair written by
+the server, a multiple-answer key stored in full, an accepted-answer list where every entry is
+correct, a format change refused with `422 QUESTION_TYPE_IMMUTABLE`, one CSV writing all four
+formats, a running paper that ships the type and the media but no key (and no options at all for a
+fill-in-the-blank), the wrong answer shape for each format refused, a mixed paper graded and broken
+down by format, the review with the typed answer against the accepted list, and the administrator's
+copy of the same attempt — typed answer, ticked set and `null` for a skipped question — reading the
+grader's stored verdict rather than re-deriving it.
 
 Authentication adds: registration (hash stored, distinct salt per user, cookie issued, email
 normalised, role escalation ignored, duplicate → 409 even when only the casing differs, weak or
@@ -469,7 +480,7 @@ pass boundary, the empty paper, duration maths, auto-submit detection and a grad
 that must carry its result.
 
 Day 9 adds 11 API tests: a full answer review over HTTP for a hand-built correct / wrong / blank
-paper (verdicts, single correct option, explanations, earned marks summing to the stored score), the
+paper (verdicts, a key per format, explanations, earned marks summing to the stored score), the
 `409` that keeps the key away from a running attempt, owner-only and admin refusals, history scoping
 and totals, status/quiz filters, score sorting, pagination, the sweep that settles a timed-out
 attempt before listing it, and the query-validation matrix. The shared package adds 13 (verdict
@@ -655,8 +666,10 @@ pretty-printed JSON outside production, and a Zod-backed env schema that fails f
 
 `apps/web/src/app/page.tsx` is a `force-dynamic` server component that calls
 `GET /api/landing` once per request, validates the response against
-`landingPayloadSchema`, and hands slices of it to six presentation blocks — hero, numbers, bento,
-tour, call to action, footer.
+`landingPayloadSchema`, and hands slices of it to seven presentation blocks — hero, numbers, bento,
+**formats**, tour, call to action, footer. The formats block draws its labels from
+`@quiz/shared/question-type` and its numbers from `SELECT type, count(*)` in the same request, so the
+page cannot advertise a format the platform does not grade, or a count the bank does not hold.
 
 **Nothing on the page is typed by hand.** The version badge, the four headline counts, the duration
 range, the pass-mark range, the sample question, the graded paper behind the hero, the console chart,
@@ -672,6 +685,7 @@ the demo logins: all of it comes from the payload. The components contain copy a
 | `shape`             | the published catalogue's min/max/average duration, pass mark and question count                         |
 | `categories`        | name, total quizzes, published quizzes — drives the console shot                                         |
 | `quizzes`           | **published only**: title, category, difficulty, duration, pass mark, attempt limit, questions           |
+| `formats`           | questions per format, in enum order, zeros included — the landing page's four-format block               |
 | `sampleQuestion`    | the first question of the fullest published quiz — text, marks, options. **No key, no explanation**      |
 | `sampleResult`      | one graded attempt: marks, counts, percentage, pass flag, time taken. **No user, no join**               |
 | `demo`              | the seeded accounts **that exist in the users table**, or `enabled: false` when `DEMO_ACCOUNTS=0`        |
@@ -695,11 +709,12 @@ The hero's two buttons come from `lib/hero-params.ts` and depend on the session:
 administrator gets **Open the console** (→ `/admin`). Nothing on the page asks a signed-in person to
 sign in again, and the header's **My dashboard** button is the only filled button in the bar.
 
-The header is one bar on every page (`components/nav/nav-bar.tsx`): the current page is a filled pill
-with `aria-current="page"`, on the landing page it follows the section you have scrolled to, the bar
-shrinks from 64px to 56px and shows a scroll-progress line, and below `lg` the links move into a
-drawer that traps Tab, closes on Escape and restores focus. One `/api/auth/me` is shared by all of it.
-See [`docs/ui.md`](docs/ui.md) §8.
+The header is one thin band on every page (`components/cinema/nav.tsx`): Platform, Formats, Tour and
+Docs in the smallest type on the page, the current one white with an `aria-current="page"` rule that
+follows the landing section you have scrolled to, transparent over the hero until the page moves.
+Below `lg` the links move into a drawer that traps Tab, closes on Escape and restores focus. One
+`/api/auth/me` is shared by the bar, the account menu and the drawer. See
+[`docs/ui.md`](docs/ui.md) §8.
 
 The page also has a visual language beyond the data: a hand-drawn pixel bookshelf
 (`library-scene.tsx`), an ambient layer of aurora blobs, stars and rising dust (`atmosphere.tsx`),
@@ -1026,10 +1041,11 @@ carries all four formats through an optional `type` column. "Match the following
 [`docs/advanced-features.md`](docs/advanced-features.md) §10 argues why: it needs a pair table, a
 different answer shape and partial credit the grader does not have.
 
-Full detail — every validation rule, the format contract, the reconciliation table, the screens and
-their failure states — is in
-[`docs/categories-and-questions.md`](docs/categories-and-questions.md) and
-[`docs/advanced-features.md`](docs/advanced-features.md).
+Full detail — the schema, the per-format payloads, the grader's rules, the console and taker screens,
+the importer's columns, the tests — is in
+[`docs/question-formats.md`](docs/question-formats.md). The authoring rules themselves are in
+[`docs/categories-and-questions.md`](docs/categories-and-questions.md), and the decision to leave
+"match the following" out is in [`docs/advanced-features.md`](docs/advanced-features.md) §10.
 
 ---
 
@@ -1471,7 +1487,7 @@ Day 14 (done): deployment & docs. Eight environment rules in one pure function, 
 places — `bun run deploy:check` before a build, `GET /api/admin/system` from inside the process, and
 `deploy:check --url` over the wire after the deploy — with a verdict of `ready`, `attention` or
 `blocked`; a redacted system screen at `/admin/system`; one `Dockerfile` with `api` and `web` targets;
-and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 1,063 Vitest tests
+and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 1,076 Vitest tests
 and a 75-check end-to-end smoke run.
 
 Day 13 (done): testing & security. Rate limiting on the auth routes (a hard per-address block and a

@@ -360,6 +360,10 @@ Two conventions behind the table:
 
 ## 10. Question formats — all of §10's list, and the one that is not
 
+> This section is the **decision**. The manual — the schema, the payloads, the
+> grader's rules, the console screens, the importer's columns and the tests — is
+> [`question-formats.md`](question-formats.md).
+
 §10 of the brief names six "future enhancement" question types and asks for
 multiple choice first. This build supports six, in four grading shapes:
 
@@ -387,63 +391,37 @@ form asks a single question — is the statement true? A hand-written two-option
 multiple-choice question still works and still grades; it just does not claim to
 be this type.
 
-### The contract, in one place
+### How it is built
 
-- **Vocabulary** — `packages/shared/src/question-type.ts` is the only list:
-  `MCQ`, `MULTI`, `TRUE_FALSE`, `FILL_BLANK`, plus the helpers every layer uses
-  (`isChoiceType`, `isMultiSelect`, `hidesOptionsWhileRunning`,
-  `QUESTION_TYPE_LABELS`, `QUESTION_TYPE_HINTS`).
-- **Authoring** — `questionInputSchema` in `packages/shared/src/question.ts`.
-  One payload shape, refined per type: `MULTI` needs ≥2 correct indices and no
-  duplicates, `FILL_BLANK` needs at least one accepted answer, `TRUE_FALSE` may
-  omit its options and may not invent its own. `resolveQuestionInput` turns that
-  payload into what the database stores, so create and edit cannot disagree. A
-  question's type is fixed once created — changing it would reinterpret every
-  answer already recorded against the row.
-- **Answering** — `saveAnswerSchema` accepts exactly one of `optionId`,
-  `optionIds` (a set of at most six) or `answerText` (1000 characters, trimmed).
-  The wrong one for the question's type is refused with `422
-ANSWER_SHAPE_MISMATCH`; an option that belongs to another question is `422
-OPTION_NOT_FOUND`. A blank typed answer counts as unanswered, not as wrong, so
-  skipping a fill-in-the-blank does not cost negative marks.
-- **Grading** — `gradeAttempt` in `packages/shared/src/attempt.ts`. Beyond the
-  legacy arithmetic (`penalty = round(neg × incorrect, 2)`, `score = max(0,
-earned − penalty)`), `MULTI` is all-or-nothing on the set — partial credit was
-  rejected because the pass mark and the negative-marking penalty are both
-  written against "a question is right or wrong" — and `FILL_BLANK` compares the
-  typed answer with `answerMatches`, which normalises case, runs of space, curly
-  quotes and a trailing full stop before comparing. Everything a person cannot
-  see is forgiven; everything they can is not ("postgres" is not "postgre").
-- **The paper** — a running attempt never carries correctness flags, and a
-  `FILL_BLANK` question ships **no options at all**, because its options _are_
-  the answer key. That is the one place where the key and the option list are
-  the same array.
-- **The result** — `formats` reports `{type, total, correct, incorrect,
-unanswered}` in `QUESTION_TYPES` order on submit, on retry, on the attempt
-  result and on the review. The result card shows the breakdown only when more
-  than one format appears, because a single row saying "multiple choice 10/10"
-  is noise.
-- **Review** — `answerVerdict` gives every format the same verdict vocabulary,
-  and the review screen shows the accepted answers for a fill-in-the-blank, the
-  full key set for a multi-answer, and the typed text next to the right answer.
+Four layers, one vocabulary:
+
+- **`packages/shared/src/question-type.ts`** is the only list of formats and the
+  helpers every layer asks (`isChoiceType`, `isMultiSelect`,
+  `hidesOptionsWhileRunning`, `normaliseAnswer`).
+- **`questionInputSchema`** validates the authoring payload per format, and
+  `resolveQuestionInput` reduces it to what is stored — so create and edit cannot
+  disagree, and the `True`/`False` pair is written by the server, never typed.
+- **`saveAnswerSchema`** accepts exactly one of `optionId`, `optionIds` or
+  `answerText`; the wrong shape for the question is `422 ANSWER_SHAPE_MISMATCH`.
+- **`gradeAttempt` + `formatBreakdown`** mark the paper and report it by format;
+  `answerVerdict` gives the review the same three verdicts for every format.
+
+The format is fixed after creation (`422 QUESTION_TYPE_IMMUTABLE`): a question
+that was a set yesterday and a typed answer today would make two students' reviews
+of the same question read differently.
+
+[`question-formats.md`](question-formats.md) has each of these in full, with the
+per-format rules, the exact error codes and the screens.
 
 ### Import
 
-The CSV importer carries all four formats. The file is the same shape as before
-with three optional columns appended — `type`, `image`, `code` — so a file
-written for the single-answer importer still imports unchanged.
-
-| type         | `option1`–`option4`          | `correct`                         |
-| ------------ | ---------------------------- | --------------------------------- |
-| `MCQ`        | the options (two or more)    | one 1-based number                |
-| `MULTI`      | the options (two or more)    | two or more, e.g. `1              | 3   | 4`  |
-| `TRUE_FALSE` | blank — the pair is fixed    | `true`/`false`, or `1`/`2`        |
-| `FILL_BLANK` | one accepted answer per cell | blank — every listed one is right |
-
-`image` takes a full `https://` URL and `code` takes a snippet; quote a cell that
-contains commas or newlines. The browser parses the file with the same function
-the API uses, so the preview's row count, format labels and error messages are
-exactly what the server would produce.
+The CSV/`.xlsx` importer carries all four formats through three optional columns
+appended to the original nine (`type`, `image`, `code`), so a file written for the
+single-answer importer still imports unchanged. `MULTI` rows list their key as
+`1|3|4`, a `TRUE_FALSE` row writes `true`/`false` and leaves the option columns
+blank, and a `FILL_BLANK` row puts each accepted spelling in an option cell.
+[`question-formats.md`](question-formats.md) §8 has the table, the examples and the
+error rules.
 
 ### Match the following — deliberately not built
 
@@ -469,5 +447,11 @@ that looks like matching in the editor and grades like something else in the
 review. The platform is better with four honest formats than five, one of which
 lies about how it scores. If matching is wanted next, the first commit is a
 decision about partial credit, not a new table.
+
+The formats are also visible on the product page: the landing page's **Four ways
+to ask** block draws the four labels from the same shared constants and counts
+each format with `SELECT type, count(*)` in the same `GET /api/landing` request as
+the headline figures — no hand-written "four formats" badge that could survive a
+format being removed.
 
 Everything else in §26 is implemented and covered by the tests named above.

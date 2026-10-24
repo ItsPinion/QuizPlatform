@@ -97,7 +97,7 @@ describe('activeSection', () => {
   });
 
   it('exposes the anchors the spy should watch', () => {
-    expect(SITE_SECTIONS).toEqual(['platform', 'tour']);
-    expect(SITE_LINKS.filter((link) => link.hash)).toHaveLength(2);
+    expect(SITE_SECTIONS).toEqual(['platform', 'formats', 'tour']);
+    expect(SITE_LINKS.filter((link) => link.hash)).toHaveLength(3);
   });
 });

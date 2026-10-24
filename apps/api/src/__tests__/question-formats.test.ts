@@ -188,6 +188,46 @@ describe('authoring the formats', () => {
     expect(res.status).toBe(422);
   });
 
+  it("refuses to change a question's format after creation", async () => {
+    const { multi } = await buildQuiz();
+
+    const res = await app.request(
+      `/api/admin/questions/${multi.id}`,
+      authed(adminCookie, {
+        method: 'PUT',
+        body: JSON.stringify({
+          type: 'MCQ',
+          questionText: multi.questionText,
+          options: multi.options.map((option) => ({ id: option.id, text: option.text })),
+          correctIndex: 0,
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(422);
+    const body = await json<{ error: { code: string; message: string } }>(res);
+    expect(body.error.code).toBe('QUESTION_TYPE_IMMUTABLE');
+    expect(body.error.message).toContain('keeps the format');
+
+    // The same question, edited in its own format, still saves.
+    const kept = await app.request(
+      `/api/admin/questions/${multi.id}`,
+      authed(adminCookie, {
+        method: 'PUT',
+        body: JSON.stringify({
+          type: 'MULTI',
+          questionText: `${multi.questionText} (edited)`,
+          options: multi.options.map((option) => ({ id: option.id, text: option.text })),
+          correctIndexes: multi.options
+            .map((option, index) => (option.isCorrect ? index : -1))
+            .filter((index) => index >= 0),
+        }),
+      }),
+    );
+
+    expect(kept.status).toBe(200);
+  });
+
   it('refuses a fill in the blank with no accepted answer', async () => {
     const res = await app.request(
       `/api/admin/quizzes/${quizId}/questions`,
@@ -477,5 +517,44 @@ describe('sitting a mixed paper', () => {
     expect(multi.selectedOptionId).toBeNull();
 
     expect(review.result.formats).toHaveLength(4);
+  });
+
+  it('shows the administrator the same typed answer and set the student gave', async () => {
+    const res = await app.request(`/api/admin/attempts/${attemptId}`, authed(adminCookie));
+
+    expect(res.status).toBe(200);
+
+    const body = await json<{
+      penalty: number;
+      answers: {
+        questionId: string;
+        type: string;
+        selectedOptionId: string | null;
+        selectedOptionIds: string[];
+        answerText: string | null;
+        isCorrect: boolean | null;
+      }[];
+    }>(res);
+
+    const blank = body.answers.find((answer) => answer.questionId === questions.blank.id)!;
+    const multi = body.answers.find((answer) => answer.questionId === questions.multi.id)!;
+    const skipped =
+      body.answers.find((answer) => answer.questionId !== blank.questionId) &&
+      body.answers.find((answer) => answer.isCorrect === null);
+
+    expect(blank.type).toBe('FILL_BLANK');
+    expect(blank.answerText).toBe('DEF.');
+    expect(blank.isCorrect).toBe(true);
+
+    expect(multi.type).toBe('MULTI');
+    expect(multi.selectedOptionIds).toHaveLength(2);
+    expect(multi.selectedOptionId).toBeNull();
+    expect(multi.isCorrect).toBe(true);
+
+    // The multiple-choice question was never answered: null, not `false`.
+    expect(skipped?.type).toBe('MCQ');
+    expect(skipped?.isCorrect).toBeNull();
+    // The penalty is the attempt's own, not a hardcoded zero.
+    expect(typeof body.penalty).toBe('number');
   });
 });

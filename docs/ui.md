@@ -15,7 +15,7 @@ surface that floats above the picture.
 
 ```
 ┌───────────────────────────────────────────────────────────┐
-│  ◉ mark      PLATFORM   TOUR   DOCS        [ Sign in ]    │  fixed, transparent
+│  ◉ mark   PLATFORM  FORMATS  TOUR  DOCS   [ Sign in ]     │  fixed, transparent
 │                                                           │  until you scroll
 │                                                           │
 │                    Ask better                             │  Clash, 9rem, 200
@@ -152,13 +152,14 @@ mid-session works), and the film is replaced by its poster.
 
 ## 1. The page
 
-Six blocks, in the order a visitor asks the questions:
+Seven blocks, in the order a visitor asks the questions:
 
 | Block    | Answers                       | What is in it                                                                                                        |
 | -------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | Hero     | What is this, can I see it?   | One promise, two session-aware buttons, a real question from a real quiz, a **live** pill and the pixel reading room |
 | Numbers  | Is there anything behind it?  | Four counts, rendered from the database                                                                              |
 | Platform | What does it contain?         | The six-cell bento map                                                                                               |
+| Formats  | How does it ask a question?   | The four formats, each with a sketch of its control and the live number of questions of that format                  |
 | Tour     | What does using it feel like? | Three screens in story order: browse it → read a result → run the console                                            |
 | Call     | Can I try it?                 | Demo logins, but only for accounts that exist                                                                        |
 | Footer   | Where is the documentation?   | Links to the README and `docs/`, plus the live endpoints                                                             |
@@ -187,17 +188,18 @@ Four rules hold the page together:
 request, validates it against `landingPayloadSchema`, and passes slices of it
 down:
 
-| Field            | Feeds                                                                      |
-| ---------------- | -------------------------------------------------------------------------- |
-| `service`        | the `v0.1.0` badge, the runtime card's version, runtime and uptime         |
-| `database`       | the runtime card's target + latency, the hero pill's first render          |
-| `counts`         | the four headline numbers, the hero sentence, the console and result cards |
-| `shape`          | the attempt-clock range, the question range, the pass-mark range           |
-| `categories`     | the console shot's bar chart and its top rows                              |
-| `quizzes`        | the catalogue shot, the "N of M published" figure                          |
-| `sampleQuestion` | the hero's attempt screen: a real question from the fullest published quiz |
-| `sampleResult`   | the floating result card and the grading row                               |
-| `demo`           | the printed logins at the close                                            |
+| Field            | Feeds                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| `service`        | the `v0.1.0` badge, the runtime card's version, runtime and uptime                   |
+| `database`       | the runtime card's target + latency, the hero pill's first render                    |
+| `counts`         | the four headline numbers, the hero sentence, the console and result cards           |
+| `shape`          | the attempt-clock range, the question range, the pass-mark range                     |
+| `categories`     | the console shot's bar chart and its top rows                                        |
+| `quizzes`        | the catalogue shot, the "N of M published" figure                                    |
+| `formats`        | the formats block: one entry per format, in enum order, with its live question count |
+| `sampleQuestion` | the hero's attempt screen: a real question from the fullest published quiz           |
+| `sampleResult`   | the floating result card and the grading row                                         |
+| `demo`           | the printed logins at the close                                                      |
 
 Four rules make that safe:
 
@@ -330,7 +332,7 @@ case — the pointer tracking without the theatre.
    it stops reading as a bento. Decide intensity first: `particles` and `magnet`
    for a showcase cell, the spotlight alone for anything in a list.
 2. Write the content as a server component in the page (or its own module, like
-   `components/platform-bento.tsx`) — `BentoCard` takes children, so the content
+   `components/landing/platform-bento.tsx`) — `BentoCard` takes children, so the content
    stays on the server.
 3. Add anything the card counts to `/api/landing` first, then read it from the
    payload. The console card says 47 questions because the database says 47; a
@@ -422,69 +424,41 @@ bento cards keep their own pointer-following light from §3.
 
 ## 8. The navigation bar
 
-`components/nav/nav-bar.tsx` replaced a `<header>` that was a logo, three links
-and a row of small buttons. It is the same chrome on every page — the landing
-page, both auth screens, the student area and the admin console — so it had to
-earn its height.
+`components/cinema/nav.tsx` is the whole of the chrome, on every route: the
+landing page, both auth screens, the student area, the admin console and the 404.
+It is one thin band across the top of the frame — the mark on the left, four page
+links in the smallest voice on the page, and the actions on the right — and it
+replaces both a fixed full-width bar and, before that, a floating "water drop".
+The drop is gone on purpose: a detached capsule is a lovely object and a poor
+navigation, because it has to inset from the edges and therefore floats over the
+content it is meant to sit above. A band that spans the frame is quieter, holds
+more, and leaves the hero's type as the loudest thing on screen.
 
-### The material: a drop of water on a table
+### The band
 
-The bar is **not attached to anything**. It is `fixed` — out of the document
-flow entirely — inset from all four edges (`px-4 pt-4`, `max-w-5xl` so it is
-narrower than the content column), at `z-[80]` so page content scrolls _under_
-it rather than beside it. It stands on its own contact shadow, so it reads as an
-object placed _on_ the page rather than the page's top edge.
+| Cue                        | How                                                                                                                                                                                                            |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Fixed, edge to edge**    | `fixed inset-x-0 top-0 z-[80]` — page content scrolls under it, so the hero starts at `y=0` and the film reaches the top of the window.                                                                        |
+| **Nothing until you move** | At the top of the page the band is `bg-transparent`: over a dark hero there is nothing for a bar to separate from. Past 40px of scroll it becomes `bg-black/55 backdrop-blur-xl`.                              |
+| **One voice**              | Links are `cine-label` — 10px, uppercase, wide tracking, `text-gray-300`. It is deliberately the smallest type on the page, so the eye goes to the headline, not the menu.                                     |
+| **Where you are**          | The current link is white and carries an `aria-current="page"`; a 1px white rule under it scales from the left on hover and stays put when current. On the landing page that rule follows the section in view. |
+| **The widest column**      | `max-w-6xl` with `px-6 sm:px-8` — the same measure as the sections below it, so the mark lines up with the content and never with the window edge.                                                             |
+| **The button**             | Sign in is an outlined pill, Get started is a white one, and a signed-in visitor gets a single filled pill into their area plus the account menu. Nothing else competes.                                       |
+| **A phone**                | Below `lg` the links move into a modal drawer; the account pill collapses to an icon-only pill and the name moves into the drawer.                                                                             |
 
-Fixed rather than sticky matters: a sticky bar still owns a slice of the
-document, so every page begins below it and the top of each screen is a reserved
-band of nothing. Fixed means the page starts at `y=0`, the drop floats over the
-first line of content, and the glass is doing its job — you can see the page
-moving behind it. The trade is that each page leaves room for the drop itself:
-`pt-28` (112px) on the landing hero, both auth screens, the student and admin
-shells, and `pt-32` on the 404, against a drop whose bottom edge sits at 80px.
-`pointer-events-none` on the fixed wrapper keeps its transparent margin from
-swallowing clicks meant for the page.
-
-Everything below is `.water-drop` in `globals.css`:
-
-| Cue                   | How                                                                                                                                                                                                                                                 |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Refraction**        | `backdrop-filter: blur(20px) saturate(1.8)` — the page behind is genuinely blurred and oversaturated, not painted over with a solid colour.                                                                                                         |
-| **Meniscus**          | A 1px rim drawn by a `::before` with `padding: 1px` and `mask-composite: exclude`, gradient from bright white at the waterline to the primary colour at the base.                                                                                   |
-| **Specular shoulder** | A `::after` radial bloom in the top-left, where the surface bends away and catches the light.                                                                                                                                                       |
-| **Sheen**             | A blurred 26%-wide highlight drifting across the surface every 17s.                                                                                                                                                                                 |
-| **Gloss**             | `.water-gloss` — a broad white highlight across the crown, a second catch on the right shoulder, and the caustic colour picked up along the base. Plus `inset 0 1px 0` on the drop itself: the bright wet line a polished edge always has.          |
-| **Glint**             | `.water-glint` — a hard reflection travelling across the glass, once every 9s. Slow on purpose: a sweep on a loop reads as a loading state; one every few seconds reads as light moving.                                                            |
-| **Caustic**           | A pool of primary-tinted light under the drop (`bottom: -13px`, `blur(11px)`) plus two faint satellite beads — the splash that came off. Its opacity breathes over 11s.                                                                             |
-| **Shape**             | Not a capsule: `--drop-radius: 30px 26px 28px 32px / 27px 30px 26px 29px` — four corners that are nearly but not exactly the same.                                                                                                                  |
-| **Settling**          | Scrolling does not just shrink the bar: `data-settled` makes the material denser, the radius smaller and the shadow tighter, the way a wet shape flattens under its own weight.                                                                     |
-| **No material?**      | `@supports not (backdrop-filter …)` raises the background to 94% opacity; `prefers-reduced-motion` removes the glint, the sheen, the caustic and the panel animation. The rim, the gloss and the contact shadow stay — those are shape, not motion. |
-
-The wrapper is `pointer-events-none` with `pointer-events-auto` on the drop, so
-the transparent strip above and beside it never swallows a click meant for the
-page underneath.
-
-### What it does
-
-| Behaviour                    | Detail                                                                                                                                                                                                                                           |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Says where you are**       | The current page is a filled pill with `aria-current="page"`. On the landing page the pill follows the section you have scrolled to, via an `IntersectionObserver` watching `#platform` and `#tour` in a band across the middle of the viewport. |
-| **Shrinks and settles**      | 64px at the top of the page, 56px once you scroll; the material gets denser and the radius smaller at the same time.                                                                                                                             |
-| **Shows your progress**      | A 2px gradient **waterline inside** the drop, driven by a `requestAnimationFrame`-throttled scroll listener. It fades in only once the page has moved — at rest there is nothing to measure.                                                     |
-| **Keeps the session honest** | One `/api/auth/me` shared by the bar, the account menu and the drawer (`lib/use-session.ts`), with a module-level snapshot and a subscriber list. Signing out publishes `guest` to all of them at once.                                          |
-| **Knows your area**          | A signed-in visitor gets the only filled button in the bar — "My dashboard" or "Admin console" — and an account menu holding the name, the email, the role, the way into the area and the way out.                                               |
-| **Works on a phone**         | Below `lg` the links live in a drawer instead of disappearing.                                                                                                                                                                                   |
+The band is a real `<header>` element, not a styled `<div>` — it is the page's
+banner landmark on every route, and assistive tech (and the deployment check)
+look for it.
 
 ### The drawer
 
-The old bar hid its links under `md`, which left a phone visitor able to reach
-the logo and nothing else. The drawer is a second drop — `.water-panel`, the same
-material, floating 0.6rem below the first and inset from the edges with it —
-and it is a small modal that behaves like one:
+Below `lg` the four site links live behind a 44px round trigger that swaps
+between menu and close. The panel is a small modal and behaves like one:
 
 - `aria-expanded` and `aria-controls` on the trigger, which swaps to a close icon;
-- `role="dialog"` / `aria-modal="true"`, focus moved to the first link on open;
-- **Escape** closes it and returns focus to the trigger; so does the backdrop;
+- `role="dialog"` / `aria-modal="true"` with a name, focus moved to the first
+  link on open;
+- **Escape** closes it and returns focus to the trigger; tapping a link does too;
 - **Tab** cycles inside the panel rather than escaping into the page behind;
 - the body does not scroll while it is open (`overflow: hidden`, restored on close);
 - it closes on a route change and when the viewport grows past `lg` — a
@@ -492,14 +466,22 @@ and it is a small modal that behaves like one:
 
 ### The rules underneath
 
-`lib/nav-sections.ts` holds the two decisions that are easy to get wrong and
-easy to test:
+`lib/nav-sections.ts` holds the decisions that are easy to get wrong and easy to
+test — fifteen tests cover the table below:
 
+- **`SITE_LINKS`** — `Platform`, `Formats`, `Tour` (the three landing anchors) and
+  `Docs` (the repository, marked `external` so it gets the arrow and a new tab).
+  `Formats` was added when the four question formats shipped: a selling point
+  that only appears twelve screens down needs a link that jumps to it.
 - **`activeHref(pathname, links)`** — exact match, or a path continuing after a
   slash (`/student` covers `/student/results`, `/stud` covers nothing), and when
-  several links match, the _longest_ wins. Fifteen tests cover the table.
+  several links match, the _longest_ wins.
 - **`activeSection(visible, order)`** — the first visible landing section in page
-  order, so the pill never flickers between two sections that both intersect.
+  order, so the underline never flickers between two sections that both
+  intersect. `SITE_SECTIONS` is derived from `SITE_LINKS`, so the observer and the
+  links cannot drift apart.
+- **`areaFor(role)`** — which door a role gets (`/admin` or `/student`), shared by
+  the header button and the drawer so signing in cannot land two different places.
 
 ---
 
@@ -589,7 +571,7 @@ the `<link rel="icon">` itself.
 
 ## 11. The console
 
-The eight admin screens and the five student screens are the same product as the
+The nine admin screens and the five student screens are the same product as the
 landing page, at a smaller size and a quieter voice. Signing in used to feel like
 walking out of a cinema into a stationery cupboard: the page that sold the thing
 was black, filmed and set in Clash, and the page you worked on was a flat grid of
@@ -686,7 +668,8 @@ the only thing a role supplies:
 ```ts
 const SECTIONS = [
   { href: '/admin/quizzes', label: 'Quizzes', icon: 'quizzes', prefix: true },
-  // …
+  // …the last two are the console's own `System` and `Account` screens
+  { href: '/admin/profile', label: 'Account', icon: 'profile' },
 ];
 ```
 
@@ -747,6 +730,41 @@ Semantic colour survived the sweep. A pass is still green and a failure still re
 (`--success`, `--destructive`), because a monochrome dashboard that renders a
 failed attempt in white has traded meaning for taste. Everything that is not a
 verdict is white on black.
+
+### One form, four formats
+
+The authoring panel is where the §10 formats become visible, and the design rule
+was "ask the format first, then only the questions that format asks". The picker
+is four radios with the shared label and one-line hint; everything below it
+changes shape:
+
+```
+┌ Question ─────────────────────────────────────────────┐
+│ (•) Multiple choice  ( ) Multiple answers             │
+│ ( ) True / false     ( ) Fill in the blank            │
+│                                                       │
+│ MULTI   ☑ option rows, ≥2 ticked      FILL_BLANK      │
+│         Add option / remove           accepted-answer │
+│                                       rows, add more  │
+│ TRUE_FALSE  a single True/False switch, no rows       │
+└───────────────────────────────────────────────────────┘
+```
+
+The same vocabulary reaches the other screens, so a format is always named the
+same way:
+
+| Surface                                            | What it shows                                                                                         |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Question list (`/admin/quizzes/:id`)               | a format badge per question; for a fill-in-the-blank, the accepted answers instead of an option count |
+| The taker (`/student/attempt/:id`)                 | radios, checkboxes, a True/False pair, or a text input — native controls, one fieldset per question   |
+| The result card                                    | a "By format" strip, only when the paper mixed formats                                                |
+| The review (`/student/attempt/:id/review`)         | the typed answer beside the accepted list, or every option with the key; the same "By format" strip   |
+| The console's attempt copy (`/admin/attempts/:id`) | the same evidence, read from the grader's stored verdict rather than recomputed                       |
+
+Image and code are presentation, so they render the same way for every format: a
+bordered `<figure>` for the image and a `<pre>` with a small "code" label above
+the prompt. A fill-in-the-blank with a picture of a dial is a fill-in-the-blank
+question, not a sixth kind of question.
 
 ### The dropdown
 

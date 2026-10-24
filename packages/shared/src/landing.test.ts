@@ -68,6 +68,12 @@ function payload(overrides: Partial<LandingPayload> = {}): LandingPayload {
         questions: 5,
       },
     ],
+    formats: [
+      { type: 'MCQ', questions: 44 },
+      { type: 'MULTI', questions: 1 },
+      { type: 'TRUE_FALSE', questions: 1 },
+      { type: 'FILL_BLANK', questions: 1 },
+    ],
     sampleQuestion: {
       quizTitle: 'HTML Fundamentals',
       category: 'HTML',
@@ -161,6 +167,19 @@ describe('sample content', () => {
 describe('the payload contract', () => {
   it('accepts a well-formed payload', () => {
     expect(landingPayloadSchema.parse(payload())).toBeTruthy();
+  });
+
+  it('lists the question formats, and refuses one it does not know', () => {
+    expect(() => landingPayloadSchema.parse(payload())).not.toThrow();
+
+    const { formats: _omitted, ...withoutFormats } = payload();
+    expect(landingPayloadSchema.safeParse(withoutFormats).success).toBe(false);
+
+    const unknownFormat = {
+      ...payload(),
+      formats: [{ type: 'ESSAY', questions: 0 }],
+    };
+    expect(landingPayloadSchema.safeParse(unknownFormat).success).toBe(false);
   });
 
   it('carries option text and nothing else about the answer', () => {

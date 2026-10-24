@@ -130,7 +130,7 @@ export default async function StudentQuizDetailPage({ params }: PageProps) {
               <div>
                 <p className="font-medium">{quiz.questionCount} questions</p>
                 <p className="text-muted-foreground text-[11.5px]">
-                  {quiz.totalMarks} marks in total · multiple choice
+                  {quiz.totalMarks} marks in total · auto-graded on submit
                 </p>
               </div>
             </div>

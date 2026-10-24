@@ -18,6 +18,7 @@ export interface NavLink {
 /** The global links. They work from inside the app, because they are absolute. */
 export const SITE_LINKS: readonly NavLink[] = [
   { href: '/#platform', label: 'Platform', hash: true },
+  { href: '/#formats', label: 'Formats', hash: true },
   { href: '/#tour', label: 'Tour', hash: true },
   { href: 'https://github.com/ItsPinion/QuizPlatform#readme', label: 'Docs', external: true },
 ];

@@ -210,8 +210,9 @@ export default async function AdminQuizPage({ params }: PageProps) {
             Questions
           </CardTitle>
           <CardDescription>
-            Multiple choice, one correct option. Marks, difficulty and the explanation travel with
-            the question; position is the order students will see.
+            Multiple choice, multiple answers, true/false or fill in the blank — and any of them can
+            carry an image or a code block. Marks, difficulty and the explanation travel with the
+            question; position is the order students will see.
           </CardDescription>
         </CardHeader>
         <CardContent>

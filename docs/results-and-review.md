@@ -51,7 +51,9 @@ deadline just passed is graded and reviewable instead of stuck at "in progress".
       "id": "…", "position": 2, "questionText": "Which declaration cannot be reassigned?",
       "marks": 2, "difficulty": "MEDIUM",
       "explanation": "const binds a name for good; let and var can be reassigned.",
-      "selectedOptionId": "…", "correctOptionId": "…",
+      "type": "MCQ",
+      "selectedOptionId": "…", "selectedOptionIds": [], "answerText": null,
+      "correctOptionId": "…",
       "verdict": "INCORRECT", "earnedMarks": 0,
       "options": [
         { "id": "…", "text": "var",   "position": 0, "isCorrect": false, "selected": false },
@@ -63,6 +65,11 @@ deadline just passed is graded and reviewable instead of stuck at "in progress".
   "counts": { "all": 20, "correct": 16, "incorrect": 3, "unanswered": 1 }
 }
 ```
+
+`result.formats` carries the same paper split by question format —
+`[{ type: 'MCQ', total, correct, incorrect, unanswered }, …]` in `QUESTION_TYPES`
+order. It is derived from the questions the grader just marked, so it cannot
+contradict `correctAnswers`.
 
 Details worth knowing:
 
@@ -78,6 +85,12 @@ Details worth knowing:
   rendering an empty box.
 - **`autoSubmitted`** is derived from `completedAt >= expiresAt`, so the review can say "the clock
   ended this one" without a separate flag in the database.
+- **Every format reads the same way.** A `MULTI` question carries its whole
+  `selectedOptionIds` set and the verdict is all-or-nothing on the set; a
+  `FILL_BLANK` question carries `answerText` and shows its options (which are the
+  accepted answers) as the key. `answerVerdict` is one function for all four
+  formats, so a review cannot mark a set differently from the grader. The formats
+  themselves are in [`question-formats.md`](question-formats.md).
 
 ## Attempt history
 
@@ -115,9 +128,12 @@ Response: `{ attempts[], pagination, filters, totals }`.
   `score of marks`, pass mark, minutes taken and an **auto-submitted** chip when the clock ended it.
 - Filter chips with live counts — `All 20`, `Correct 16`, `Incorrect 3`, `Unanswered 1` — as plain
   links to `?filter=…`, so the view is shareable, reloadable and works without JavaScript.
+- A **By format** strip after the header when the paper mixed formats:
+  `Multiple choice · 3 of 4 correct`.
 - One card per question: its **original number** (`Question 7 of 20`, even when a filter hides the
-  others), difficulty, verdict badge, marks earned, the options with `your answer` / `correct`
-  markers, a sentence describing the outcome, and the explanation.
+  others), its **format**, difficulty, verdict badge, marks earned, the answer given
+  (options with `your answer` / `correct` markers, every ticked box on a set, or the typed text
+  beside the accepted list), a sentence describing the outcome, and the explanation.
 - An empty filter state that links back to the full paper.
 - A link back to the score.
 
@@ -156,10 +172,10 @@ screen links back to the score, and both are reachable from the history.
   correct"), earned marks, the tally, filter matching, the review and history schemas, query
   defaults and caps, and the status labels.
 - `apps/api/src/__tests__/reviews.test.ts` (11) — a full review over HTTP with a hand-built
-  correct / wrong / blank paper, `earnedMarks` summing to the stored score, exactly one correct
-  option per question, the explanations arriving, the `409` for a live attempt (with no key in the
-  body), owner-only `404`s, the admin `403`, a seeded attempt reviewable, history scoping, totals
-  agreeing with the rows, status/quiz filters, score sorting, pagination, the sweep settling a
+  correct / wrong / blank paper, `earnedMarks` summing to the stored score, each question's key
+  released with the option flagged, the explanations arriving, the `409` for a live attempt (with no
+  key in the body), owner-only `404`s, the admin `403`, a seeded attempt reviewable, history scoping,
+  totals agreeing with the rows, status/quiz filters, score sorting, pagination, the sweep settling a
   timed-out attempt before listing it, and the query validation matrix.
 - `apps/web/src/lib/review-params.test.ts` (16) — review filter parsing and href round-trips,
   history filter parsing, `toHistoryQuery`, history href round-trips (never emitting a dropped

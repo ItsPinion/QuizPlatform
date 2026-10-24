@@ -244,14 +244,29 @@ export async function createQuestion(quizId: string, input: QuestionInput): Prom
  * The reason is structural: an options array plus the correct index is only
  * consistent as a set. A partial patch could remove the correct option while
  * leaving the index alone, producing a question nobody can pass.
+ *
+ * The **format is not editable**. Everything else may change — the text, the
+ * options, the marks, the media — but a question that was a set yesterday and a
+ * typed answer today would make two students' reviews of the same question read
+ * differently. The console disables the picker; this is the rule it is disabling
+ * it for, and it is enforced here rather than trusted to the form.
  */
 export async function replaceQuestion(id: string, input: QuestionInput): Promise<AdminQuestion> {
-  await questionRow(id);
+  const existing = await questionRow(id);
+  const type = input.type ?? 'MCQ';
+
+  if (type !== existing.type) {
+    throw new ApiError(
+      422,
+      'QUESTION_TYPE_IMMUTABLE',
+      'A question keeps the format it was created with. Delete it and write a new one instead.',
+    );
+  }
 
   await db
     .update(questions)
     .set({
-      type: input.type ?? 'MCQ',
+      type,
       questionText: input.questionText,
       explanation: input.explanation,
       marks: input.marks,

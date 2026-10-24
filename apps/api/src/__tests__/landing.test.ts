@@ -1,5 +1,7 @@
 import { landingPayloadSchema, type LandingPayload } from '@quiz/shared/landing';
+import { QUESTION_TYPES } from '@quiz/shared/question-type';
 import { db, schema } from '@quiz/db';
+import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
 import { app } from '../app';
@@ -46,6 +48,21 @@ describe('GET /api/landing', () => {
     expect(body.counts.passedAttempts).toBeLessThanOrEqual(body.counts.gradedAttempts);
     expect(body.counts.passRate).toBeGreaterThanOrEqual(0);
     expect(body.counts.passRate).toBeLessThanOrEqual(100);
+  });
+
+  it('reports the question bank by format, read from the table', async () => {
+    const { body } = await landing();
+
+    expect(body.formats.map((format) => format.type)).toEqual([...QUESTION_TYPES]);
+
+    const summed = body.formats.reduce((total, format) => total + format.questions, 0);
+    expect(summed).toBe(body.counts.questions);
+
+    for (const format of body.formats) {
+      expect(format.questions).toBe(
+        await db.$count(schema.questions, eq(schema.questions.type, format.type)),
+      );
+    }
   });
 
   it('derives the catalogue ranges from the published quizzes it lists', async () => {
@@ -171,6 +188,8 @@ describe('when the database cannot be read', () => {
     expect(body.quizzes).toEqual([]);
     expect(body.sampleQuestion).toBeNull();
     expect(body.sampleResult).toBeNull();
+    // The four formats are a capability, not a count: they survive an empty bank.
+    expect(body.formats).toEqual(QUESTION_TYPES.map((type) => ({ type, questions: 0 })));
     expect(body.demo.accounts).toEqual([]);
     expect(body.database.connected).toBe(false);
     expect(body.unavailableReason).toBe('the database has not been migrated yet');

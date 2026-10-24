@@ -16,6 +16,7 @@ import type {
   AdminAttemptQuery,
   StudentProfile,
 } from '@quiz/shared/admin-attempts';
+import { parseIdOrder } from '@quiz/shared/attempt';
 import { wasAutoSubmitted } from '@quiz/shared/submission';
 import { db, schema } from '@quiz/db';
 
@@ -45,6 +46,8 @@ const attemptSelection = {
   startedAt: attempts.startedAt,
   expiresAt: attempts.expiresAt,
   completedAt: attempts.completedAt,
+  /** The quiz's penalty at the moment the attempt began, for the detail screen. */
+  penalty: attempts.penalty,
 } as const;
 
 type AttemptRow = {
@@ -66,6 +69,7 @@ type AttemptRow = {
   startedAt: Date;
   expiresAt: Date;
   completedAt: Date | null;
+  penalty: number;
 };
 
 function toAdminAttempt(row: AttemptRow): AdminAttempt {
@@ -255,6 +259,7 @@ export async function getAttemptDetail(attemptId: string): Promise<AdminAttemptD
       id: questions.id,
       position: questions.position,
       questionText: questions.questionText,
+      type: questions.type,
       marks: questions.marks,
       explanation: questions.explanation,
     })
@@ -279,26 +284,32 @@ export async function getAttemptDetail(attemptId: string): Promise<AdminAttemptD
       : [];
 
   const answerRows = await db
-    .select({ questionId: answers.questionId, selectedOptionId: answers.selectedOptionId })
+    .select({
+      questionId: answers.questionId,
+      selectedOptionId: answers.selectedOptionId,
+      selectedOptionIds: answers.selectedOptionIds,
+      answerText: answers.answerText,
+      // Stamped when the paper was graded: the console reads the verdict back
+      // instead of re-deriving it from the option flags.
+      isCorrect: answers.isCorrect,
+    })
     .from(answers)
     .where(eq(answers.attemptId, attemptId));
 
-  const selected = new Map(
-    answerRows.map((answer) => [answer.questionId, answer.selectedOptionId]),
-  );
+  const saved = new Map(answerRows.map((answer) => [answer.questionId, answer]));
 
   return {
     attempt: toAdminAttempt(row),
     quiz,
     answers: questionRows.map((question) => {
       const own = optionRows.filter((option) => option.questionId === question.id);
-      const selectedOptionId = selected.get(question.id) ?? null;
-      const correct = own.find((option) => option.isCorrect);
+      const answer = saved.get(question.id);
 
       return {
         questionId: question.id,
         questionText: question.questionText,
         position: question.position,
+        type: question.type,
         marks: question.marks,
         explanation: question.explanation,
         options: own.map((option) => ({
@@ -306,11 +317,15 @@ export async function getAttemptDetail(attemptId: string): Promise<AdminAttemptD
           text: option.text,
           isCorrect: option.isCorrect,
         })),
-        selectedOptionId,
-        isCorrect: selectedOptionId === null || !correct ? null : selectedOptionId === correct.id,
+        selectedOptionId: answer?.selectedOptionId ?? null,
+        selectedOptionIds: parseIdOrder(answer?.selectedOptionIds),
+        answerText: answer?.answerText ?? null,
+        // `null` means unanswered; a stored `false` means answered and wrong —
+        // a distinction the old recomputation lost for sets and typed answers.
+        isCorrect: answer?.isCorrect ?? null,
       };
     }),
-    penalty: 0,
+    penalty: Number(row.penalty ?? 0),
   };
 }
 

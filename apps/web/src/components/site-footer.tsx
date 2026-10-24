@@ -19,6 +19,11 @@ const COLUMNS: { title: string; links: { label: string; href: string; external?:
     title: 'Under the hood',
     links: [
       { label: 'README', href: `${REPO}#readme`, external: true },
+      {
+        label: 'Question formats',
+        href: `${REPO}/blob/main/docs/question-formats.md`,
+        external: true,
+      },
       { label: 'Security model', href: `${REPO}/blob/main/docs/security.md`, external: true },
       { label: 'Deployment', href: `${REPO}/blob/main/docs/deployment.md`, external: true },
       { label: 'Testing', href: `${REPO}/blob/main/docs/testing.md`, external: true },
