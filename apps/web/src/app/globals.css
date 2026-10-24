@@ -1133,14 +1133,25 @@
   color: rgba(11, 11, 12, 0.45);
 }
 
-/* The primary button: white-on-black becomes black-on-white. */
-[data-theme='light'] .bg-white.text-black,
-[data-theme='light'] .text-black {
-  color: #ffffff;
-}
+/* The primary button: white-on-black becomes black-on-white.
+   Scoped to `screen` on purpose — the certificate is a printed artefact, and
+   `print:text-black` must be able to win there. A plain descendant rule has
+   higher specificity than a print utility and would print white on white. */
+@media screen {
+  [data-theme='light'] .bg-white.text-black,
+  [data-theme='light'] .text-black {
+    color: #ffffff;
+  }
 
-[data-theme='light'] .bg-white {
-  background-color: #0b0b0c;
+  [data-theme='light'] .bg-white {
+    background-color: #0b0b0c;
+  }
+
+  /* The CTA's sliding fill is a light grey slid under dark text. Inverted, it has
+     to be a dark grey under white text, or the label disappears into it. */
+  [data-theme='light'] .cine-slide__fill {
+    background: #2a2a2e;
+  }
 }
 
 [data-theme='light'] .text-gray-300 {
