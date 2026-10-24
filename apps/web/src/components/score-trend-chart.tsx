@@ -18,6 +18,8 @@ import { cn } from '@/lib/utils';
 interface Props {
   trend: StudentDashboard['trend'];
   passMark?: number;
+  /** The line's caption. Defaults to the number, so a caller with one quiz keeps `pass 60%`. */
+  passLabel?: string;
   height?: number;
 }
 
@@ -32,7 +34,7 @@ const WIDTH = 560;
  * pinned to 0–100 so a wobble between 72% and 78% looks like a wobble, and the
  * pass mark is drawn as a rule so a point above or below it is obvious.
  */
-export function ScoreTrendChart({ trend, passMark = 60, height = 132 }: Props) {
+export function ScoreTrendChart({ trend, passMark = 60, passLabel, height = 132 }: Props) {
   const points = scoreChartPoints(
     trend.map((point) => point.percentage),
     WIDTH,
@@ -120,7 +122,7 @@ export function ScoreTrendChart({ trend, passMark = 60, height = 132 }: Props) {
           strokeDasharray="5 4"
         />
         <text x={WIDTH - 10} y={markY - 4} textAnchor="end" className="fill-warning text-[9px]">
-          pass {passMark}%
+          {passLabel ?? `pass ${passMark}%`}
         </text>
 
         <path d={area} fill="url(#trend-fill)" className="text-primary" />

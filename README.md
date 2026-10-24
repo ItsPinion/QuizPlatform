@@ -22,7 +22,7 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 > a redacted system screen an operator can read, a `bun run deploy:check` gate that runs the same
 > rules locally and eight live probes against a real URL, one Dockerfile with two targets, and the
 > runbook for migrate, verify and roll back.
-> **1,086 automated tests, a 77-check end-to-end smoke run and a 216-probe spec audit.** Feature complete: all fourteen days shipped.
+> **1,112 automated tests, a 77-check end-to-end smoke run and a 220-probe spec audit.** Feature complete: all fourteen days shipped.
 
 ---
 
@@ -392,14 +392,14 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 1,086 tests, all workspaces through Turbo
+bun run test                    # 1,112 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
 bun run test:e2e                # 77 checks against a live server + throwaway DB
-bun run test:spec               # 216 probes, one per spec promise (needs both servers up)
+bun run test:spec               # 220 probes, one per spec promise (needs both servers up)
 bun run deploy:check            # the deployment gate (see docs/deployment.md)
 ```
 
-**1,086 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
+**1,112 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
 
 **`@quiz/shared`** (386) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
@@ -552,7 +552,7 @@ email search, empty values, unknown roles), pagination, both sorts, 422s for bad
 lookups, 404/422 handling, promotion/demotion, deactivation lockout and restoration, `SELF_LOCKOUT`
 for self-demotion and self-deactivation, and 401/403 on every admin route.
 
-**`@quiz/web`** (282) — the error-envelope narrowing every auth form relies on (API error codes,
+**`@quiz/web`** (308) — the error-envelope narrowing every auth form relies on (API error codes,
 Zod issue extraction, fallbacks for malformed bodies, network-error mapping), the Day 3 page guard
 rules, the Day 4 directory parameters, the Day 5 quiz helpers, the Day 6 question-form helpers, and
 the Day 7–9 student helpers: catalogue filter parsing with `toStudentQuery`/`quizzesHref` round-trips
@@ -569,7 +569,13 @@ filter and host shortening, and the auth-screen helpers: the three password rule
 states, role labels, the per-screen live stats, the role home and the demo fill announcement.
 `logo-geometry.test.ts` covers the mark as numbers: the ink fits the 32-unit grid with a margin, its
 centre is the grid's centre, the tail floats clear of the ring rather than joining it, and the stroke
-stays heavy enough for a 16px favicon and light enough for a poster. `hero-params.test.ts` covers the
+stays heavy enough for a 16px favicon and light enough for a poster. `floating.test.ts` (10) covers
+where a dropdown goes — below the field, upward near the bottom of the window, never wider or
+further out than the window — and `select.test.ts` (6) plus `category-combobox.test.ts` (2) open the
+real components in jsdom and prove the list is portalled to `<body>`, fixed and above the console's
+own layers rather than trapped under the next card. `dashboard-params.test.ts` also covers the
+dashboard's pass mark: it is averaged from the student's own catalogue, and the chart label becomes a
+range (`pass 60–70%`) when the catalogue disagrees with itself — there is no hardcoded 60 in the UI. `hero-params.test.ts` covers the
 landing page's two calls to action: a visitor is asked to sign up, a
 student is sent to the catalogue, an administrator to the console, and neither signed-in role is ever
 pointed at `/login`. `nav-sections.test.ts` covers the bar: segment-aware active matching
@@ -954,6 +960,22 @@ flip it:
 | publish an already-published quiz     | `200` — idempotent, the intent holds |
 | unpublish a published quiz            | `200 UNPUBLISHED`                    |
 | unpublish a draft or unpublished quiz | `409 QUIZ_NOT_PUBLISHED`             |
+
+### A new quiz is a draft, and the console says so where you can see it
+
+`POST` always answers `DRAFT`, because a quiz with no questions cannot be published — and the
+student catalogue only ever lists `PUBLISHED` rows. So a freshly created quiz is correctly
+invisible to students, which is also how an admin ends up asking "where is my quiz?".
+
+The console answers that question three times over, from the row itself: an amber callout above the
+directory when anything on the page is unpublished, a **Publish** button in each unpublished row
+(disabled with its reason while the quiz has no questions), and a banner above the edit form naming
+the state — "Draft — students cannot see this quiz" — with **Publish now** and the question count it
+would take live. The API stays the authority; the buttons mirror `QUIZ_HAS_NO_QUESTIONS` only so
+they can explain themselves.
+
+The audit asserts both directions: a draft is absent from `/api/student/quizzes`, publishing puts it
+there at once — including on the page students actually open — and unpublishing removes it again.
 
 ### Deleting protects student history
 
@@ -1490,7 +1512,7 @@ Day 14 (done): deployment & docs. Eight environment rules in one pure function, 
 places — `bun run deploy:check` before a build, `GET /api/admin/system` from inside the process, and
 `deploy:check --url` over the wire after the deploy — with a verdict of `ready`, `attention` or
 `blocked`; a redacted system screen at `/admin/system`; one `Dockerfile` with `api` and `web` targets;
-and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 1,086 Vitest tests
+and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 1,112 Vitest tests
 and a 75-check end-to-end smoke run.
 
 Day 13 (done): testing & security. Rate limiting on the auth routes (a hard per-address block and a

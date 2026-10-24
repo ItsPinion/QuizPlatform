@@ -31,6 +31,8 @@ import {
   attemptsCaption,
   coverageLabel,
   durationLabel,
+  passMarkLabel,
+  passMarkOf,
   passRateLabel,
   percentLabel,
   toneFor,
@@ -95,7 +97,10 @@ export default async function StudentPage() {
     .slice(0, 3);
 
   const totals = dashboard?.totals;
-  const passMark = 60;
+  // Every quiz sets its own pass mark; the trend line needs one number, so it is
+  // the average of the catalogue — and the caption states the range when the
+  // catalogue disagrees. No hardcoded 60 in the UI.
+  const pass = passMarkOf(quizzes);
 
   const stats: {
     label: string;
@@ -130,7 +135,7 @@ export default async function StudentPage() {
       value: totals ? percentLabel(totals.averagePercentage) : '—',
       caption: totals?.accuracy != null ? `${percentLabel(totals.accuracy)} answer accuracy` : '—',
       icon: ChartNoAxesCombined,
-      tone: statTone(toneFor(totals?.averagePercentage ?? null, passMark)),
+      tone: statTone(toneFor(totals?.averagePercentage ?? null, pass.mark)),
     },
     {
       label: 'Highest score',
@@ -138,7 +143,7 @@ export default async function StudentPage() {
       caption:
         totals?.worstPercentage != null ? `low ${percentLabel(totals.worstPercentage)}` : '—',
       icon: Trophy,
-      tone: statTone(toneFor(totals?.bestPercentage ?? null, passMark)),
+      tone: statTone(toneFor(totals?.bestPercentage ?? null, pass.mark)),
     },
     {
       label: 'Questions answered',
@@ -248,7 +253,11 @@ export default async function StudentPage() {
           </CardHeader>
           <CardContent>
             {dashboard ? (
-              <ScoreTrendChart trend={dashboard.trend} passMark={passMark} />
+              <ScoreTrendChart
+                trend={dashboard.trend}
+                passMark={pass.mark}
+                passLabel={passMarkLabel(pass)}
+              />
             ) : (
               <p className="text-muted-foreground py-8 text-center text-[12.5px]">
                 The dashboard could not be loaded. Check the API on port 3001.

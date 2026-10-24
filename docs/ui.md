@@ -792,30 +792,45 @@ question, not a sixth kind of question.
 
 ### The dropdown
 
-A `<select>` is the right element — a phone gets the platform picker, `name`
-submits with the form, a screen reader calls it a combobox, no script. But its
-**popup** is painted by the browser, not by CSS, and on a dark page Chrome was
-opening a white list with black type. `components/ui/select.tsx` fixes that in
-one line that reaches the popup:
+A native `<select>` is the right _control_ — a phone gets the platform picker,
+`name` submits with the plain GET form, a screen reader calls it a combobox, and
+none of that needs a script. What could not be kept is the **popup**: that list
+is painted by the operating system, so on a black page it arrived as a white
+panel with black type (or white type over a white panel, in browsers that honour
+`option { color }` but not its background). `color-scheme: dark` fixes Chrome and
+Safari and does nothing for the GTK popup on Linux; there is no CSS that reaches
+it.
 
-```css
-select {
-  color-scheme: dark;
-}
-select option,
-select optgroup {
-  background-color: #0a0a0a;
-  color: #f9fafb;
-}
-```
+`components/ui/select.tsx` therefore draws the list itself while keeping the
+native contract:
 
-`color-scheme: dark` is what Chrome and Safari honour for the option list; the
-explicit `option` colours cover Firefox, which renders them itself. The control's
-own chrome is replaced (`appearance-none`) and a chevron is drawn inside the field
-at a fixed offset, so the closed state matches `Input` exactly — same 40px height,
-same glass, same focus ring. Every one of the eleven selects in the app uses it:
-the three filter forms and both authoring forms. The submit buttons beside them
-moved from `sm` to `lg` so a filter row is one height end to end.
+- `role="combobox"` with `aria-expanded`, `aria-controls` and
+  `aria-activedescendant` (the ARIA 1.2 pattern);
+- arrows, Home/End, Enter/Space, Escape and Tab behave the way a select should,
+  and focus never leaves the trigger;
+- a hidden input carries the field's `name`, so the form submits exactly what the
+  picker shows — the value is real even without JavaScript picking the option.
+
+**The list is portalled to `<body>`.** This is the part that is easy to get wrong:
+the card that holds the filters carries `backdrop-filter`, which makes it a
+stacking context of its own, so a `z-50` list inside it still loses to the next
+card down the page. That is exactly the bug where the student catalogue's filter
+dropdown opened _under_ the quiz grid. Out at the body there is no ancestor to
+lose to, so `fixed` + `z-[120]` is simply the top layer.
+
+The arithmetic — where the box goes, how tall it may be, whether it opens upward
+near the bottom of the window, and how it is clamped so a field in the last
+column still opens a full-width list inside the window — is
+`lib/floating.ts`: pure functions over two rectangles, ten tests, no browser.
+`lib/use-floating-list.ts` is the browser half: measure the trigger, re-measure
+on scroll (capture phase, so a scroll inside any ancestor counts) and on resize.
+`components/category-combobox.tsx` — the type-ahead that creates a category —
+uses the same hook, for the same reason.
+
+`apps/web/src/components/ui/select.test.ts` opens a real select in jsdom and
+asserts the list is a child of `<body>`, that it is `fixed`, that it sits at
+`z-[120]`, and that the form value still follows the pick. **6 tests**; the
+combobox has **2** of its own.
 
 ### The runner
 

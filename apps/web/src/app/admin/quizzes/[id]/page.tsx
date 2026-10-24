@@ -2,11 +2,12 @@ import type { QuestionListResponse } from '@quiz/shared/question';
 
 import { PageHeader } from '@/components/cinema/page-header';
 import type { CategoryListResponse, QuizDetailResponse } from '@quiz/shared/quiz';
-import { ArrowLeft, CalendarClock, ListChecks, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, CalendarClock, EyeOff, ListChecks, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { QuizActions } from '@/components/quiz-actions';
+import { QuizPublishButton } from '@/components/quiz-publish-button';
 import { QuizForm } from '@/components/quiz-form';
 import { QuestionsPanel } from '@/components/questions-panel';
 import { Badge } from '@/components/ui/badge';
@@ -142,6 +143,30 @@ export default async function AdminQuizPage({ params }: PageProps) {
         </p>
       </div>
 
+      {quiz.status !== 'PUBLISHED' ? (
+        <div className="flex flex-col gap-4 rounded-xl border border-amber-400/25 bg-amber-400/[0.06] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="flex items-start gap-3">
+            <EyeOff aria-hidden className="mt-0.5 size-4 shrink-0 text-amber-300" />
+            <div>
+              <p className="text-[13.5px] font-medium text-amber-100">
+                {quiz.status === 'DRAFT' ? 'Draft' : 'Unpublished'} — students cannot see this quiz
+              </p>
+              <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-amber-200/80">
+                {quiz.questionCount === 0
+                  ? 'It has no questions yet. Add the first one below, then publish — the catalogue only ever lists published quizzes.'
+                  : `It has ${quiz.questionCount} question${quiz.questionCount === 1 ? '' : 's'} ready. Publishing puts it in the student catalogue immediately; nothing else has to change.`}
+              </p>
+            </div>
+          </div>
+          <QuizPublishButton
+            quizId={quiz.id}
+            questionCount={quiz.questionCount}
+            size="lg"
+            label="Publish now"
+          />
+        </div>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <Card>
           <CardHeader>
@@ -161,7 +186,9 @@ export default async function AdminQuizPage({ params }: PageProps) {
             <CardHeader>
               <CardTitle>Lifecycle</CardTitle>
               <CardDescription>
-                Published quizzes are visible to students; drafts and unpublished ones are not.
+                {quiz.status === 'PUBLISHED'
+                  ? 'Live: it is in the student catalogue now. Unpublishing hides it again without touching its questions or its history.'
+                  : 'Only published quizzes reach students. Publishing is instant and reversible.'}
               </CardDescription>
             </CardHeader>
             <CardContent>

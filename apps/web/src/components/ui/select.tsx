@@ -2,7 +2,9 @@
 
 import { Check, ChevronDown } from 'lucide-react';
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 
+import { useFloatingList } from '@/lib/use-floating-list';
 import { cn } from '@/lib/utils';
 
 /**
@@ -26,6 +28,15 @@ import { cn } from '@/lib/utils';
  *     should, and focus never leaves the trigger;
  *   - a hidden input with the field's `name`, so a plain GET form still submits
  *     exactly what the picker shows — no JavaScript needed to *send* the value.
+ *
+ * The list is **portalled to `document.body`** and placed with `position: fixed`.
+ * That is not decoration: the field usually sits inside a `Card`, and a card
+ * carries `backdrop-filter`, which makes it a stacking context of its own. A
+ * `z-50` list inside that context still loses to the next card down the page —
+ * which is exactly the bug where a filter dropdown opens *under* the quiz grid.
+ * Out at the body there is no ancestor to lose to, and `floating.ts` does the
+ * arithmetic for where the box goes, how tall it may be, and whether it opens
+ * upward near the bottom of the window.
  *
  * The API is the native one: `value` / `defaultValue` / `onChange` / `name` /
  * `id` / `children` as `<option>` elements. Call sites did not have to change.
@@ -115,7 +126,7 @@ export function Select({
   );
 
   const rootRef = React.useRef<HTMLDivElement>(null);
-  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const { triggerRef, placement } = useFloatingList<HTMLButtonElement>(open, 300);
   const listRef = React.useRef<HTMLUListElement>(null);
   const reactId = React.useId();
   const listId = `${reactId}-list`;
@@ -127,7 +138,13 @@ export function Select({
     if (!open) return;
 
     function onPointerDown(event: PointerEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+
+      // The list lives in a portal, so it is not inside `rootRef` — it counts as
+      // "inside" all the same, or picking an option would close before the click.
+      if (rootRef.current?.contains(target) || listRef.current?.contains(target)) return;
+
+      setOpen(false);
     }
 
     document.addEventListener('pointerdown', onPointerDown);
@@ -259,46 +276,56 @@ export function Select({
         />
       </button>
 
-      {open ? (
-        <ul
-          ref={listRef}
-          id={listId}
-          role="listbox"
-          aria-labelledby={id}
-          tabIndex={-1}
-          className="select-popup absolute z-50 mt-1.5 max-h-64 w-full overflow-y-auto rounded-xl border border-white/12 bg-[#0a0a0a] p-1 shadow-[0_28px_60px_-20px_rgba(0,0,0,0.9)] outline-none"
-        >
-          {options.map((option, index) => {
-            const isSelected = option.value === selectedValue;
-            const isActive = index === activeIndex;
+      {open && placement
+        ? createPortal(
+            <ul
+              ref={listRef}
+              id={listId}
+              role="listbox"
+              aria-labelledby={id}
+              tabIndex={-1}
+              data-side={placement.side}
+              style={{
+                left: placement.left,
+                top: placement.top,
+                width: placement.width,
+                maxHeight: placement.maxHeight,
+              }}
+              className="select-popup fixed z-[120] overflow-y-auto overscroll-contain rounded-xl border border-white/12 bg-[#0a0a0a] p-1 shadow-[0_28px_60px_-20px_rgba(0,0,0,0.9)] outline-none"
+            >
+              {options.map((option, index) => {
+                const isSelected = option.value === selectedValue;
+                const isActive = index === activeIndex;
 
-            return (
-              <li
-                key={`${option.value}-${index}`}
-                id={optionId(index)}
-                role="option"
-                aria-selected={isSelected}
-                aria-disabled={option.disabled || undefined}
-                data-active={isActive}
-                onPointerEnter={() => setActiveIndex(index)}
-                onClick={() => commit(option)}
-                className={cn(
-                  'flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-[12.5px] transition-colors',
-                  option.disabled && 'pointer-events-none opacity-40',
-                  isActive ? 'bg-white/10 text-white' : 'text-gray-300',
-                  isSelected && 'font-medium',
-                )}
-              >
-                <Check
-                  aria-hidden
-                  className={cn('size-3.5 shrink-0', isSelected ? 'opacity-100' : 'opacity-0')}
-                />
-                <span className="truncate">{option.label}</span>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
+                return (
+                  <li
+                    key={`${option.value}-${index}`}
+                    id={optionId(index)}
+                    role="option"
+                    aria-selected={isSelected}
+                    aria-disabled={option.disabled || undefined}
+                    data-active={isActive}
+                    onPointerEnter={() => setActiveIndex(index)}
+                    onClick={() => commit(option)}
+                    className={cn(
+                      'flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-[12.5px] transition-colors',
+                      option.disabled && 'pointer-events-none opacity-40',
+                      isActive ? 'bg-white/10 text-white' : 'text-gray-300',
+                      isSelected && 'font-medium',
+                    )}
+                  >
+                    <Check
+                      aria-hidden
+                      className={cn('size-3.5 shrink-0', isSelected ? 'opacity-100' : 'opacity-0')}
+                    />
+                    <span className="truncate">{option.label}</span>
+                  </li>
+                );
+              })}
+            </ul>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

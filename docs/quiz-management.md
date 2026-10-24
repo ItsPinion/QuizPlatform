@@ -130,6 +130,31 @@ published from the lifecycle card, and a published quiz can never lose its last 
 (`409 QUIZ_WOULD_HAVE_NO_QUESTIONS`). See
 [`categories-and-questions.md`](categories-and-questions.md).
 
+### A new quiz is a draft — and the console now says so
+
+`POST /api/admin/quizzes` always answers `DRAFT`, because a quiz with no questions cannot
+be published (`409 QUIZ_HAS_NO_QUESTIONS`). The student catalogue only ever lists
+`PUBLISHED` rows, so a quiz that has been created but not published is _correctly_
+invisible to students — and _incorrectly_ invisible to the admin, who has just made one.
+
+That gap used to be a dead end: the only Publish button lived in the Lifecycle card, in
+the right-hand column of the edit screen, and nothing in the directory said the quiz was
+hidden. Three things close it now, all driven by the row itself:
+
+| Where                                | What it says                                                                                                                                                                            |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/admin/quizzes`, above the table    | An amber callout when any quiz on the page is not published: "2 quizzes are not published — students only ever see published quizzes", with a link that filters the directory to drafts |
+| `/admin/quizzes`, in each row        | A **Publish** button on every unpublished quiz (`components/quiz-publish-button.tsx`), disabled with its reason when the quiz has no questions yet                                      |
+| `/admin/quizzes/:id`, above the form | A banner naming the state — "Draft — students cannot see this quiz" — with a **Publish now** button and the count of questions it would take live                                       |
+
+The API stays the authority: the button mirrors `QUIZ_HAS_NO_QUESTIONS` only so it can
+explain itself, and a refused publish still prints the server's message.
+
+The other direction is asserted too, in the spec audit: a draft is absent from
+`GET /api/student/quizzes`, publishing puts it there immediately, the page students open
+shows it on the first screen, and unpublishing takes it away again. Four probes, so
+"publish" cannot quietly become "publish, eventually".
+
 In the browser, `components/category-combobox.tsx` ranks suggestions
 (`rankCategories()` in `lib/quiz-params.ts`: exact → prefix → substring, alphabetical
 ties, capped at 8) and shows each one's quiz count. It keeps the typed text when nothing
@@ -208,11 +233,11 @@ failing after a click.
 
 ## Screens
 
-| Route                | What it does                                                                                                                    |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `/admin/quizzes`     | Server-rendered directory: filters in the URL, pagination, status and difficulty badges, question/attempt counts, "Manage" link |
-| `/admin/quizzes/new` | Create form (client) → `POST` → lands on the new quiz's edit screen                                                             |
-| `/admin/quizzes/:id` | Edit form + lifecycle card (publish/unpublish, two-step delete) + record panel                                                  |
+| Route                | What it does                                                                                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/admin/quizzes`     | Server-rendered directory: filters in the URL, pagination, status and difficulty badges, question/attempt counts, inline **Publish** for drafts, "Manage" link |
+| `/admin/quizzes/new` | Create form (client) → `POST` → lands on the new quiz's edit screen                                                                                            |
+| `/admin/quizzes/:id` | Edit form + lifecycle card (publish/unpublish, two-step delete) + record panel                                                                                 |
 
 Both the list and the form are guarded by `decideAccess(session, 'ADMIN', <path>)` on the
 server, and every mutation goes through `hc<AppType>` so the payload and response shapes
@@ -224,14 +249,14 @@ verbatim, so the UI can never invent a rule the server does not enforce.
 
 ### Failure states
 
-| Situation                        | What the screen does                                      |
-| -------------------------------- | --------------------------------------------------------- |
-| API or database unavailable      | "could not be loaded" card with the `/api/health/db` hint |
-| No quizzes match the filters     | Empty state suggesting clearing them                      |
-| Publish blocked (no questions)   | Button disabled, reason printed under it                  |
-| Delete blocked (attempts exist)  | Button disabled, "n attempts — unpublish instead"         |
-| API rejects a mutation (409/422) | The API's message in an inline alert                      |
-| Unknown quiz id                  | Next.js `notFound()` → 404                                |
+| Situation                        | What the screen does                                                    |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| API or database unavailable      | "could not be loaded" card with the `/api/health/db` hint               |
+| No quizzes match the filters     | Empty state suggesting clearing them                                    |
+| Publish blocked (no questions)   | Button disabled, reason in its tooltip and in the banner above the form |
+| Delete blocked (attempts exist)  | Button disabled, "n attempts — unpublish instead"                       |
+| API rejects a mutation (409/422) | The API's message in an inline alert                                    |
+| Unknown quiz id                  | Next.js `notFound()` → 404                                              |
 
 ---
 

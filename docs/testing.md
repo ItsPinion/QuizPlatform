@@ -3,9 +3,9 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test         # 1,086 unit + integration tests across the four workspaces
+bun run test         # 1,112 unit + integration tests across the four workspaces
 bun run test:e2e     # 77 checks against a real HTTP server (own process, own port)
-bun run test:spec    # 216 probes against a running API + web (see the audit below)
+bun run test:spec    # 220 probes against a running API + web (see the audit below)
 bun run deploy:check # the deployment gate (see docs/deployment.md)
 ```
 
@@ -23,7 +23,7 @@ tests.
 | `@quiz/shared` | 386   | auth + content contracts, the four question formats, attempt clocks, the grader, dashboard, analytics, ranking, deployment rules, availability, passwords, certificates, email, CSV import of every format, `.xlsx` reading |
 | `@quiz/db`     | 63    | migrations replayed from scratch, schema constraints, seed integrity (all four formats present in the seed), Drizzle Kit wiring                                                                                             |
 | `@quiz/api`    | 355   | health/readiness, auth, guards, content, the four formats end to end, taking, grading, reviewing, stats, analytics, board, system, account, import, outbox                                                                  |
-| `@quiz/web`    | 282   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers, question-format helpers, the logo geometry, theming                                                                           |
+| `@quiz/web`    | 308   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers, question-format helpers, the logo geometry, dropdown placement, the portalled select and category combobox, theming           |
 
 Run one workspace at a time when you are iterating:
 
@@ -536,7 +536,7 @@ has attempts, which is the product protecting history, so the audit works with t
 adding a bypass. Run it against a remote database and it prints a note and leaves the quiz, because
 there is no file to clean up in.
 
-**Result on 2026-10-24, against the question-format work: `216 passed · 0 failed`.** The
+**Result on 2026-10-24, against the question-format work: `220 passed · 0 failed`.** The
 probes group by section as follows; each line is a count of assertions, not of features.
 
 | §     | What the probes prove                                                                                                                                                                                                                                                                                                                                                                                                                                | Probes |
@@ -545,7 +545,7 @@ probes group by section as follows; each line is a count of assertions, not of f
 | 4     | register, logout, forgot-password for a student **and** an admin, a bad reset token refused, change-password requires the current password, the console's own account screen and its rail link, a student refused it                                                                                                                                                                                                                                 | 11     |
 | 5     | every statistic the dashboard names — students, quizzes, published, drafts, questions, attempts, average, passed, failed — plus a 30-point timeline, popular quizzes and popular categories                                                                                                                                                                                                                                                          | 15     |
 | 6     | name, email, registration date, status, attempts, **average score**, highest score; a student's profile, history and performance; the profile page renders                                                                                                                                                                                                                                                                                           | 13     |
-| 7, 9  | create → edit → publish → unpublish → delete; every create-quiz field including the thumbnail; question text, options, one correct answer, explanation, marks, difficulty                                                                                                                                                                                                                                                                            | 18     |
+| 7, 9  | create → edit → publish → unpublish → delete; **a draft is invisible to students, publishing puts it in their catalogue and on their page, unpublishing hides it again**; every create-quiz field including the thumbnail; question text, options, one correct answer, explanation, marks, difficulty                                                                                                                                                | 22     |
 | 10    | every format authored through the API, a true/false pair written by the server, an image attached to any format, the malformed cases refused, one CSV carrying all four formats, a mixed paper where a fill-in-the-blank ships no options, a set and a typed answer saved and graded, the by-format breakdown on the result and the review page, the administrator's format-aware copy of the attempt, and the landing page's live per-format counts | 22     |
 | 8     | create, rename, delete a category; the row links to the filtered quiz list                                                                                                                                                                                                                                                                                                                                                                           | 4      |
 | 11–14 | start, resume without spending a try, the server-side clock, answer save, submit, the full result payload, and a review carrying question, selected answer, correct answer, explanation and verdict                                                                                                                                                                                                                                                  | 26     |
@@ -649,6 +649,20 @@ QUIZ_WOULD_HAVE_NO_QUESTIONS`; unpublish and the delete goes through.
 - [ ] `/admin/profile` → the rail shows **Account**, the password form asks for the current password,
       and a wrong one is refused without signing you out.
 - [ ] On `/admin/users`, every row has a **View** button that opens that student's profile.
+- [ ] Create a quiz, then open `/student/quizzes` in a second window as the student → it is **not**
+      there. The admin directory says so in an amber callout above the table, and the row carries a
+      **Publish** button; the edit screen's banner names the state. Publish from the row, reload the
+      student tab and it is on the first screen — no deploy, no cache to clear.
+- [ ] Publish a quiz that has no questions → the row's button is disabled and says why; the API
+      answers `409 QUIZ_HAS_NO_QUESTIONS` if you `curl` it anyway.
+- [ ] On `/student/quizzes`, open the **Category** filter → the list paints **over** the quiz cards,
+      not under them. Same for **Sort**, **Length** and **Difficulty**, and for the admin directory's
+      filters. Scroll the page with a list open: it follows its field; near the bottom of the window it
+      opens upward instead of running off-screen.
+- [ ] In the quiz form, open the **Category** suggestions → same layer, same behaviour.
+- [ ] `/student` → the score-trend chart's dashed line is labelled from the real catalogue
+      (`pass 60–70%` on the seed, not a fixed `pass 60%`), and the two score cards' colours use the
+      same number.
 - [ ] Sign in as `rahul@quiz.dev`, open `/student/quizzes` → only published quizzes; the draft and
       unpublished seeds are absent even if you paste their ids.
 - [ ] Open a quiz → the rules (questions, marks, duration, pass mark, attempts left) are stated

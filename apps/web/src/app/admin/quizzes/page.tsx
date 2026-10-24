@@ -1,9 +1,10 @@
 import type { CategoryListResponse, QuizListResponse } from '@quiz/shared/quiz';
-import { ArrowLeft, ArrowRight, ListChecks, Plus, Search, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, EyeOff, ListChecks, Plus, Search, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { PageHeader } from '@/components/cinema/page-header';
+import { QuizPublishButton } from '@/components/quiz-publish-button';
 import { StatCard } from '@/components/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
@@ -57,6 +58,11 @@ export default async function AdminQuizzesPage({ searchParams }: PageProps) {
 
   const categoryName = categories.find((category) => category.id === filters.categoryId)?.name;
   const filtered = hasQuizFilters(filters);
+
+  // The quizzes on this page that a student cannot see. Counted here rather than
+  // in the table, because the warning belongs above it: an admin whose new quiz
+  // "is missing" from the catalogue is almost always looking at one of these.
+  const hidden = (data?.quizzes ?? []).filter((quiz) => quiz.status !== 'PUBLISHED');
 
   return (
     <div className="space-y-8">
@@ -200,6 +206,33 @@ export default async function AdminQuizzesPage({ searchParams }: PageProps) {
             />
           </section>
 
+          {hidden.length > 0 ? (
+            <div className="flex flex-col gap-3 rounded-xl border border-amber-400/25 bg-amber-400/[0.06] p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <EyeOff aria-hidden className="mt-0.5 size-4 shrink-0 text-amber-300" />
+                <div>
+                  <p className="text-[13px] font-medium text-amber-100">
+                    {hidden.length} quiz{hidden.length === 1 ? ' is' : 'es are'} not published
+                  </p>
+                  <p className="mt-0.5 text-[12px] leading-relaxed text-amber-200/80">
+                    Students only ever see published quizzes, so{' '}
+                    {hidden.length === 1 ? 'this one' : 'these'} will not appear in their catalogue
+                    until you publish. A quiz needs at least one question first.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href={quizzesHref({ ...filters, status: 'DRAFT' })}
+                className={cn(
+                  buttonVariants({ variant: 'outline', size: 'sm' }),
+                  'shrink-0 rounded-full',
+                )}
+              >
+                Show only drafts
+              </Link>
+            </div>
+          ) : null}
+
           {data.quizzes.length === 0 ? (
             <div className="border-border/70 bg-card/40 rounded-xl border border-dashed px-6 py-12 text-center">
               <p className="text-sm font-medium">No quizzes match these filters.</p>
@@ -248,13 +281,21 @@ export default async function AdminQuizzesPage({ searchParams }: PageProps) {
                       <td className="text-muted-foreground px-3 py-3">
                         {formatDuration(quiz.durationMinutes)}
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <Link
-                          href={`/admin/quizzes/${quiz.id}`}
-                          className={cn(buttonVariants({ variant: 'outline', size: 'lg' }))}
-                        >
-                          Manage
-                        </Link>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          {quiz.status !== 'PUBLISHED' ? (
+                            <QuizPublishButton
+                              quizId={quiz.id}
+                              questionCount={quiz.questionCount}
+                            />
+                          ) : null}
+                          <Link
+                            href={`/admin/quizzes/${quiz.id}`}
+                            className={cn(buttonVariants({ variant: 'outline', size: 'lg' }))}
+                          >
+                            Manage
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}

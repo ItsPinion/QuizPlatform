@@ -466,6 +466,18 @@ async function main(): Promise<void> {
     '',
   );
 
+  // A new quiz is a draft, and a draft is invisible to students. That is the
+  // product rule — and the one an admin trips over, because the quiz they just
+  // made is nowhere in the catalogue. Asserted in both directions so publishing
+  // can never quietly stop working.
+  const draftCatalogue = (await student.api('/api/student/quizzes?pageSize=24')).body;
+  check(
+    '7',
+    'a draft is not in the student catalogue',
+    !draftCatalogue.quizzes.some((entry: any) => entry.id === quiz.id),
+    '',
+  );
+
   const published = await admin.api(`/api/admin/quizzes/${quiz.id}/publish`, 'POST');
   check(
     '7',
@@ -473,12 +485,39 @@ async function main(): Promise<void> {
     published.status === 200 && published.body.quiz.status === 'PUBLISHED',
     String(published.status),
   );
+
+  const liveCatalogue = (await student.api('/api/student/quizzes?pageSize=24')).body;
+  check(
+    '7',
+    'publishing puts it in the student catalogue at once',
+    liveCatalogue.quizzes.some((entry: any) => entry.id === quiz.id),
+    '',
+  );
+
+  // The same thing through the page a student actually loads: newest first, so
+  // a freshly published quiz is on the first screen.
+  const studentShelf = await student.page('/student/quizzes');
+  check(
+    '7',
+    'and on the page students open, without a reload dance',
+    studentShelf.status === 200 && studentShelf.html.includes('Audit Quiz Renamed'),
+    String(studentShelf.status),
+  );
+
   const unpublished = await admin.api(`/api/admin/quizzes/${quiz.id}/unpublish`, 'POST');
   check(
     '7',
     'unpublish quiz',
     unpublished.status === 200 && unpublished.body.quiz.status !== 'PUBLISHED',
     String(unpublished.status),
+  );
+
+  const hiddenAgain = (await student.api('/api/student/quizzes?pageSize=24')).body;
+  check(
+    '7',
+    'unpublishing hides it again',
+    !hiddenAgain.quizzes.some((entry: any) => entry.id === quiz.id),
+    '',
   );
 
   /* ── §8 Categories ─────────────────────────────────────────────────────── */

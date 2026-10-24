@@ -10,6 +10,8 @@ import {
   coverageLabel,
   deltaLabel,
   durationLabel,
+  passMarkLabel,
+  passMarkOf,
   passRateLabel,
   percentLabel,
   toneFor,
@@ -167,5 +169,46 @@ describe('categories', () => {
     expect(categoryCaption({ attempts: 3, bestPercentage: 66.666 })).toBe(
       '3 attempts · best 66.67%',
     );
+  });
+});
+
+describe('passMarkOf', () => {
+  it('averages the catalogue instead of assuming 60', () => {
+    expect(passMarkOf([{ passingScore: 50 }, { passingScore: 70 }])).toEqual({
+      mark: 60,
+      min: 50,
+      max: 70,
+    });
+  });
+
+  it('rounds to a whole percentage', () => {
+    expect(passMarkOf([{ passingScore: 55 }, { passingScore: 56 }]).mark).toBe(56);
+  });
+
+  it('returns the range so the label can be honest', () => {
+    expect(passMarkOf([{ passingScore: 40 }, { passingScore: 80 }]).max).toBe(80);
+  });
+
+  it('falls back only when there is nothing to average', () => {
+    expect(passMarkOf([], 75)).toEqual({ mark: 75, min: null, max: null });
+    expect(passMarkOf([], 75).mark).toBe(75);
+  });
+
+  it('ignores values that are not numbers', () => {
+    expect(passMarkOf([{ passingScore: Number.NaN }, { passingScore: 65 }]).mark).toBe(65);
+  });
+});
+
+describe('passMarkLabel', () => {
+  it('names the number when the catalogue agrees with itself', () => {
+    expect(passMarkLabel({ mark: 60, min: 60, max: 60 })).toBe('pass 60%');
+  });
+
+  it('names the range when it does not', () => {
+    expect(passMarkLabel({ mark: 60, min: 50, max: 70 })).toBe('pass 50–70%');
+  });
+
+  it('never prints a range made of one number twice', () => {
+    expect(passMarkLabel({ mark: 45, min: 45, max: 45 })).not.toContain('–');
   });
 });

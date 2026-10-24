@@ -39,6 +39,53 @@ export function passRateLabel(passRate: number | null): string {
   return passRate == null ? '—' : `${Number(passRate.toFixed(2))}%`;
 }
 
+/**
+ * The pass mark the dashboard draws its line at.
+ *
+ * There is no global pass mark: every quiz sets its own. The chart spans the
+ * student's last twelve graded attempts, which can be twelve different papers, so
+ * a single dashed line has to choose one number — the average of the quizzes this
+ * student can actually sit. The range is returned too, because "pass 60%" over a
+ * catalogue that passes at 50 and 70 is a small lie the label can avoid telling.
+ *
+ * `fallback` is only for the empty catalogue, and it is the product default that
+ * the create form uses — never a guess about a quiz that exists.
+ */
+export function passMarkOf(
+  quizzes: readonly { passingScore: number }[],
+  fallback = 60,
+): { mark: number; min: number | null; max: number | null } {
+  const scores = quizzes
+    .map((quiz) => quiz.passingScore)
+    .filter((score) => Number.isFinite(score))
+    .map((score) => Math.round(score));
+
+  if (scores.length === 0) return { mark: fallback, min: null, max: null };
+
+  const total = scores.reduce((sum, score) => sum + score, 0);
+
+  return {
+    mark: Math.round(total / scores.length),
+    min: Math.min(...scores),
+    max: Math.max(...scores),
+  };
+}
+
+/** `pass 65%`, or `pass 50–70%` when the catalogue disagrees with itself. */
+export function passMarkLabel({
+  mark,
+  min,
+  max,
+}: {
+  mark: number;
+  min: number | null;
+  max: number | null;
+}): string {
+  if (min !== null && max !== null && min !== max) return `pass ${min}–${max}%`;
+
+  return `pass ${mark}%`;
+}
+
 /** Tone for a score card, using the shared pass-mark rule. */
 export function toneFor(percentage: number | null, passMark = 60): string {
   switch (scoreTone(percentage, passMark)) {
