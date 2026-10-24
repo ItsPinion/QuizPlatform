@@ -360,14 +360,26 @@ Two conventions behind the table:
 
 ## 10. What is not built, and why
 
-**Question types other than multiple choice.** The schema, the grader, the
-review screen and the CSV importer are all built around one question shape:
-prompt, 2–4 options, exactly one correct. Adding true/false is a subset (it
-already works — two options), but multi-select, short answer and ordering would
-each need a different grader, a different review layout and a different import
-format. They are a deliberate scope decision, not an oversight: a half-built
-second type is worse than one type that is correct everywhere. The schema stores
-a `questions` row with options, so adding a `type` discriminator later is a
-migration, not a rewrite.
+**Question types other than multiple choice.** The specification itself puts
+these under _Future Enhancement_ (§10): multiple correct answers, true/false,
+fill in the blanks, match the following, image-based and code-based questions are
+listed after the one type the first version must support, and that type —
+"multiple choice, one correct answer" — is what is built.
+
+That is a scope line the brief draws, not one this build invented. It is still
+worth saying what the line costs and why crossing it is not a small change:
+
+- every question type needs its own **grader** (a set of correct answers, a
+  normalised string, an ordered pairing), its own **review layout**, and its own
+  **import column shape**;
+- the timer, autosave, shuffle and negative marking are all written against
+  "exactly one selected option per question" — the seed, the attempt payload and
+  the answer table all assume it;
+- a true/false question is already expressible (two options, one correct), so the
+  gap is narrower than it looks for the type people ask for first.
+
+The schema stores a `questions` row whose options are rows, so adding a `type`
+discriminator later is a migration plus a grader, not a rewrite. Nothing here
+pretends otherwise.
 
 Everything else in §26 is implemented and covered by the tests named above.
