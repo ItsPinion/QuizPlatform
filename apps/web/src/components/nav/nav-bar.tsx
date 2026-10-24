@@ -213,15 +213,18 @@ export function NavBar({ version }: { version?: string }) {
 
   return (
     /**
-     * The table.
+     * The air above the table.
      *
-     * `sticky top-0` with padding on every side: the drop never touches an edge
-     * of the screen, and once the page moves it hovers over the content instead
-     * of dragging a full-width band with it. The padding is transparent, and
-     * pointer-events are off on this box so the strip above and beside the drop
-     * never swallows a click meant for the page.
+     * `fixed`, not `sticky`: a sticky bar still owns a slice of the document, so
+     * the page starts below it and the top of every screen is a reserved band of
+     * nothing. Fixed takes it out of the flow completely — the page begins at
+     * y=0, scrolls underneath the glass, and the drop floats clear of all four
+     * edges at a higher index than any page content.
+     *
+     * Pointer events are off on this box so the transparent margin around the
+     * drop never swallows a click meant for the page behind it.
      */
-    <div className="pointer-events-none sticky top-0 z-50 px-4 pt-4 pb-1 sm:px-6 sm:pt-5">
+    <div className="pointer-events-none fixed inset-x-0 top-0 z-[80] px-4 pt-4 sm:px-6 sm:pt-5">
       <div className="pointer-events-auto relative mx-auto w-full max-w-5xl">
         {/* The caustic on the table: light that went through the drop. */}
         <span aria-hidden className="water-caustic" />
@@ -232,7 +235,13 @@ export function NavBar({ version }: { version?: string }) {
             aria-hidden
             className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
           >
+            {/* The wet highlight across the crown and the glow picked up
+                underneath — the part that says "polished", not "painted". */}
+            <span className="water-gloss" />
+            {/* A slow swell of light drifting along the surface. */}
             <span className="water-sheen" />
+            {/* A reflection travelling across the glass, once every few seconds. */}
+            <span className="water-glint" />
           </span>
 
           <div

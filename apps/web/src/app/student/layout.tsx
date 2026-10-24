@@ -22,7 +22,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       <SkipLink href="#main" label="Skip to the content" />
       <SiteHeader />
 
-      <div className="mx-auto grid w-full max-w-6xl flex-1 gap-8 px-5 py-10 sm:px-8 lg:grid-cols-[190px_minmax(0,1fr)]">
+      <div className="mx-auto grid w-full max-w-6xl flex-1 gap-8 px-5 pt-28 pb-10 sm:px-8 lg:grid-cols-[190px_minmax(0,1fr)]">
         <StudentNav />
         <main id="main" tabIndex={-1} className="min-w-0 outline-none">
           {children}

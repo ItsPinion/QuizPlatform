@@ -47,7 +47,7 @@ export function Hero({ payload, role }: { payload: LandingPayload | null; role: 
     <section className="border-border/60 relative overflow-hidden border-b">
       <div className="bg-glow pointer-events-none absolute inset-0" />
 
-      <div className="relative mx-auto grid w-full max-w-6xl items-center gap-12 px-5 pt-16 pb-8 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:pt-24 lg:pb-10">
+      <div className="relative mx-auto grid w-full max-w-6xl items-center gap-12 px-5 pt-28 pb-8 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:pt-32 lg:pb-10">
         <div>
           <div className="reveal" style={{ '--reveal-delay': '60ms' } as React.CSSProperties}>
             <Badge className="border-primary/30 bg-primary/10 text-primary gap-2 py-1 font-mono text-[10.5px] tracking-wide uppercase">

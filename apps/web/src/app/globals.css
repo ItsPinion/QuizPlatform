@@ -767,8 +767,11 @@
   -webkit-backdrop-filter: blur(var(--drop-blur)) saturate(1.8);
   backdrop-filter: blur(var(--drop-blur)) saturate(1.8);
   box-shadow:
-    /* the contact shadow — darkest where the drop meets the table */
-    0 6px 14px -8px rgb(0 0 0 / 65%),
+    /* the bright wet line along the crown, and a soft one along the base */
+    inset 0 1px 0 0 rgb(255 255 255 / 55%),
+    inset 0 -1px 0 0 rgb(255 255 255 / 8%),
+    /* the contact shadow — darkest where the drop meets the table */ 0 6px 14px -8px
+      rgb(0 0 0 / 65%),
     0 18px 36px -20px rgb(0 0 0 / 80%),
     /* light that passed through and pooled below */ 0 28px 60px -34px
       color-mix(in oklab, var(--primary) 70%, transparent);
@@ -785,6 +788,8 @@
   --drop-radius: 26px 23px 25px 28px / 23px 26px 22px 25px;
   background: color-mix(in oklab, var(--background) 80%, transparent);
   box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 60%),
+    inset 0 -1px 0 0 rgb(255 255 255 / 9%),
     0 4px 10px -6px rgb(0 0 0 / 70%),
     0 14px 30px -16px rgb(0 0 0 / 88%),
     0 26px 54px -30px color-mix(in oklab, var(--primary) 60%, transparent);
@@ -800,10 +805,10 @@
   padding: 1px;
   background: linear-gradient(
     180deg,
-    color-mix(in oklab, white 52%, transparent) 0%,
-    color-mix(in oklab, white 16%, transparent) 26%,
-    color-mix(in oklab, white 7%, transparent) 58%,
-    color-mix(in oklab, var(--primary) 34%, transparent) 100%
+    color-mix(in oklab, white 92%, transparent) 0%,
+    color-mix(in oklab, white 34%, transparent) 18%,
+    color-mix(in oklab, white 12%, transparent) 52%,
+    color-mix(in oklab, var(--primary) 46%, transparent) 100%
   );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -845,6 +850,7 @@
     transparent 76%
   );
   filter: blur(7px);
+  opacity: 0.55;
   animation: water-sheen 17s ease-in-out infinite;
   pointer-events: none;
 }
@@ -916,6 +922,70 @@
   }
 }
 
+/* The gloss: the wet highlight lying across the crown of the drop, a second
+   catch on the right shoulder, and the caustic light it picked up underneath.
+   This is the layer that makes it read as polished rather than painted. */
+.water-gloss {
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      124% 84% at 50% -38%,
+      rgb(255 255 255 / 46%),
+      rgb(255 255 255 / 10%) 42%,
+      transparent 63%
+    ),
+    radial-gradient(36% 60% at 84% -8%, rgb(255 255 255 / 22%), transparent 70%),
+    linear-gradient(to top, color-mix(in oklab, var(--primary) 24%, transparent), transparent 46%);
+}
+
+/* The glint: a hard reflection travelling across the glass. Slow and
+   infrequent on purpose — a sweep on a loop reads as a loading state, one
+   every nine seconds reads as light moving. */
+.water-glint {
+  position: absolute;
+  top: -60%;
+  bottom: -60%;
+  left: 0;
+  width: 16%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    rgb(255 255 255 / 30%) 42%,
+    rgb(255 255 255 / 46%) 50%,
+    rgb(255 255 255 / 30%) 58%,
+    transparent
+  );
+  filter: blur(5px);
+  opacity: 0;
+  animation: water-glint 9s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes water-glint {
+  0%,
+  58% {
+    opacity: 0;
+    transform: translate3d(-260%, 0, 0) skewX(-14deg);
+  }
+
+  63% {
+    opacity: 0.95;
+  }
+
+  82% {
+    opacity: 0.5;
+  }
+
+  96%,
+  100% {
+    opacity: 0;
+    transform: translate3d(760%, 0, 0) skewX(-14deg);
+  }
+}
+
 /* The drawer, in the same material: a second drop that fell off the first. */
 .water-panel {
   border-radius: 26px;
@@ -970,6 +1040,7 @@
   .glow-pulse,
   .shine::after,
   .water-sheen,
+  .water-glint,
   .water-caustic,
   .water-panel,
   .pixel-art [class*='animate'] {
@@ -980,8 +1051,10 @@
     display: none;
   }
 
-  /* The drop keeps its rim and its contact shadow — it just stops shimmering. */
-  .water-sheen {
+  /* The drop keeps its rim, its gloss and its contact shadow — it just stops
+     shimmering. Shape is not motion. */
+  .water-sheen,
+  .water-glint {
     display: none;
   }
 

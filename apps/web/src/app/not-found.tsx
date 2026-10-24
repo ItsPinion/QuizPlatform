@@ -32,7 +32,7 @@ export default function NotFound() {
       <main id="main" className="relative flex flex-1 items-center overflow-hidden">
         <Atmosphere className="opacity-60" />
 
-        <div className="relative mx-auto grid w-full max-w-4xl items-center gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="relative mx-auto grid w-full max-w-4xl items-center gap-10 px-5 pt-32 pb-16 sm:px-8 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="reveal">
             <p className="text-primary/80 font-mono text-[11px] tracking-[0.2em] uppercase">
               404 · not on the shelf

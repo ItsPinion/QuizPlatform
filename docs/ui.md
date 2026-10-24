@@ -289,22 +289,36 @@ earn its height.
 
 ### The material: a drop of water on a table
 
-The bar is **not attached to anything**. It is inset from all four edges
-(`px-4 pt-4` on a `sticky` wrapper, `max-w-5xl` so it is narrower than the
-content column), and it stands on its own contact shadow, so it reads as an
-object placed _on_ the page rather than the page's top edge. Everything below
-is `.water-drop` in `globals.css`:
+The bar is **not attached to anything**. It is `fixed` — out of the document
+flow entirely — inset from all four edges (`px-4 pt-4`, `max-w-5xl` so it is
+narrower than the content column), at `z-[80]` so page content scrolls _under_
+it rather than beside it. It stands on its own contact shadow, so it reads as an
+object placed _on_ the page rather than the page's top edge.
 
-| Cue                   | How                                                                                                                                                                                                                           |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Refraction**        | `backdrop-filter: blur(20px) saturate(1.8)` — the page behind is genuinely blurred and oversaturated, not painted over with a solid colour.                                                                                   |
-| **Meniscus**          | A 1px rim drawn by a `::before` with `padding: 1px` and `mask-composite: exclude`, gradient from bright white at the waterline to the primary colour at the base.                                                             |
-| **Specular shoulder** | A `::after` radial bloom in the top-left, where the surface bends away and catches the light.                                                                                                                                 |
-| **Sheen**             | A blurred 26%-wide highlight drifting across the surface every 17s.                                                                                                                                                           |
-| **Caustic**           | A pool of primary-tinted light under the drop (`bottom: -13px`, `blur(11px)`) plus two faint satellite beads — the splash that came off. Its opacity breathes over 11s.                                                       |
-| **Shape**             | Not a capsule: `--drop-radius: 30px 26px 28px 32px / 27px 30px 26px 29px` — four corners that are nearly but not exactly the same.                                                                                            |
-| **Settling**          | Scrolling does not just shrink the bar: `data-settled` makes the material denser, the radius smaller and the shadow tighter, the way a wet shape flattens under its own weight.                                               |
-| **No material?**      | `@supports not (backdrop-filter …)` raises the background to 94% opacity; `prefers-reduced-motion` removes the sheen, the caustic and the panel animation. The rim and the contact shadow stay — those are shape, not motion. |
+Fixed rather than sticky matters: a sticky bar still owns a slice of the
+document, so every page begins below it and the top of each screen is a reserved
+band of nothing. Fixed means the page starts at `y=0`, the drop floats over the
+first line of content, and the glass is doing its job — you can see the page
+moving behind it. The trade is that each page leaves room for the drop itself:
+`pt-28` (112px) on the landing hero, both auth screens, the student and admin
+shells, and `pt-32` on the 404, against a drop whose bottom edge sits at 80px.
+`pointer-events-none` on the fixed wrapper keeps its transparent margin from
+swallowing clicks meant for the page.
+
+Everything below is `.water-drop` in `globals.css`:
+
+| Cue                   | How                                                                                                                                                                                                                                                 |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Refraction**        | `backdrop-filter: blur(20px) saturate(1.8)` — the page behind is genuinely blurred and oversaturated, not painted over with a solid colour.                                                                                                         |
+| **Meniscus**          | A 1px rim drawn by a `::before` with `padding: 1px` and `mask-composite: exclude`, gradient from bright white at the waterline to the primary colour at the base.                                                                                   |
+| **Specular shoulder** | A `::after` radial bloom in the top-left, where the surface bends away and catches the light.                                                                                                                                                       |
+| **Sheen**             | A blurred 26%-wide highlight drifting across the surface every 17s.                                                                                                                                                                                 |
+| **Gloss**             | `.water-gloss` — a broad white highlight across the crown, a second catch on the right shoulder, and the caustic colour picked up along the base. Plus `inset 0 1px 0` on the drop itself: the bright wet line a polished edge always has.          |
+| **Glint**             | `.water-glint` — a hard reflection travelling across the glass, once every 9s. Slow on purpose: a sweep on a loop reads as a loading state; one every few seconds reads as light moving.                                                            |
+| **Caustic**           | A pool of primary-tinted light under the drop (`bottom: -13px`, `blur(11px)`) plus two faint satellite beads — the splash that came off. Its opacity breathes over 11s.                                                                             |
+| **Shape**             | Not a capsule: `--drop-radius: 30px 26px 28px 32px / 27px 30px 26px 29px` — four corners that are nearly but not exactly the same.                                                                                                                  |
+| **Settling**          | Scrolling does not just shrink the bar: `data-settled` makes the material denser, the radius smaller and the shadow tighter, the way a wet shape flattens under its own weight.                                                                     |
+| **No material?**      | `@supports not (backdrop-filter …)` raises the background to 94% opacity; `prefers-reduced-motion` removes the glint, the sheen, the caustic and the panel animation. The rim, the gloss and the contact shadow stay — those are shape, not motion. |
 
 The wrapper is `pointer-events-none` with `pointer-events-auto` on the drop, so
 the transparent strip above and beside it never swallows a click meant for the

@@ -95,7 +95,7 @@ export function AuthShell({
       <main id="main" className="relative flex-1 overflow-hidden">
         <Atmosphere className="opacity-70" />
 
-        <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-5 py-10 sm:px-8 lg:grid-cols-[minmax(0,1fr)_27rem] lg:items-start lg:gap-16 lg:py-16">
+        <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-5 pt-28 pb-10 sm:px-8 lg:grid-cols-[minmax(0,1fr)_27rem] lg:items-start lg:gap-16 lg:pt-32 lg:pb-16">
           <div
             id="auth"
             tabIndex={-1}
