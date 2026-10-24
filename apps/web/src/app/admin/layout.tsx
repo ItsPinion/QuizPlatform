@@ -37,7 +37,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const session = await getSession();
 
   return (
-    <div className="relative isolate flex min-h-dvh flex-col">
+    <div className="relative isolate flex min-h-dvh flex-col overflow-x-clip">
       <Ambience />
       <SkipLink href="#main" label="Skip to the content" />
       <SiteHeader user={session?.user ?? null} />

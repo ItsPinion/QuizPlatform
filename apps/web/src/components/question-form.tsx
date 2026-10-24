@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import { client } from '@/lib/api';
 import { parseApiFailure, toApiFailure } from '@/lib/api-error';
 import {
@@ -27,9 +28,6 @@ interface Props {
   onSaved: (question: AdminQuestion) => void;
   onCancel: () => void;
 }
-
-const SELECT_CLASS =
-  'h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15';
 
 /**
  * Author one multiple choice question.
@@ -222,18 +220,17 @@ export function QuestionForm({ quizId, question, onSaved, onCancel }: Props) {
 
         <div className="space-y-1.5">
           <Label htmlFor="questionDifficulty">Difficulty</Label>
-          <select
+          <Select
             id="questionDifficulty"
             value={form.difficulty}
             onChange={(event) =>
               update('difficulty', event.target.value as FormState['difficulty'])
             }
-            className={SELECT_CLASS}
           >
             <option value="EASY">Easy</option>
             <option value="MEDIUM">Medium</option>
             <option value="HARD">Hard</option>
-          </select>
+          </Select>
         </div>
 
         <div className="space-y-1.5 sm:col-span-2">

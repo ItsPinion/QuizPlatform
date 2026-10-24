@@ -70,8 +70,11 @@ export function SectionNav({
   const pathname = usePathname();
 
   return (
-    <nav aria-label={label} className="lg:sticky lg:top-28 lg:self-start">
-      <ul className="flex scrollbar-none gap-2 overflow-x-auto pb-1 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:border-l lg:border-white/10 lg:pb-0">
+    // `min-w-0` matters on a phone: this is a grid item wrapping a horizontal
+    // scroller, and a grid track's default `min-width: auto` would let the rail
+    // widen the whole page instead of scrolling inside it.
+    <nav aria-label={label} className="min-w-0 lg:sticky lg:top-28 lg:self-start">
+      <ul className="flex w-full scrollbar-none gap-2 overflow-x-auto pb-1 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:border-l lg:border-white/10 lg:pb-0">
         {items.map((item) => {
           const Icon = ICONS[item.icon];
           const active =

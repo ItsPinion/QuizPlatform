@@ -10,6 +10,7 @@ import { CategoryCombobox } from '@/components/category-combobox';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import { client } from '@/lib/api';
 import { parseApiFailure, toApiFailure } from '@/lib/api-error';
 import { cn } from '@/lib/utils';
@@ -19,9 +20,6 @@ interface Props {
   /** Present when editing; absent when creating. */
   quiz?: AdminQuiz;
 }
-
-const SELECT_CLASS =
-  'h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15';
 
 /**
  * Create / edit form.
@@ -151,18 +149,17 @@ export function QuizForm({ categories, quiz }: Props) {
 
         <div className="space-y-1.5">
           <Label htmlFor="difficulty">Difficulty</Label>
-          <select
+          <Select
             id="difficulty"
             value={form.difficulty}
             onChange={(event) =>
               update('difficulty', event.target.value as AdminQuiz['difficulty'])
             }
-            className={SELECT_CLASS}
           >
             <option value="EASY">Easy</option>
             <option value="MEDIUM">Medium</option>
             <option value="HARD">Hard</option>
-          </select>
+          </Select>
         </div>
 
         <div className="space-y-1.5">

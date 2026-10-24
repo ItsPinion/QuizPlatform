@@ -609,6 +609,40 @@ cards in the system sans. Not any more.
    hairline rail          content, max-w-6xl, pt-28
 ```
 
+### The room behind the console
+
+The console keeps the landing page's backdrop, minus the thing that makes it a
+video:
+
+```
+┌ the film's first frame, held still, 18% over black ────────────┐
+│  the same dust GIF, screen-blended, dropped under reduced motion│
+│  two blooms · the grid at 5% · a veil (55% → 92%)               │
+│  ── the canvas: pointer is a lamp, a press is a ring ──         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+A six-second loop under a table of numbers is noise and battery, so the console
+takes the poster — the exact frame the film opens on, an image the landing page
+has already fetched — and pushes it back to 18%. Over it: the same
+`reading-room.gif` dust, the same two blooms, the same grid, and a vertical veil
+from 55% black at the top to 92% at the bottom, because that is where long lists
+live. Cards are translucent, so the room shows through them as depth rather than
+as a picture behind a wall.
+
+And the canvas comes with it. `CanvasField` is mounted inside `Ambience`, so
+every console page gets the same pointer-lamp, the same neighbour threads, the
+same three-ring splash on a press — and the same discipline: no loop under
+`prefers-reduced-motion`, no loop in a hidden tab or scrolled past, DPR capped at 2. It is `aria-hidden` and `pointer-events-none`, so it never swallows a click
+meant for a button.
+
+The shell opens a stacking context (`relative isolate`) and clips sideways
+overflow (`overflow-x-clip`, not `hidden` — clip does not create a scroll
+container, so the sticky rail keeps sticking). Together those two lines are why
+a `-z-10` layer is visible at all and why no console page can be scrolled
+sideways: before them, the mobile pill rail widened its grid track and the whole
+page drifted left under the pointer.
+
 ### The shell
 
 Both consoles are one layout each (`app/admin/layout.tsx`,
@@ -713,6 +747,33 @@ Semantic colour survived the sweep. A pass is still green and a failure still re
 (`--success`, `--destructive`), because a monochrome dashboard that renders a
 failed attempt in white has traded meaning for taste. Everything that is not a
 verdict is white on black.
+
+### The dropdown
+
+A `<select>` is the right element — a phone gets the platform picker, `name`
+submits with the form, a screen reader calls it a combobox, no script. But its
+**popup** is painted by the browser, not by CSS, and on a dark page Chrome was
+opening a white list with black type. `components/ui/select.tsx` fixes that in
+one line that reaches the popup:
+
+```css
+select {
+  color-scheme: dark;
+}
+select option,
+select optgroup {
+  background-color: #0a0a0a;
+  color: #f9fafb;
+}
+```
+
+`color-scheme: dark` is what Chrome and Safari honour for the option list; the
+explicit `option` colours cover Firefox, which renders them itself. The control's
+own chrome is replaced (`appearance-none`) and a chevron is drawn inside the field
+at a fixed offset, so the closed state matches `Input` exactly — same 40px height,
+same glass, same focus ring. Every one of the eleven selects in the app uses it:
+the three filter forms and both authoring forms. The submit buttons beside them
+moved from `sm` to `lg` so a filter row is one height end to end.
 
 ### The runner
 

@@ -45,7 +45,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const session = await getSession();
 
   return (
-    <div className="relative isolate flex min-h-dvh flex-col">
+    <div className="relative isolate flex min-h-dvh flex-col overflow-x-clip">
       <Ambience />
       <SkipLink href="#main" label="Skip to the content" />
       <SiteHeader user={session?.user ?? null} />

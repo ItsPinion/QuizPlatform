@@ -10,6 +10,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import { serverApi } from '@/lib/api-server';
 import { decideAccess } from '@/lib/guards';
 import {
@@ -110,63 +111,48 @@ export default async function AdminQuizzesPage({ searchParams }: PageProps) {
               <Label htmlFor="status" className="text-[11.5px]">
                 Status
               </Label>
-              <select
-                id="status"
-                name="status"
-                defaultValue={filters.status}
-                className="h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15"
-              >
+              <Select id="status" name="status" defaultValue={filters.status}>
                 <option value="">Any</option>
                 <option value="DRAFT">Draft</option>
                 <option value="PUBLISHED">Published</option>
                 <option value="UNPUBLISHED">Unpublished</option>
-              </select>
+              </Select>
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="difficulty" className="text-[11.5px]">
                 Difficulty
               </Label>
-              <select
-                id="difficulty"
-                name="difficulty"
-                defaultValue={filters.difficulty}
-                className="h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15"
-              >
+              <Select id="difficulty" name="difficulty" defaultValue={filters.difficulty}>
                 <option value="">Any</option>
                 <option value="EASY">Easy</option>
                 <option value="MEDIUM">Medium</option>
                 <option value="HARD">Hard</option>
-              </select>
+              </Select>
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="categoryId" className="text-[11.5px]">
                 Category
               </Label>
-              <select
-                id="categoryId"
-                name="categoryId"
-                defaultValue={filters.categoryId}
-                className="h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15"
-              >
+              <Select id="categoryId" name="categoryId" defaultValue={filters.categoryId}>
                 <option value="">Any</option>
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name} ({category.quizCount})
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div className="flex items-end gap-2">
-              <button type="submit" className={cn(buttonVariants({ size: 'sm' }), 'h-9')}>
+              <button type="submit" className={cn(buttonVariants({ size: 'lg' }), 'rounded-lg')}>
                 Apply
               </button>
               {filtered ? (
                 <Link
                   href={quizzesHref({})}
-                  className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'h-9')}
+                  className={cn(buttonVariants({ variant: 'ghost', size: 'lg' }), 'h-9')}
                 >
                   Clear
                 </Link>
@@ -265,7 +251,7 @@ export default async function AdminQuizzesPage({ searchParams }: PageProps) {
                       <td className="px-4 py-3 text-right">
                         <Link
                           href={`/admin/quizzes/${quiz.id}`}
-                          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+                          className={cn(buttonVariants({ variant: 'outline', size: 'lg' }))}
                         >
                           Manage
                         </Link>
@@ -281,7 +267,7 @@ export default async function AdminQuizzesPage({ searchParams }: PageProps) {
             {data.pagination.hasPrev ? (
               <Link
                 href={quizzesHref({ ...filters, page: filters.page - 1 })}
-                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+                className={cn(buttonVariants({ variant: 'outline', size: 'lg' }))}
               >
                 <ArrowLeft />
                 Previous
@@ -289,7 +275,7 @@ export default async function AdminQuizzesPage({ searchParams }: PageProps) {
             ) : (
               <span
                 className={cn(
-                  buttonVariants({ variant: 'outline', size: 'sm' }),
+                  buttonVariants({ variant: 'outline', size: 'lg' }),
                   'pointer-events-none opacity-40',
                 )}
               >
@@ -310,7 +296,7 @@ export default async function AdminQuizzesPage({ searchParams }: PageProps) {
             {data.pagination.hasNext ? (
               <Link
                 href={quizzesHref({ ...filters, page: filters.page + 1 })}
-                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+                className={cn(buttonVariants({ variant: 'outline', size: 'lg' }))}
               >
                 Next
                 <ArrowRight />
@@ -318,7 +304,7 @@ export default async function AdminQuizzesPage({ searchParams }: PageProps) {
             ) : (
               <span
                 className={cn(
-                  buttonVariants({ variant: 'outline', size: 'sm' }),
+                  buttonVariants({ variant: 'outline', size: 'lg' }),
                   'pointer-events-none opacity-40',
                 )}
               >

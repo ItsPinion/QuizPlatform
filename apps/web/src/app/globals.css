@@ -109,6 +109,26 @@
     letter-spacing: -0.02em;
   }
 
+  /* Native <select>: the *popup* is painted by the platform, not by us, and a
+     white list of options over a black page was the one place the design broke.
+     `color-scheme: dark` is what reaches Chrome and Safari's option list; the
+     explicit colours cover Firefox, which renders `<option>` itself. The
+     control's own chrome is replaced in `components/ui/select.tsx`. */
+  select {
+    color-scheme: dark;
+  }
+
+  select option,
+  select optgroup {
+    background-color: #0a0a0a;
+    color: #f9fafb;
+  }
+
+  select option:checked {
+    background-color: #1f2937;
+    color: #ffffff;
+  }
+
   /* The focus ring is white on black; a tinted one would be the only colour on
      the page. */
   :focus-visible {

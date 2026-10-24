@@ -11,6 +11,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import {
   DEFAULT_PAGE_SIZE,
   describeFilters,
@@ -97,60 +98,45 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                 <Label htmlFor="role" className="text-[11.5px]">
                   Role
                 </Label>
-                <select
-                  id="role"
-                  name="role"
-                  defaultValue={filters.role}
-                  className="h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15"
-                >
+                <Select id="role" name="role" defaultValue={filters.role}>
                   <option value="">Any</option>
                   <option value="ADMIN">Admin</option>
                   <option value="STUDENT">Student</option>
-                </select>
+                </Select>
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="status" className="text-[11.5px]">
                   Status
                 </Label>
-                <select
-                  id="status"
-                  name="status"
-                  defaultValue={filters.status}
-                  className="h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15"
-                >
+                <Select id="status" name="status" defaultValue={filters.status}>
                   <option value="">Any</option>
                   <option value="ACTIVE">Active</option>
                   <option value="INACTIVE">Inactive</option>
-                </select>
+                </Select>
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="sort" className="text-[11.5px]">
                   Sort
                 </Label>
-                <select
-                  id="sort"
-                  name="sort"
-                  defaultValue={filters.sort}
-                  className="h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15"
-                >
+                <Select id="sort" name="sort" defaultValue={filters.sort}>
                   <option value="newest">Newest</option>
                   <option value="oldest">Oldest</option>
                   <option value="name">Name</option>
                   <option value="attempts">Most attempts</option>
-                </select>
+                </Select>
               </div>
 
               <div className="flex items-end gap-2">
-                <button type="submit" className={cn(buttonVariants({ size: 'sm' }), 'h-9')}>
+                <button type="submit" className={cn(buttonVariants({ size: 'lg' }), 'rounded-lg')}>
                   <SlidersHorizontal />
                   Apply
                 </button>
                 {filtered ? (
                   <Link
                     href={usersHref({})}
-                    className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'h-9')}
+                    className={cn(buttonVariants({ variant: 'ghost', size: 'lg' }), 'h-9')}
                   >
                     Clear
                   </Link>
@@ -208,7 +194,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
             {data.pagination.hasPrev ? (
               <Link
                 href={usersHref({ ...filters, page: filters.page - 1 })}
-                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+                className={cn(buttonVariants({ variant: 'outline', size: 'lg' }))}
               >
                 <ArrowLeft />
                 Previous
@@ -216,7 +202,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
             ) : (
               <span
                 className={cn(
-                  buttonVariants({ variant: 'outline', size: 'sm' }),
+                  buttonVariants({ variant: 'outline', size: 'lg' }),
                   'pointer-events-none opacity-40',
                 )}
               >
@@ -230,7 +216,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
             {data.pagination.hasNext ? (
               <Link
                 href={usersHref({ ...filters, page: filters.page + 1 })}
-                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+                className={cn(buttonVariants({ variant: 'outline', size: 'lg' }))}
               >
                 Next
                 <ArrowRight />
@@ -238,7 +224,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
             ) : (
               <span
                 className={cn(
-                  buttonVariants({ variant: 'outline', size: 'sm' }),
+                  buttonVariants({ variant: 'outline', size: 'lg' }),
                   'pointer-events-none opacity-40',
                 )}
               >

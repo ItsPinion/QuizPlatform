@@ -12,6 +12,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import { serverApi } from '@/lib/api-server';
 import { decideAccess } from '@/lib/guards';
 import { getSession } from '@/lib/session';
@@ -29,9 +30,6 @@ export const metadata = { title: 'Quizzes — QuizPlatform' };
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
-
-const SELECT_CLASS =
-  'h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15';
 
 /**
  * The catalogue.
@@ -96,12 +94,7 @@ export default async function StudentQuizzesPage({ searchParams }: PageProps) {
 
             <div className="space-y-1.5">
               <Label htmlFor="categoryId">Category</Label>
-              <select
-                id="categoryId"
-                name="categoryId"
-                defaultValue={filters.categoryId}
-                className={SELECT_CLASS}
-              >
+              <Select id="categoryId" name="categoryId" defaultValue={filters.categoryId}>
                 <option value="">All categories</option>
                 {categories
                   .filter((category) => category.quizCount > 0)
@@ -110,42 +103,37 @@ export default async function StudentQuizzesPage({ searchParams }: PageProps) {
                       {category.name}
                     </option>
                   ))}
-              </select>
+              </Select>
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="difficulty">Difficulty</Label>
-              <select
-                id="difficulty"
-                name="difficulty"
-                defaultValue={filters.difficulty}
-                className={SELECT_CLASS}
-              >
+              <Select id="difficulty" name="difficulty" defaultValue={filters.difficulty}>
                 <option value="">Any</option>
                 <option value="EASY">Easy</option>
                 <option value="MEDIUM">Medium</option>
                 <option value="HARD">Hard</option>
-              </select>
+              </Select>
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="sort">Sort</Label>
-              <select id="sort" name="sort" defaultValue={filters.sort} className={SELECT_CLASS}>
+              <Select id="sort" name="sort" defaultValue={filters.sort}>
                 <option value="newest">Newest</option>
                 <option value="title">Title</option>
                 <option value="duration">Shortest first</option>
-              </select>
+              </Select>
             </div>
 
             <div className="flex items-end gap-2 lg:col-span-2">
-              <button type="submit" className={cn(buttonVariants({ size: 'sm' }))}>
+              <button type="submit" className={cn(buttonVariants({ size: 'lg' }), 'rounded-lg')}>
                 <Search />
                 Apply
               </button>
               {filtered ? (
                 <Link
                   href="/student/quizzes"
-                  className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
+                  className={cn(buttonVariants({ variant: 'ghost', size: 'lg' }))}
                 >
                   Clear
                 </Link>
@@ -207,7 +195,7 @@ export default async function StudentQuizzesPage({ searchParams }: PageProps) {
           {data.pagination.hasPrev ? (
             <Link
               href={quizzesHref({ ...filters, page: filters.page - 1 })}
-              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+              className={cn(buttonVariants({ variant: 'outline', size: 'lg' }))}
             >
               <ArrowLeft />
               Previous
@@ -223,7 +211,7 @@ export default async function StudentQuizzesPage({ searchParams }: PageProps) {
           {data.pagination.hasNext ? (
             <Link
               href={quizzesHref({ ...filters, page: filters.page + 1 })}
-              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+              className={cn(buttonVariants({ variant: 'outline', size: 'lg' }))}
             >
               Next
               <ArrowRight />
