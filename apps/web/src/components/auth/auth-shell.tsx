@@ -38,7 +38,7 @@ const LOGIN_POINTS = [
   {
     icon: ListChecks,
     title: 'The answer key, after',
-    body: 'Once a paper is graded you get every question back with the right option, your choice and the reason.',
+    body: 'Once a paper is graded you get every question back with the correct answer, what you gave and the reason.',
   },
   {
     icon: Trophy,

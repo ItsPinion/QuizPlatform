@@ -57,7 +57,7 @@ function stops(payload: LandingPayload | null): Stop[] {
     {
       step: '02',
       eyebrow: 'Grading',
-      title: 'One grader, one answer, no second opinion',
+      title: 'One grader, one verdict, no second opinion',
       body: 'Marks, counts, percentage and pass/fail come from a single pure function on the server. Submitting twice returns the stored result instead of grading the paper again.',
       points: [
         result
