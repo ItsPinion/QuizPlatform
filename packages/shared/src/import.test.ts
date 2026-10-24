@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { MAX_IMPORT_ROWS, parseCsv, parseQuestionImport } from './import';
 
 const HEADER = 'question,option1,option2,option3,option4,correct,explanation,marks,difficulty';
+const FULL_HEADER = `${HEADER},type,image,code`;
 
 describe('parseCsv', () => {
   it('splits rows and cells', () => {
@@ -49,9 +50,12 @@ describe('parseQuestionImport', () => {
     expect(result.issues).toEqual([]);
     expect(result.questions).toEqual([
       {
+        type: 'MCQ',
         questionText: 'What is 2+2?',
         options: ['3', '4', '5', '6'],
-        correctIndex: 1,
+        correctIndexes: [1],
+        imageUrl: null,
+        codeSnippet: null,
         explanation: 'Because maths',
         marks: 1,
         difficulty: 'EASY',
@@ -74,7 +78,7 @@ describe('parseQuestionImport', () => {
 
     expect(result.questions).toHaveLength(1);
     expect(result.issues).toEqual([
-      { line: 2, message: '"correct" must be a column number between 1 and 2 (got "9").' },
+      { line: 2, message: '"correct" must be between 1 and 2 (got "9").' },
     ]);
   });
 
@@ -106,6 +110,109 @@ describe('parseQuestionImport', () => {
     const result = parseQuestionImport([HEADER, ...rows].join('\n'));
     expect(result.questions).toHaveLength(0);
     expect(result.issues[0]?.message).toContain(`at most ${MAX_IMPORT_ROWS}`);
+  });
+
+  it('imports a multi-answer row from a list of correct numbers', () => {
+    const result = parseQuestionImport(
+      [FULL_HEADER, 'Which values are falsy?,0,NaN,null,[],1|3|4,,2,HARD,MULTI'].join('\n'),
+    );
+
+    expect(result.issues).toEqual([]);
+    expect(result.questions[0]).toMatchObject({
+      type: 'MULTI',
+      options: ['0', 'NaN', 'null', '[]'],
+      correctIndexes: [0, 2, 3],
+    });
+  });
+
+  it('needs two correct options for a multi-answer row', () => {
+    const result = parseQuestionImport(
+      [FULL_HEADER, 'Two keys needed?,a,b,c,,1,,1,,MULTI'].join('\n'),
+    );
+    expect(result.questions).toHaveLength(0);
+    expect(result.issues[0]?.message).toBe(
+      'A multi-answer question needs at least two correct options (got "1").',
+    );
+  });
+
+  it('refuses more than one key on a multiple-choice row', () => {
+    const result = parseQuestionImport(
+      [FULL_HEADER, 'Two keys wrong?,a,b,c,,1|2,,1,,MCQ'].join('\n'),
+    );
+    expect(result.issues[0]?.message).toContain('use type = MULTI for several');
+  });
+
+  it('imports a true/false row with its pair written by the parser', () => {
+    const result = parseQuestionImport(
+      [FULL_HEADER, 'HTML is a programming language,,,,,false,,1,,TRUE_FALSE'].join('\n'),
+    );
+
+    expect(result.issues).toEqual([]);
+    expect(result.questions[0]).toMatchObject({
+      type: 'TRUE_FALSE',
+      options: ['True', 'False'],
+      correctIndexes: [1],
+    });
+  });
+
+  it('does not let a true/false row invent its own options', () => {
+    const result = parseQuestionImport(
+      [FULL_HEADER, 'Is this true?,Yes,No,,,,,1,,TRUE_FALSE'].join('\n'),
+    );
+    expect(result.issues[0]?.message).toContain('fixed True/False pair');
+  });
+
+  it('imports a fill-in-the-blank row with every listed answer accepted', () => {
+    const result = parseQuestionImport(
+      [FULL_HEADER, 'Which keyword defines a function?,def,define,,,,,1,,FILL_BLANK'].join('\n'),
+    );
+
+    expect(result.issues).toEqual([]);
+    expect(result.questions[0]).toMatchObject({
+      type: 'FILL_BLANK',
+      options: ['def', 'define'],
+      correctIndexes: [0, 1],
+    });
+  });
+
+  it('needs at least one accepted answer for a fill-in-the-blank row', () => {
+    const result = parseQuestionImport(
+      [FULL_HEADER, 'Type the answer,,,,,,,,,FILL_BLANK'].join('\n'),
+    );
+    expect(result.issues[0]?.message).toBe('Give at least one accepted answer in option1–option4.');
+  });
+
+  it('rejects an unknown type without dropping the other rows', () => {
+    const result = parseQuestionImport(
+      [FULL_HEADER, 'A good question?,a,b,,,1,,1,,ESSAY', 'Another good one?,a,b,,,1,,1,,MCQ'].join(
+        '\n',
+      ),
+    );
+
+    expect(result.questions).toHaveLength(1);
+    expect(result.issues[0]?.message).toContain('"type" must be one of');
+  });
+
+  it('carries an image and a code snippet on any format', () => {
+    const result = parseQuestionImport(
+      [
+        FULL_HEADER,
+        'What does this print?,10,11,,,2,,1,,MCQ,https://example.com/a.png,"console.log(1)"',
+      ].join('\n'),
+    );
+
+    expect(result.questions[0]).toMatchObject({
+      type: 'MCQ',
+      imageUrl: 'https://example.com/a.png',
+      codeSnippet: 'console.log(1)',
+    });
+  });
+
+  it('rejects an image that is not a URL', () => {
+    const result = parseQuestionImport(
+      [FULL_HEADER, 'What is this?,a,b,,,1,,1,,MCQ,not-a-url'].join('\n'),
+    );
+    expect(result.issues[0]?.message).toContain('must be a full https:// URL');
   });
 
   it('counts data rows from 1, not from the header', () => {

@@ -15,6 +15,8 @@ import { z } from 'zod';
 
 import { availabilityOf } from './availability';
 import { difficultySchema, quizStatusSchema } from './index';
+import { MAX_ANSWER_TEXT, MAX_OPTIONS } from './question';
+import { questionTypeSchema } from './question-type';
 import { attemptResultSchema } from './submission';
 
 /* -------------------------------------------------------------------------- */
@@ -349,9 +351,19 @@ export type AttemptOption = z.infer<typeof attemptOptionSchema>;
 export const attemptQuestionSchema = z.object({
   id: z.string(),
   position: z.number(),
+  /** Which format the student is answering (§10). Defaults keep old payloads valid. */
+  type: questionTypeSchema.default('MCQ'),
   questionText: z.string(),
   marks: z.number(),
   difficulty: difficultySchema,
+  /** Shown above the options when the author attached one. */
+  imageUrl: z.string().nullable().default(null),
+  /** Shown in a monospace block above the options when the author attached one. */
+  codeSnippet: z.string().nullable().default(null),
+  /**
+   * Empty for `FILL_BLANK`: there the options *are* the answer key, so a
+   * running attempt is told nothing but the question itself.
+   */
   options: z.array(attemptOptionSchema),
 });
 export type AttemptQuestion = z.infer<typeof attemptQuestionSchema>;
@@ -359,6 +371,10 @@ export type AttemptQuestion = z.infer<typeof attemptQuestionSchema>;
 export const attemptAnswerSchema = z.object({
   questionId: z.string(),
   selectedOptionId: z.string().nullable(),
+  /** Every option picked on a `MULTI` question; empty on the other formats. */
+  selectedOptionIds: z.array(z.string()).default([]),
+  /** What was typed on a `FILL_BLANK` question; null on the other formats. */
+  answerText: z.string().nullable().default(null),
 });
 export type AttemptAnswer = z.infer<typeof attemptAnswerSchema>;
 
@@ -406,16 +422,37 @@ export const startAttemptResponseSchema = z.object({
 });
 export type StartAttemptResponse = z.infer<typeof startAttemptResponseSchema>;
 
-/** `null` clears the answer — choosing nothing is different from not answering. */
-export const saveAnswerSchema = z.object({
-  optionId: z.string().uuid('Invalid option id').nullable(),
-});
+/**
+ * One answer, in whichever shape the format needs.
+ *
+ * Exactly one of the three keys is sent — a single option, a set of options, or
+ * text — and the server refuses a payload that does not match the question's
+ * format, so a client cannot save a checkbox set against a radio question.
+ * `null`/`[]`/`''` clear the answer: choosing nothing is different from never
+ * having answered.
+ */
+export const saveAnswerSchema = z
+  .object({
+    optionId: z.string().uuid('Invalid option id').nullable().optional(),
+    optionIds: z.array(z.string().uuid('Invalid option id')).max(MAX_OPTIONS).optional(),
+    answerText: z.string().trim().max(MAX_ANSWER_TEXT).nullable().optional(),
+  })
+  .refine((value) => {
+    const shapes = [
+      value.optionId !== undefined,
+      value.optionIds !== undefined,
+      value.answerText !== undefined,
+    ].filter(Boolean);
+    return shapes.length === 1;
+  }, 'Send exactly one of optionId, optionIds or answerText');
 export type SaveAnswerInput = z.infer<typeof saveAnswerSchema>;
 
 export const saveAnswerResponseSchema = z.object({
   answer: z.object({
     questionId: z.string(),
     selectedOptionId: z.string().nullable(),
+    selectedOptionIds: z.array(z.string()).default([]),
+    answerText: z.string().nullable().default(null),
   }),
   progress: z.object({
     answered: z.number(),

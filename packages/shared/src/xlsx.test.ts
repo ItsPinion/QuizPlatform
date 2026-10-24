@@ -140,7 +140,7 @@ describe('workbookToCsv', () => {
     expect(parsed.issues).toEqual([]);
     expect(parsed.questions).toHaveLength(1);
     expect(parsed.questions[0]?.questionText).toBe('Q, with a comma');
-    expect(parsed.questions[0]?.correctIndex).toBe(0);
+    expect(parsed.questions[0]?.correctIndexes).toEqual([0]);
   });
 
   it('refuses an empty workbook with an instruction, not a stack trace', () => {

@@ -22,7 +22,7 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 > a redacted system screen an operator can read, a `bun run deploy:check` gate that runs the same
 > rules locally and eight live probes against a real URL, one Dockerfile with two targets, and the
 > runbook for migrate, verify and roll back.
-> **998 automated tests, a 77-check end-to-end smoke run and a 191-probe spec audit.** Feature complete: all fourteen days shipped.
+> **1,063 automated tests, a 77-check end-to-end smoke run and a 213-probe spec audit.** Feature complete: all fourteen days shipped.
 
 ---
 
@@ -332,15 +332,15 @@ quizplatform/
 
 Seven tables, defined in `packages/db/src/schema.ts`:
 
-| Table        | Purpose                                                                                             |
-| ------------ | --------------------------------------------------------------------------------------------------- |
-| `users`      | Both roles (`ADMIN`, `STUDENT`), status, scrypt password hash                                       |
-| `categories` | Quiz categories — unique name, unique slug, and a `lower(name)` index so "Rust" and "rust" collide  |
-| `quizzes`    | Metadata, category FK, duration, passing score, max attempts, `DRAFT` / `PUBLISHED` / `UNPUBLISHED` |
-| `questions`  | Belongs to a quiz, marks, difficulty, explanation, display position                                 |
-| `options`    | Belongs to a question, `is_correct` flag, display position                                          |
-| `attempts`   | One row per try: score, percentage, pass/fail, **server-enforced `expires_at`**                     |
-| `answers`    | Selected option per question, graded `is_correct` (unique per attempt + question)                   |
+| Table        | Purpose                                                                                                     |
+| ------------ | ----------------------------------------------------------------------------------------------------------- |
+| `users`      | Both roles (`ADMIN`, `STUDENT`), status, scrypt password hash                                               |
+| `categories` | Quiz categories — unique name, unique slug, and a `lower(name)` index so "Rust" and "rust" collide          |
+| `quizzes`    | Metadata, category FK, duration, passing score, max attempts, `DRAFT` / `PUBLISHED` / `UNPUBLISHED`         |
+| `questions`  | Belongs to a quiz, `type`, marks, difficulty, explanation, image/code, display position                     |
+| `options`    | Belongs to a question, `is_correct` flag, display position — the answer key for a fill-in-the-blank         |
+| `attempts`   | One row per try: score, percentage, pass/fail, **server-enforced `expires_at`**                             |
+| `answers`    | Selected option, option set or typed text per question, graded `is_correct` (unique per attempt + question) |
 
 Relationship chain: `users → attempts → quizzes → questions → options`, with `answers` joining an
 attempt to the question it answered. Indexes cover the foreign keys, status and difficulty columns
@@ -390,16 +390,16 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 998 tests, all workspaces through Turbo
+bun run test                    # 1,063 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
 bun run test:e2e                # 77 checks against a live server + throwaway DB
-bun run test:spec               # 191 probes, one per spec promise (needs both servers up)
+bun run test:spec               # 213 probes, one per spec promise (needs both servers up)
 bun run deploy:check            # the deployment gate (see docs/deployment.md)
 ```
 
-**998 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
+**1,063 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
 
-**`@quiz/shared`** (276) — scrypt record format, unique salts, correct/wrong passwords, unicode
+**`@quiz/shared`** (376) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
 auth contracts (trimming, lowercased emails, stripped unknown keys, the exact password policy,
 session constants), plus the Day 4 admin contracts: query coercion and defaults, the
@@ -411,7 +411,7 @@ summary arithmetic behind `5 of 6 checks pass · 1 warning`. `landing.test.ts` (
 payload schema, the range and duration labels (`15–25 min`, `60–70%`, `57.1%`) and the headline-number
 derivation the page renders.
 
-**`@quiz/db`** (62) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
+**`@quiz/db`** (63) — migrations replayed from scratch with `drizzle-kit migrate`; all seven tables
 and the uniqueness/lookup indexes; column defaults; millisecond timestamp precision; unique email,
 slug and per-attempt answer constraints; quiz → questions/options/attempts/answers cascade;
 category-with-quizzes protected by `restrict`; user deletion cascading while nulling the quiz author;
@@ -421,7 +421,7 @@ integrity (quiz/question/option counts, one correct option each, attempt percent
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
 
-**`@quiz/api`** (328) — service banner, health payload shape, request IDs, security headers, CORS
+**`@quiz/api`** (352) — service banner, health payload shape, request IDs, security headers, CORS
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
 the database is unreachable, `/api/meta` roadmap, and the 404 error envelope. Day 14 adds the system
 report: the schema-validated document, counts that match the tables, checks that are honest about a
@@ -540,7 +540,7 @@ email search, empty values, unknown roles), pagination, both sorts, 422s for bad
 lookups, 404/422 handling, promotion/demotion, deactivation lockout and restoration, `SELF_LOCKOUT`
 for self-demotion and self-deactivation, and 401/403 on every admin route.
 
-**`@quiz/web`** (230) — the error-envelope narrowing every auth form relies on (API error codes,
+**`@quiz/web`** (272) — the error-envelope narrowing every auth form relies on (API error codes,
 Zod issue extraction, fallbacks for malformed bodies, network-error mapping), the Day 3 page guard
 rules, the Day 4 directory parameters, the Day 5 quiz helpers, the Day 6 question-form helpers, and
 the Day 7–9 student helpers: catalogue filter parsing with `toStudentQuery`/`quizzesHref` round-trips
@@ -620,7 +620,7 @@ The Turso-only rule applies to the running application, not to tests.
 | PATCH  | `/api/admin/quizzes/:id`                        | Edit a quiz; the slug stays stable                     |
 | DELETE | `/api/admin/quizzes/:id`                        | Delete a quiz that has no attempts                     |
 | GET    | `/api/admin/quizzes/:id/questions`              | A quiz's questions, ordered, each with its options     |
-| POST   | `/api/admin/quizzes/:id/questions`              | Author a question (2–6 options, exactly one right)     |
+| POST   | `/api/admin/quizzes/:id/questions`              | Author a question, in any of the four formats          |
 | PATCH  | `/api/admin/quizzes/:id/questions/order`        | Reorder a quiz's questions as a whole list             |
 | GET    | `/api/admin/questions/:id`                      | One question with its options and answer count         |
 | PUT    | `/api/admin/questions/:id`                      | Replace a question; options reconcile by id            |
@@ -1000,8 +1000,35 @@ The UI is an inline authoring panel on the quiz edit page — add, edit, reorder
 `packages/shared/src/question.ts` so the console disables a button and explains it, while the API
 stays the authority.
 
-Full detail — every validation rule, the reconciliation table, the screens and their failure states
-— is in [`docs/categories-and-questions.md`](docs/categories-and-questions.md).
+### Four formats, not one
+
+§10 lists question types as future work; all of them that make sense as a _grading_ shape ship here.
+
+| Type         | Authored as                                   | Graded                                    |
+| ------------ | --------------------------------------------- | ----------------------------------------- |
+| `MCQ`        | 2–6 options, exactly one key                  | the chosen option is the key              |
+| `MULTI`      | 2–6 options, two or more keys                 | the chosen **set** must equal the key set |
+| `TRUE_FALSE` | a statement; the server writes `True`/`False` | the chosen option is the key              |
+| `FILL_BLANK` | one or more accepted answers                  | typed text, compared after normalisation  |
+
+Image-based and code-based questions are not a fifth and sixth type: `imageUrl` and `codeSnippet`
+are presentation fields on `questions`, rendered above the options for any of the four. The paper a
+student receives carries the format and the media but never a correctness flag — and a fill-in-the-
+blank ships **no options at all**, because there its options are the answer key.
+
+A multiple-answer question is all-or-nothing on purpose: the pass mark, the negative-marking penalty
+and the attempt totals are all written against "a question is right or wrong". `FILL_BLANK` forgives
+what a person cannot see (case, runs of space, curly quotes, a trailing full stop) and nothing else.
+Results and the review screen break a mixed paper down by format, and the CSV/`.xlsx` importer
+carries all four formats through an optional `type` column. "Match the following" is the one item on
+§10's list that is not built, and
+[`docs/advanced-features.md`](docs/advanced-features.md) §10 argues why: it needs a pair table, a
+different answer shape and partial credit the grader does not have.
+
+Full detail — every validation rule, the format contract, the reconciliation table, the screens and
+their failure states — is in
+[`docs/categories-and-questions.md`](docs/categories-and-questions.md) and
+[`docs/advanced-features.md`](docs/advanced-features.md).
 
 ---
 
@@ -1443,7 +1470,7 @@ Day 14 (done): deployment & docs. Eight environment rules in one pure function, 
 places — `bun run deploy:check` before a build, `GET /api/admin/system` from inside the process, and
 `deploy:check --url` over the wire after the deploy — with a verdict of `ready`, `attention` or
 `blocked`; a redacted system screen at `/admin/system`; one `Dockerfile` with `api` and `web` targets;
-and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 998 Vitest tests
+and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 1,063 Vitest tests
 and a 75-check end-to-end smoke run.
 
 Day 13 (done): testing & security. Rate limiting on the auth routes (a hard per-address block and a

@@ -28,17 +28,23 @@ const result = {
   penalty: 0,
   negativeMarks: 0,
   certificateCode: null,
+  formats: [{ type: 'MCQ' as const, total: 4, correct: 2, incorrect: 1, unanswered: 1 }],
 };
 
 const question = {
   id: 'q1',
   position: 0,
+  type: 'MCQ' as const,
   questionText: 'Which one?',
+  imageUrl: null,
+  codeSnippet: null,
   marks: 2,
   difficulty: 'EASY' as const,
   explanation: 'Because it is.',
   selectedOptionId: 'o1',
+  selectedOptionIds: ['o1'],
   correctOptionId: 'o1',
+  answerText: null,
   verdict: 'CORRECT' as const,
   earnedMarks: 2,
   options: [

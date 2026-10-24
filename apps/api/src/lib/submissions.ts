@@ -2,12 +2,17 @@ import { and, eq, inArray, lte } from 'drizzle-orm';
 
 import type { AttemptResult, SubmitAttemptResponse } from '@quiz/shared/submission';
 import {
+  formatBreakdown,
   gradeAttempt,
   timeTakenSeconds,
   wasAutoSubmitted,
+  type FormatBreakdown,
   type GradableAnswer,
   type GradableQuestion,
 } from '@quiz/shared/submission';
+import { answerVerdict } from '@quiz/shared/review';
+import { parseIdOrder } from '@quiz/shared/attempt';
+import type { QuestionType } from '@quiz/shared/question-type';
 import { db, schema } from '@quiz/db';
 
 import { certificateEmail, resultEmail } from '@quiz/shared/email';
@@ -105,6 +110,7 @@ function toResult(
     quizNegativeMarks: number;
   },
   certificateCode: string | null = null,
+  formats: FormatBreakdown[] = [],
 ): AttemptResult {
   const completedAt = row.completedAt ?? row.expiresAt;
   const passed =
@@ -129,6 +135,7 @@ function toResult(
     penalty: Number(row.penalty ?? 0),
     negativeMarks: Number(row.negativeMarks ?? row.quizNegativeMarks ?? 0),
     certificateCode,
+    formats,
   };
 }
 
@@ -143,17 +150,22 @@ function toResult(
  * (or a tab reconnecting after the clock ran out) is recorded as finishing when
  * time ran out, never after it.
  */
-async function gradeAndStore(
-  row: AttemptRow & {
-    passingScore: number;
-    quizNegativeMarks: number;
-    certificateEnabled: boolean;
-  },
-): Promise<SubmitAttemptResponse> {
+/**
+ * The paper as the grader sees it: questions with their format, and the answers
+ * with whichever shape each one uses.
+ *
+ * Used both to grade a paper and to re-derive its per-format tally on a later
+ * read, so the two can never disagree about what was on the paper.
+ */
+async function loadPaper(quizId: string, attemptId: string) {
   const questionRows = await db
-    .select({ id: questions.id, marks: questions.marks })
+    .select({
+      id: questions.id,
+      marks: questions.marks,
+      type: questions.type,
+    })
     .from(questions)
-    .where(eq(questions.quizId, row.quizId));
+    .where(eq(questions.quizId, quizId));
 
   const questionIds = questionRows.map((question) => question.id);
 
@@ -163,35 +175,56 @@ async function gradeAndStore(
           .select({
             id: options.id,
             questionId: options.questionId,
+            text: options.optionText,
             isCorrect: options.isCorrect,
           })
           .from(options)
           .where(inArray(options.questionId, questionIds))
       : Promise.resolve([]),
     db
-      .select({ questionId: answers.questionId, selectedOptionId: answers.selectedOptionId })
+      .select({
+        questionId: answers.questionId,
+        selectedOptionId: answers.selectedOptionId,
+        selectedOptionIds: answers.selectedOptionIds,
+        answerText: answers.answerText,
+      })
       .from(answers)
-      .where(eq(answers.attemptId, row.id)),
+      .where(eq(answers.attemptId, attemptId)),
   ]);
 
-  const optionsByQuestion = new Map<string, { id: string; isCorrect: boolean }[]>();
+  const optionsByQuestion = new Map<string, { id: string; isCorrect: boolean; text: string }[]>();
 
   for (const option of optionRows) {
     const list = optionsByQuestion.get(option.questionId) ?? [];
-    list.push({ id: option.id, isCorrect: option.isCorrect });
+    list.push({ id: option.id, isCorrect: option.isCorrect, text: option.text });
     optionsByQuestion.set(option.questionId, list);
   }
 
   const gradable: GradableQuestion[] = questionRows.map((question) => ({
     id: question.id,
     marks: question.marks,
+    type: question.type as QuestionType,
     options: optionsByQuestion.get(question.id) ?? [],
   }));
 
   const savedAnswers: GradableAnswer[] = answerRows.map((answer) => ({
     questionId: answer.questionId,
     selectedOptionId: answer.selectedOptionId,
+    selectedOptionIds: parseIdOrder(answer.selectedOptionIds),
+    answerText: answer.answerText,
   }));
+
+  return { questionRows, gradable, savedAnswers };
+}
+
+async function gradeAndStore(
+  row: AttemptRow & {
+    passingScore: number;
+    quizNegativeMarks: number;
+    certificateEnabled: boolean;
+  },
+): Promise<SubmitAttemptResponse> {
+  const { gradable, savedAnswers } = await loadPaper(row.quizId, row.id);
 
   // Wrong answers cost marks on a quiz that says so. The value is the attempt's
   // own (frozen at start), so an admin editing the quiz mid-week cannot change
@@ -226,21 +259,34 @@ async function gradeAndStore(
     })
     .where(eq(attempts.id, row.id));
 
-  // Stamp correctness on the saved rows. Only a real selection can be right or
-  // wrong; a cleared answer keeps `is_correct = null`.
-  const correctIds = new Set(
-    gradable.flatMap((question) =>
-      question.options.filter((option) => option.isCorrect).map((option) => option.id),
-    ),
-  );
+  // Stamp correctness on the saved rows, per question rather than per option:
+  // a multiple-answer question is right or wrong as a set, and a typed answer
+  // has no option id to look up. An unanswered row keeps `is_correct = null`.
+  for (const question of gradable) {
+    const answer = savedAnswers.find((entry) => entry.questionId === question.id);
+    if (!answer) continue;
 
-  for (const answer of answerRows) {
-    if (!answer.selectedOptionId) continue;
+    const verdict = answerVerdict({
+      type: question.type ?? 'MCQ',
+      options: question.options.map((option) => ({
+        id: option.id,
+        isCorrect: option.isCorrect,
+        text: option.text ?? '',
+      })),
+      selectedOptionIds: answer.selectedOptionIds?.length
+        ? answer.selectedOptionIds
+        : answer.selectedOptionId
+          ? [answer.selectedOptionId]
+          : [],
+      answerText: answer.answerText ?? null,
+    });
+
+    if (verdict === 'UNANSWERED') continue;
 
     await db
       .update(answers)
-      .set({ isCorrect: correctIds.has(answer.selectedOptionId) })
-      .where(and(eq(answers.attemptId, row.id), eq(answers.questionId, answer.questionId)));
+      .set({ isCorrect: verdict === 'CORRECT' })
+      .where(and(eq(answers.attemptId, row.id), eq(answers.questionId, question.id)));
   }
 
   const { certificateCode } = await notifyStudent(row, {
@@ -365,7 +411,7 @@ export async function submitAttempt(
       attemptId: row.id,
       quizId: row.quizId,
       alreadySubmitted: true,
-      result: toResult(row, await certificateCodeFor(row.id)),
+      result: toResult(row, await certificateCodeFor(row.id), await formatsFor(row.quizId, row.id)),
     };
   }
 
@@ -403,11 +449,20 @@ export async function expireStaleAttempts(userId: string, now: Date = new Date()
   return stale.length;
 }
 
+/** The per-format tally of a stored paper, for a read that is not a fresh grade. */
+async function formatsFor(quizId: string, attemptId: string): Promise<FormatBreakdown[]> {
+  const { gradable, savedAnswers } = await loadPaper(quizId, attemptId);
+  return formatBreakdown({ questions: gradable, answers: savedAnswers });
+}
+
 /** The graded result of a finished attempt, or `null` while it is still open. */
 export async function getAttemptResult(
   attemptId: string,
   userId: string,
 ): Promise<AttemptResult | null> {
   const row = await loadAttempt(attemptId, userId);
-  return row.status === 'IN_PROGRESS' ? null : toResult(row, await certificateCodeFor(row.id));
+
+  return row.status === 'IN_PROGRESS'
+    ? null
+    : toResult(row, await certificateCodeFor(row.id), await formatsFor(row.quizId, row.id));
 }

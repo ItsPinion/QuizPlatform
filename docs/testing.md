@@ -3,8 +3,9 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test         # 998 unit + integration tests across the four workspaces
+bun run test         # 1,063 unit + integration tests across the four workspaces
 bun run test:e2e     # 77 checks against a real HTTP server (own process, own port)
+bun run test:spec    # 213 probes against a running API + web (see the audit below)
 bun run deploy:check # the deployment gate (see docs/deployment.md)
 ```
 
@@ -17,12 +18,12 @@ tests.
 
 ## What runs where
 
-| Workspace      | Tests | Focus                                                                                                                                                                            |
-| -------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@quiz/shared` | 338   | auth + content contracts, attempt clocks, the grader, dashboard, analytics, ranking, deployment rules, availability, passwords, certificates, email, CSV import, `.xlsx` reading |
-| `@quiz/db`     | 62    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring                                                                                         |
-| `@quiz/api`    | 339   | health/readiness, auth, guards, content, taking, grading, reviewing, stats, analytics, board, system, account, import, outbox                                                    |
-| `@quiz/web`    | 259   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers, theming                                                                            |
+| Workspace      | Tests | Focus                                                                                                                                                                                                                       |
+| -------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@quiz/shared` | 376   | auth + content contracts, the four question formats, attempt clocks, the grader, dashboard, analytics, ranking, deployment rules, availability, passwords, certificates, email, CSV import of every format, `.xlsx` reading |
+| `@quiz/db`     | 63    | migrations replayed from scratch, schema constraints, seed integrity (all four formats present in the seed), Drizzle Kit wiring                                                                                             |
+| `@quiz/api`    | 352   | health/readiness, auth, guards, content, the four formats end to end, taking, grading, reviewing, stats, analytics, board, system, account, import, outbox                                                                  |
+| `@quiz/web`    | 272   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers, question-format helpers, theming                                                                                              |
 
 Run one workspace at a time when you are iterating:
 
@@ -522,29 +523,36 @@ attempt section plays the paper as that account, so a second run cannot fail for
 that the seeded student ran out of tries), creates and then deletes an audit quiz and category, sends
 one password-reset mail, and spends its own rate-limit bucket from a fixed `X-Forwarded-For` address.
 
-**Result on 2026-10-24, against `5c6e6c7` + the average-score fix: `191 passed · 0 failed`.** The
+**Result on 2026-10-24, against the question-format work: `213 passed · 0 failed`.** The
 probes group by section as follows; each line is a count of assertions, not of features.
 
-| §     | What the probes prove                                                                                                                                                                                                                                                                           | Probes |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 3.1   | both roles sign in; the admin console renders; users, quizzes, categories, attempts and one attempt's answers are readable through the API                                                                                                                                                      | 10     |
-| 4     | register, logout, forgot-password for a student **and** an admin, a bad reset token refused, change-password requires the current password                                                                                                                                                      | 8      |
-| 5     | every statistic the dashboard names — students, quizzes, published, drafts, questions, attempts, average, passed, failed — plus a 30-point timeline, popular quizzes and popular categories                                                                                                     | 15     |
-| 6     | name, email, registration date, status, attempts, **average score**, highest score; a student's profile, history and performance; the profile page renders                                                                                                                                      | 13     |
-| 7, 9  | create → edit → publish → unpublish → delete; every create-quiz field including the thumbnail; question text, options, one correct answer, explanation, marks, difficulty                                                                                                                       | 18     |
-| 8     | create, rename, delete a category; the row links to the filtered quiz list                                                                                                                                                                                                                      | 4      |
-| 11–14 | start, resume without spending a try, the server-side clock, answer save, submit, the full result payload, and a review carrying question, selected answer, correct answer, explanation and verdict                                                                                             | 26     |
-| 15–19 | dashboard totals and recents; search by title and by category; category, difficulty, duration and sort filters; details; history; leaderboard across three metrics, three periods and one category                                                                                              | 31     |
-| 20    | every table and column the spec draws exists, and passwords are stored as scrypt hashes                                                                                                                                                                                                         | 8      |
-| 25    | the endpoint list resolves — each canonical route answers rather than 404s                                                                                                                                                                                                                      | 11     |
-| 26    | randomisation, negative marking (setting **and** applied penalty), max attempts, scheduling (a blocked start), certificates plus public verification, the email outbox and its transport, dark mode on both consoles, CSV parse and commit                                                      | 20     |
-| 27    | a tampered session, invalid ids, missing parameters, SQL injection, a foreign origin, rate limiting, secure headers, a CSP on the web app, an error envelope with no stack, unknown routes, no secrets in `/api/health`, stored-XSS escaping, and no answer key or score in the attempt payload | 23     |
-| 28    | every console and the landing page declares a responsive viewport                                                                                                                                                                                                                               | 4      |
+| §     | What the probes prove                                                                                                                                                                                                                                                                                                                           | Probes |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 3.1   | both roles sign in; the admin console renders; users, quizzes, categories, attempts and one attempt's answers are readable through the API                                                                                                                                                                                                      | 10     |
+| 4     | register, logout, forgot-password for a student **and** an admin, a bad reset token refused, change-password requires the current password, the console's own account screen and its rail link, a student refused it                                                                                                                            | 11     |
+| 5     | every statistic the dashboard names — students, quizzes, published, drafts, questions, attempts, average, passed, failed — plus a 30-point timeline, popular quizzes and popular categories                                                                                                                                                     | 15     |
+| 6     | name, email, registration date, status, attempts, **average score**, highest score; a student's profile, history and performance; the profile page renders                                                                                                                                                                                      | 13     |
+| 7, 9  | create → edit → publish → unpublish → delete; every create-quiz field including the thumbnail; question text, options, one correct answer, explanation, marks, difficulty                                                                                                                                                                       | 18     |
+| 10    | every format authored through the API, a true/false pair written by the server, an image attached to any format, the malformed cases refused, one CSV carrying all four formats, a mixed paper where a fill-in-the-blank ships no options, a set and a typed answer saved and graded, the by-format breakdown on the result and the review page | 19     |
+| 8     | create, rename, delete a category; the row links to the filtered quiz list                                                                                                                                                                                                                                                                      | 4      |
+| 11–14 | start, resume without spending a try, the server-side clock, answer save, submit, the full result payload, and a review carrying question, selected answer, correct answer, explanation and verdict                                                                                                                                             | 26     |
+| 15–19 | dashboard totals and recents; search by title and by category; category, difficulty, duration and sort filters; details; history; leaderboard across three metrics, three periods and one category                                                                                                                                              | 31     |
+| 20    | every table and column the spec draws exists, and passwords are stored as scrypt hashes                                                                                                                                                                                                                                                         | 8      |
+| 25    | the endpoint list resolves — each canonical route answers rather than 404s                                                                                                                                                                                                                                                                      | 11     |
+| 26    | randomisation, negative marking (setting **and** applied penalty), max attempts, scheduling (a blocked start), certificates plus public verification, the email outbox and its transport, dark mode on both consoles, CSV parse and commit                                                                                                      | 20     |
+| 27    | a tampered session, invalid ids, missing parameters, SQL injection, a foreign origin, rate limiting, secure headers, a CSP on the web app, an error envelope with no stack, unknown routes, no secrets in `/api/health`, stored-XSS escaping, and no answer key or score in the attempt payload                                                 | 23     |
+| 28    | every console and the landing page declares a responsive viewport                                                                                                                                                                                                                                                                               | 4      |
 
-Two things the audit cannot prove, both documented elsewhere: question types other than
-multiple-choice (§10 of the spec defers them; the rationale and migration path are in
-`docs/advanced-features.md` §10), and wall-clock behaviour under load. Both remain honest gaps rather
-than silent ones.
+One thing the audit cannot prove is wall-clock behaviour under load: a probe can show that a
+deadline is enforced, not how the platform behaves when a thousand people hit one at the same
+second. That remains an honest gap rather than a silent one, and
+[`docs/deployment.md`](deployment.md) names the load test as the first thing to run against a real
+deployment.
+
+Question formats are no longer a gap: §10's list is covered end to end (four grading shapes, with
+images and code as presentation), except "match the following", which
+[`docs/advanced-features.md`](advanced-features.md) §10 argues against building as a thin wrapper
+over an existing type.
 
 ---
 

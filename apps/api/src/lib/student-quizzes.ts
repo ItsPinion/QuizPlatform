@@ -4,6 +4,7 @@ import { and, asc, count, desc, eq, gt, gte, inArray, like, lt, max, or, sql } f
 
 import type {
   AttemptSession,
+  SaveAnswerInput,
   SaveAnswerResponse,
   StartAttemptResponse,
   StudentQuiz,
@@ -20,6 +21,11 @@ import {
   startDecision,
 } from '@quiz/shared/attempt';
 import { availabilityOf } from '@quiz/shared/availability';
+import {
+  hidesOptionsWhileRunning,
+  isMultiSelect,
+  type QuestionType,
+} from '@quiz/shared/question-type';
 import type { CategoryOption } from '@quiz/shared/quiz';
 import { db, schema } from '@quiz/db';
 
@@ -509,9 +515,12 @@ export async function getAttemptSession(
     .select({
       id: questions.id,
       position: questions.position,
+      type: questions.type,
       questionText: questions.questionText,
       marks: questions.marks,
       difficulty: questions.difficulty,
+      imageUrl: questions.imageUrl,
+      codeSnippet: questions.codeSnippet,
     })
     .from(questions)
     .where(eq(questions.quizId, attempt.quizId))
@@ -533,7 +542,12 @@ export async function getAttemptSession(
           .orderBy(asc(options.position), asc(options.optionText))
       : Promise.resolve([]),
     db
-      .select({ questionId: answers.questionId, selectedOptionId: answers.selectedOptionId })
+      .select({
+        questionId: answers.questionId,
+        selectedOptionId: answers.selectedOptionId,
+        selectedOptionIds: answers.selectedOptionIds,
+        answerText: answers.answerText,
+      })
       .from(answers)
       .where(eq(answers.attemptId, attemptId)),
   ]);
@@ -574,19 +588,33 @@ export async function getAttemptSession(
       questionCount: presentedQuestions.length,
       totalMarks: Number(attempt.totalMarks),
     },
-    questions: presentedQuestions.map((question) => ({
-      id: question.id,
-      position: question.position,
-      questionText: question.questionText,
-      marks: question.marks,
-      difficulty: question.difficulty,
-      options: presentedOptions
-        .filter((option) => option.questionId === question.id)
-        .map((option) => ({ id: option.id, text: option.text, position: option.position })),
-    })),
+    questions: presentedQuestions.map((question) => {
+      const type = question.type as QuestionType;
+
+      return {
+        id: question.id,
+        position: question.position,
+        type,
+        questionText: question.questionText,
+        marks: question.marks,
+        difficulty: question.difficulty,
+        imageUrl: question.imageUrl,
+        codeSnippet: question.codeSnippet,
+        // The accepted answers *are* the answer key on a fill-in-the-blank, so a
+        // running attempt is sent none of them (§27: the browser is never told
+        // what is correct).
+        options: hidesOptionsWhileRunning(type)
+          ? []
+          : presentedOptions
+              .filter((option) => option.questionId === question.id)
+              .map((option) => ({ id: option.id, text: option.text, position: option.position })),
+      };
+    }),
     answers: answerRows.map((row) => ({
       questionId: row.questionId,
       selectedOptionId: row.selectedOptionId,
+      selectedOptionIds: parseIdOrder(row.selectedOptionIds),
+      answerText: row.answerText,
     })),
   };
 }
@@ -597,11 +625,16 @@ export async function getAttemptSession(
  * `PATCH`-like semantics with a full body, one question at a time: the attempt
  * screen writes as the student clicks, so a closed tab loses at most one
  * selection. Nothing is graded here — `is_correct` stays null until submission.
+ *
+ * The shape of the body is checked against the question's format (§10): a
+ * multiple-answer question takes a set, a fill-in-the-blank takes text, and the
+ * single-answer formats take one option. Sending the wrong shape is a `422`
+ * rather than a silently ignored field.
  */
 export async function saveAnswer(
   attemptId: string,
   questionId: string,
-  optionId: string | null,
+  input: SaveAnswerInput,
   userId: string,
 ): Promise<SaveAnswerResponse> {
   const attempt = await loadAttempt(attemptId, userId);
@@ -619,7 +652,11 @@ export async function saveAnswer(
   }
 
   const [question] = await db
-    .select({ id: questions.id, quizId: questions.quizId })
+    .select({
+      id: questions.id,
+      quizId: questions.quizId,
+      type: questions.type,
+    })
     .from(questions)
     .where(eq(questions.id, questionId))
     .limit(1);
@@ -628,17 +665,45 @@ export async function saveAnswer(
     throw new ApiError(422, 'QUESTION_NOT_FOUND', 'That question is not part of this attempt.');
   }
 
-  if (optionId) {
-    const [option] = await db
+  const type = question.type as QuestionType;
+  const shape = answerShape(input);
+
+  const expected =
+    type === 'FILL_BLANK' ? 'answerText' : isMultiSelect(type) ? 'optionIds' : 'optionId';
+
+  if (shape !== expected) {
+    throw new ApiError(
+      422,
+      'ANSWER_SHAPE_MISMATCH',
+      type === 'FILL_BLANK'
+        ? 'This question takes a typed answer.'
+        : isMultiSelect(type)
+          ? 'This question takes more than one option.'
+          : 'This question takes a single option.',
+    );
+  }
+
+  const optionIds = input.optionIds ?? (input.optionId ? [input.optionId] : []);
+
+  if (optionIds.length > 0) {
+    const rows = await db
       .select({ id: options.id, questionId: options.questionId })
       .from(options)
-      .where(eq(options.id, optionId))
-      .limit(1);
+      .where(inArray(options.id, optionIds));
 
-    if (!option || option.questionId !== questionId) {
+    if (rows.length !== optionIds.length || rows.some((row) => row.questionId !== questionId)) {
       throw new ApiError(422, 'OPTION_NOT_FOUND', 'That option does not belong to this question.');
     }
   }
+
+  const selectedOptionId = isMultiSelect(type) ? null : (optionIds[0] ?? null);
+  const selectedOptionIds = isMultiSelect(type) ? optionIds : [];
+  const answerText =
+    type === 'FILL_BLANK'
+      ? input.answerText == null || input.answerText.trim() === ''
+        ? null
+        : input.answerText.trim()
+      : null;
 
   const [existing] = await db
     .select({ id: answers.id })
@@ -646,26 +711,30 @@ export async function saveAnswer(
     .where(and(eq(answers.attemptId, attemptId), eq(answers.questionId, questionId)))
     .limit(1);
 
+  const values = {
+    selectedOptionId,
+    selectedOptionIds: selectedOptionIds.length > 0 ? JSON.stringify(selectedOptionIds) : null,
+    answerText,
+    // Stamped by the grader on submission; never trusted from the client.
+    isCorrect: null,
+  };
+
   if (existing) {
-    await db
-      .update(answers)
-      .set({ selectedOptionId: optionId, isCorrect: null })
-      .where(eq(answers.id, existing.id));
+    await db.update(answers).set(values).where(eq(answers.id, existing.id));
   } else {
-    await db.insert(answers).values({
-      id: randomUUID(),
-      attemptId,
-      questionId,
-      selectedOptionId: optionId,
-      // Stamped by the grader on submission; never trusted from the client.
-      isCorrect: null,
-    });
+    await db.insert(answers).values({ id: randomUUID(), attemptId, questionId, ...values });
   }
 
   const [answered] = await db
     .select({ value: count() })
     .from(answers)
-    .where(and(eq(answers.attemptId, attemptId), sql`${answers.selectedOptionId} is not null`));
+    .where(
+      and(
+        eq(answers.attemptId, attemptId),
+        // An answer counts as given when it holds a choice *or* typed text.
+        sql`(${answers.selectedOptionId} is not null or ${answers.selectedOptionIds} is not null or (${answers.answerText} is not null and trim(${answers.answerText}) <> ''))`,
+      ),
+    );
 
   const totalRows = await db
     .select({ value: count() })
@@ -677,11 +746,18 @@ export async function saveAnswer(
   const answeredCount = Number(answered?.value ?? 0);
 
   return {
-    answer: { questionId, selectedOptionId: optionId },
+    answer: { questionId, selectedOptionId, selectedOptionIds, answerText },
     progress: {
       answered: answeredCount,
       unanswered: Math.max(0, Number(total) - answeredCount),
       total: Number(total),
     },
   };
+}
+
+/** Which of the three answer shapes the body used. */
+function answerShape(input: SaveAnswerInput): 'optionId' | 'optionIds' | 'answerText' {
+  if (input.answerText !== undefined) return 'answerText';
+  if (input.optionIds !== undefined) return 'optionIds';
+  return 'optionId';
 }

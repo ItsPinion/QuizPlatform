@@ -1,13 +1,26 @@
 import type { Difficulty, QuizStatus } from '@quiz/shared';
+import type { QuestionType } from '@quiz/shared/question-type';
 
 export interface QuestionSeed {
   text: string;
-  options: [string, string, string, string];
-  /** Index (0–3) of the correct option. */
-  correct: number;
+  /** Defaults to `MCQ`; the seed carries one of each so the demo shows all of §10. */
+  type?: QuestionType;
+  /**
+   * Choice options, or — on a `FILL_BLANK` — every accepted answer. Marked
+   * correct according to `correct`/`correctIndexes`, or in full when the type
+   * lists nothing else.
+   */
+  options: string[];
+  /** Index of the correct option on the single-answer types. */
+  correct?: number;
+  /** Indices of every correct option on a `MULTI`. */
+  correctIndexes?: number[];
   explanation: string;
   marks?: number;
   difficulty?: Difficulty;
+  /** Presentation shown above the options. */
+  imageUrl?: string;
+  codeSnippet?: string;
 }
 
 export interface QuizSeed {
@@ -112,15 +125,21 @@ export const quizSeeds: QuizSeed[] = [
         explanation: '<nav> is the semantic element for a block of major navigation links.',
       },
       {
-        text: 'Which doctype declaration marks a document as HTML5?',
-        options: [
-          '<!DOCTYPE html>',
-          '<!DOCTYPE html5>',
-          '<?html version="5"?>',
-          '<!DOCTYPE xhtml>',
-        ],
+        // A true/false question (§10): two options the author never types.
+        type: 'TRUE_FALSE',
+        text: 'HTML is a programming language.',
+        options: ['True', 'False'],
+        correct: 1,
+        explanation:
+          'HTML describes the structure of a document. It has no variables, loops or logic, so it is a markup language.',
+      },
+      {
+        // An image-based question (§10): multiple choice with a figure.
+        text: 'This dial is the classic 12-hour face. Roughly what time does the hour hand show?',
+        imageUrl: 'https://placehold.co/480x480/png?text=12-hour+dial',
+        options: ['About 12 o’clock', 'About 3 o’clock', 'About 6 o’clock', 'About 9 o’clock'],
         correct: 0,
-        explanation: 'HTML5 uses the short, case-insensitive `<!DOCTYPE html>` declaration.',
+        explanation: 'The figure is a dial with 12 at the top — the hand points at it.',
       },
     ],
   },
@@ -201,6 +220,18 @@ export const quizSeeds: QuizSeed[] = [
         options: ['unshift()', 'push()', 'pop()', 'shift()'],
         correct: 1,
         explanation: 'push() appends items; pop() removes from the end.',
+      },
+      {
+        // Multiple correct answers (§10), and a code-based prompt.
+        type: 'MULTI',
+        text: 'Which of these values are falsy in JavaScript?',
+        codeSnippet:
+          'const values = [0, "0", null, [], ""];\nconst falsy = values.filter((value) => !value);',
+        options: ['0', '"0"', 'null', '[]', '""'],
+        correctIndexes: [0, 2, 4],
+        explanation:
+          '`0`, `null` and the empty string are falsy. `"0"` is a non-empty string and `[]` is an object, so both are truthy.',
+        marks: 2,
       },
       {
         text: 'What does `typeof null` evaluate to?',
@@ -340,9 +371,11 @@ export const quizSeeds: QuizSeed[] = [
     status: 'PUBLISHED',
     questions: [
       {
-        text: 'Which keyword defines a function in Python?',
-        options: ['func', 'def', 'function', 'lambda'],
-        correct: 1,
+        // Fill in the blank (§10). Both spellings below are accepted, and the
+        // answer text is never sent to the student while they are sitting it.
+        type: 'FILL_BLANK',
+        text: 'Which keyword starts a function definition in Python?',
+        options: ['def'],
         explanation: '`def` starts a function definition; `lambda` creates an anonymous one.',
       },
       {

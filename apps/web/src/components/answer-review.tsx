@@ -1,8 +1,10 @@
 import type { AttemptReview, ReviewFilter, ReviewQuestion } from '@quiz/shared/review';
 import { verdictMatchesFilter } from '@quiz/shared/review';
-import { CircleCheck, CircleX, Clock, Info, MinusCircle } from 'lucide-react';
+import { QUESTION_TYPE_LABELS, isMultiSelect, type QuestionType } from '@quiz/shared/question-type';
+import { CircleCheck, CircleX, Clock, Code2, Info, MinusCircle } from 'lucide-react';
 import Link from 'next/link';
 
+import { FormatBreakdownList } from '@/components/format-breakdown';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { difficultyTone } from '@/lib/quiz-params';
@@ -40,8 +42,17 @@ function QuestionCard({
   total: number;
 }) {
   const Icon = VERDICT_ICON[question.verdict];
+  const typed = question.type === 'FILL_BLANK';
   const selected = question.options.find((option) => option.selected) ?? null;
   const correct = question.options.find((option) => option.isCorrect) ?? null;
+  // What the student actually gave: a set on a checkbox question, their text on
+  // a fill-in-the-blank, one option otherwise.
+  const given = typed
+    ? (question.answerText ?? '')
+    : question.options
+        .filter((option) => option.selected)
+        .map((option) => option.text)
+        .join(', ');
 
   return (
     <Card
@@ -59,6 +70,9 @@ function QuestionCard({
           <Badge variant={difficultyTone(question.difficulty)} className="text-[9.5px]">
             {question.difficulty}
           </Badge>
+          <Badge variant="outline" className="text-[9.5px]">
+            {QUESTION_TYPE_LABELS[question.type as QuestionType]}
+          </Badge>
           <Badge variant={verdictTone(question.verdict)} className="gap-1.5">
             <Icon className="size-3" />
             {verdictLabel(question.verdict)}
@@ -68,49 +82,101 @@ function QuestionCard({
           </span>
         </div>
 
+        {question.imageUrl ? (
+          <figure className="border-border/70 overflow-hidden rounded-lg border">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={question.imageUrl}
+              alt="Figure for this question"
+              className="max-h-64 w-full object-contain"
+              loading="lazy"
+            />
+          </figure>
+        ) : null}
+
+        {question.codeSnippet ? (
+          <div className="border-border/70 bg-muted/30 overflow-x-auto rounded-lg border">
+            <div className="text-muted-foreground border-border/60 flex items-center gap-1.5 border-b px-3 py-1.5 text-[10px] tracking-wide uppercase">
+              <Code2 className="size-3" /> code
+            </div>
+            <pre className="px-3 py-2 text-[12px] leading-relaxed">
+              <code>{question.codeSnippet}</code>
+            </pre>
+          </div>
+        ) : null}
+
         <p className="text-[14.5px] leading-snug font-medium">{question.questionText}</p>
 
-        <ul className="space-y-1.5">
-          {question.options.map((option, optionIndex) => {
-            const isCorrect = option.isCorrect;
-            const isPicked = option.selected;
+        {typed ? (
+          <div className="space-y-2 text-[12.5px]">
+            <div
+              className={cn(
+                'rounded-lg border px-3 py-2',
+                question.verdict === 'CORRECT'
+                  ? 'border-success/40 bg-success/10'
+                  : question.verdict === 'INCORRECT'
+                    ? 'border-destructive/40 bg-destructive/10'
+                    : 'border-border/60',
+              )}
+            >
+              <p className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase">
+                your answer
+              </p>
+              <p className="mt-0.5 font-medium">
+                {question.answerText?.trim() ? question.answerText : 'left blank'}
+              </p>
+            </div>
 
-            return (
-              <li
-                key={option.id}
-                className={cn(
-                  'flex items-start gap-2.5 rounded-lg border px-3 py-2 text-[12.5px]',
-                  isCorrect && 'border-success/40 bg-success/10',
-                  !isCorrect && isPicked && 'border-destructive/40 bg-destructive/10',
-                  !isCorrect && !isPicked && 'border-border/60',
-                )}
-              >
-                <span className="text-muted-foreground mt-0.5 font-mono text-[10.5px]">
-                  {String.fromCharCode(65 + optionIndex)}
-                </span>
-                <span className="flex-1">{option.text}</span>
-                <span className="flex shrink-0 items-center gap-1.5">
-                  {isPicked ? (
-                    <span
-                      className={cn(
-                        'font-mono text-[10px] tracking-wide uppercase',
-                        isCorrect ? 'text-success' : 'text-destructive',
-                      )}
-                    >
-                      your answer
-                    </span>
-                  ) : null}
-                  {isCorrect ? (
-                    <span className="text-success inline-flex items-center gap-1 font-mono text-[10px] tracking-wide uppercase">
-                      <CircleCheck className="size-3" />
-                      correct
-                    </span>
-                  ) : null}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+            <div className="border-success/30 bg-success/5 rounded-lg border px-3 py-2">
+              <p className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase">
+                accepted
+              </p>
+              <p className="mt-0.5">{question.options.map((option) => option.text).join(' · ')}</p>
+            </div>
+          </div>
+        ) : (
+          <ul className="space-y-1.5">
+            {question.options.map((option, optionIndex) => {
+              const isCorrect = option.isCorrect;
+              const isPicked = option.selected;
+
+              return (
+                <li
+                  key={option.id}
+                  className={cn(
+                    'flex items-start gap-2.5 rounded-lg border px-3 py-2 text-[12.5px]',
+                    isCorrect && 'border-success/40 bg-success/10',
+                    !isCorrect && isPicked && 'border-destructive/40 bg-destructive/10',
+                    !isCorrect && !isPicked && 'border-border/60',
+                  )}
+                >
+                  <span className="text-muted-foreground mt-0.5 font-mono text-[10.5px]">
+                    {String.fromCharCode(65 + optionIndex)}
+                  </span>
+                  <span className="flex-1">{option.text}</span>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {isPicked ? (
+                      <span
+                        className={cn(
+                          'font-mono text-[10px] tracking-wide uppercase',
+                          isCorrect ? 'text-success' : 'text-destructive',
+                        )}
+                      >
+                        your answer
+                      </span>
+                    ) : null}
+                    {isCorrect ? (
+                      <span className="text-success inline-flex items-center gap-1 font-mono text-[10px] tracking-wide uppercase">
+                        <CircleCheck className="size-3" />
+                        correct
+                      </span>
+                    ) : null}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
 
         <p
           className={cn(
@@ -118,7 +184,26 @@ function QuestionCard({
             question.verdict === 'CORRECT' ? 'text-success' : 'text-muted-foreground',
           )}
         >
-          {reviewSelectionLabel(question.verdict, selected?.text ?? null, correct?.text ?? null)}
+          {typed
+            ? question.verdict === 'CORRECT'
+              ? 'That matches an accepted answer.'
+              : question.verdict === 'UNANSWERED'
+                ? 'You left this one blank.'
+                : `Not quite — ${question.options.map((option) => option.text).join(' or ')} would have scored.`
+            : isMultiSelect(question.type as QuestionType)
+              ? question.verdict === 'CORRECT'
+                ? 'Every correct option, and nothing else.'
+                : question.verdict === 'UNANSWERED'
+                  ? 'You left this one blank.'
+                  : `You picked ${given || 'nothing'}. The full set is needed: ${question.options
+                      .filter((option) => option.isCorrect)
+                      .map((option) => option.text)
+                      .join(', ')}.`
+              : reviewSelectionLabel(
+                  question.verdict,
+                  selected?.text ?? null,
+                  correct?.text ?? null,
+                )}
         </p>
 
         {question.explanation ? (
@@ -188,6 +273,11 @@ export function AnswerReview({ review, filter }: Props) {
             {formatPercentage(review.result.passingScore)} · took{' '}
             {Math.max(1, Math.round(review.attempt.timeTakenSeconds / 60))} min
           </p>
+
+          <FormatBreakdownList
+            formats={review.result.formats}
+            className="border-border/70 bg-background/40 rounded-lg border px-3 py-2"
+          />
 
           <div className="flex flex-wrap items-center gap-1.5">
             {options.map((option) => {

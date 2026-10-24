@@ -7,6 +7,7 @@ import { db } from './index';
 import { loadEnvFiles } from './load-env';
 import { resolveDatabaseConfig } from './env';
 import { certificateCode, normalizeCertificateCode } from '@quiz/shared/certificate';
+import type { QuestionType } from '@quiz/shared/question-type';
 import { certificateEmail, resultEmail, welcomeEmail } from '@quiz/shared/email';
 
 import {
@@ -176,10 +177,20 @@ async function main() {
   /* --------------------------- quizzes + questions ------------------------ */
   const quizIds = new Map<string, string>();
   const quizById = new Map<string, (typeof quizSeeds)[number]>();
-  /** quiz slug -> list of { id, marks, optionIds, correctOptionId } */
+  /** quiz slug -> the questions of that quiz, with their format and key */
   const questionMap = new Map<
     string,
-    { id: string; marks: number; correctOptionId: string; optionIds: string[] }[]
+    {
+      id: string;
+      marks: number;
+      type: QuestionType;
+      /** The key: one id on a single-answer question, the set on a `MULTI`. */
+      correctOptionIds: string[];
+      /** Every option id, in order — the wrong-answer pool for the simulation. */
+      optionIds: string[];
+      /** Accepted spellings, for a `FILL_BLANK`. */
+      accepted: string[];
+    }[]
   >();
 
   for (const [index, seed] of quizSeeds.entries()) {
@@ -222,19 +233,36 @@ async function main() {
 
     const questionRows: NewQuestion[] = [];
     const optionRows: NewOption[] = [];
-    const collected: { id: string; marks: number; correctOptionId: string; optionIds: string[] }[] =
-      [];
+    const collected: {
+      id: string;
+      marks: number;
+      type: QuestionType;
+      correctOptionIds: string[];
+      optionIds: string[];
+      accepted: string[];
+    }[] = [];
 
     seed.questions.forEach((question, questionIndex) => {
       const questionId = randomUUID();
       const questionMarks = question.marks ?? 1;
       const createdAtOffset = new Date(createdAt.getTime() + questionIndex * 60_000);
 
+      const type: QuestionType = question.type ?? 'MCQ';
+      const correctIndexes =
+        type === 'FILL_BLANK'
+          ? question.options.map((_, optionIndex) => optionIndex)
+          : type === 'MULTI'
+            ? (question.correctIndexes ?? [])
+            : [question.correct ?? 0];
+
       questionRows.push({
         id: questionId,
         quizId,
+        type,
         questionText: question.text,
         explanation: question.explanation,
+        imageUrl: question.imageUrl ?? null,
+        codeSnippet: question.codeSnippet ?? null,
         marks: questionMarks,
         difficulty: question.difficulty ?? seed.difficulty,
         position: questionIndex,
@@ -248,17 +276,25 @@ async function main() {
           id: optionId,
           questionId,
           optionText,
-          isCorrect: optionIndex === question.correct,
+          isCorrect: correctIndexes.includes(optionIndex),
           position: optionIndex,
         });
         return optionId;
       });
 
-      const correctOptionId = optionIds[question.correct];
-      if (!correctOptionId)
+      const correctOptionIds = correctIndexes.map((optionIndex) => optionIds[optionIndex]);
+      if (correctOptionIds.some((id) => !id)) {
         throw new Error(`Invalid correct index for question "${question.text}"`);
+      }
 
-      collected.push({ id: questionId, marks: questionMarks, correctOptionId, optionIds });
+      collected.push({
+        id: questionId,
+        marks: questionMarks,
+        type,
+        correctOptionIds: correctOptionIds as string[],
+        optionIds,
+        accepted: question.options,
+      });
     });
 
     await db.insert(quizzes).values(quizRow);
@@ -316,8 +352,8 @@ async function main() {
         const localAnswers: NewAnswer[] = [];
 
         ordered.forEach((question, index) => {
-          const selectedOptions = question.optionIds.filter(
-            (id) => id !== question.correctOptionId,
+          const wrongOptions = question.optionIds.filter(
+            (id) => !question.correctOptionIds.includes(id),
           );
 
           if (index === unansweredIndex) {
@@ -334,11 +370,42 @@ async function main() {
             incorrectCount += 1;
           }
 
+          // Each format is answered the way a student would answer it, so the
+          // seeded history exercises the same rows the API writes.
+          if (question.type === 'FILL_BLANK') {
+            localAnswers.push({
+              id: randomUUID(),
+              attemptId,
+              questionId: question.id,
+              selectedOptionId: null,
+              answerText: isCorrect ? question.accepted[0]! : 'no idea',
+              isCorrect,
+            });
+            return;
+          }
+
+          if (question.type === 'MULTI') {
+            // A wrong answer picks part of the set: the common, plausible miss.
+            const selectedOptionIds = isCorrect
+              ? question.correctOptionIds
+              : [question.correctOptionIds[0]!, ...(wrongOptions[0] ? [wrongOptions[0]] : [])];
+
+            localAnswers.push({
+              id: randomUUID(),
+              attemptId,
+              questionId: question.id,
+              selectedOptionId: null,
+              selectedOptionIds: JSON.stringify(selectedOptionIds),
+              isCorrect,
+            });
+            return;
+          }
+
           localAnswers.push({
             id: randomUUID(),
             attemptId,
             questionId: question.id,
-            selectedOptionId: isCorrect ? question.correctOptionId : pick(selectedOptions),
+            selectedOptionId: isCorrect ? question.correctOptionIds[0]! : pick(wrongOptions),
             isCorrect,
           });
         });

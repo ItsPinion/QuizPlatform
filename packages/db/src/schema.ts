@@ -1,7 +1,14 @@
 import { relations, sql } from 'drizzle-orm';
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
-import { ATTEMPT_STATUSES, DIFFICULTIES, QUIZ_STATUSES, ROLES, USER_STATUSES } from '@quiz/shared';
+import {
+  ATTEMPT_STATUSES,
+  DIFFICULTIES,
+  QUESTION_TYPE_LIST,
+  QUIZ_STATUSES,
+  ROLES,
+  USER_STATUSES,
+} from '@quiz/shared';
 
 /** Milliseconds since epoch, used for every timestamp column. */
 const createdAt = () =>
@@ -123,8 +130,16 @@ export const questions = sqliteTable(
     quizId: text('quiz_id')
       .notNull()
       .references(() => quizzes.id, { onDelete: 'cascade' }),
+    /**
+     * The answer format (§10). Stored per question rather than per quiz: a paper
+     * may mix a true/false with a fill-in-the-blank.
+     */
+    type: text('type', { enum: QUESTION_TYPE_LIST }).notNull().default('MCQ'),
     questionText: text('question_text', { length: 2000 }).notNull(),
     explanation: text('explanation', { length: 2000 }),
+    /** Presentation: an image and/or a code block shown above the options. */
+    imageUrl: text('image_url', { length: 1000 }),
+    codeSnippet: text('code_snippet', { length: 4000 }),
     marks: integer('marks').notNull().default(1),
     difficulty: text('difficulty', { enum: DIFFICULTIES }).notNull().default('MEDIUM'),
     /** Display order inside the quiz. */
@@ -217,6 +232,21 @@ export const answers = sqliteTable(
     selectedOptionId: text('selected_option_id').references(() => options.id, {
       onDelete: 'set null',
     }),
+    /**
+     * A `MULTI` answer's set, as a JSON array of option ids.
+     *
+     * Null on every other format, where `selected_option_id` is the whole
+     * answer. Kept beside it rather than replacing it so single-answer rows and
+     * their foreign key behave exactly as they always have.
+     */
+    selectedOptionIds: text('selected_option_ids'),
+    /**
+     * A `FILL_BLANK` answer as typed. Null on the option formats.
+     *
+     * The raw text is stored, not just "was it right": the review screen shows
+     * the student what they wrote, and a disputed mark needs the original.
+     */
+    answerText: text('answer_text', { length: 1000 }),
     /** Null while the attempt is in progress; set when the backend grades it. */
     isCorrect: integer('is_correct', { mode: 'boolean' }),
   },

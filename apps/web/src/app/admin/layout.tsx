@@ -23,6 +23,7 @@ const SECTIONS = [
   { href: '/admin/analytics', label: 'Analytics', icon: 'analytics' },
   { href: '/admin/emails', label: 'Email', icon: 'email' },
   { href: '/admin/system', label: 'System', icon: 'system' },
+  { href: '/admin/profile', label: 'Account', icon: 'profile' },
 ] as const;
 
 /**

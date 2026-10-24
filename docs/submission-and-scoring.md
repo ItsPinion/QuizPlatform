@@ -67,14 +67,21 @@ countdown hits 0 ──────┘
 
 Grading rules, in order of subtleness:
 
-1. **A question is answered** only when the saved `selectedOptionId` is one of _that_ question's
-   options. A stale selection (an option deleted while the attempt was open) counts as unanswered
-   rather than incorrect — the student never expressed a choice the platform could read.
-2. **Marks are per question.** `score` is the sum of the marks of correctly answered questions;
+1. **A question is answered** only when the saved answer is one the grader can read for that
+   question's format: a `selectedOptionId` that belongs to the question, a `selectedOptionIds` set
+   with at least one member, or non-blank `answerText`. A stale selection (an option deleted while
+   the attempt was open) counts as unanswered rather than incorrect — the student never expressed a
+   choice the platform could read — and a blank typed answer is skipped rather than penalised.
+2. **The format decides what "right" means.** Multiple choice and true/false need the keyed option;
+   a multiple-answer question needs the chosen set to equal the key set (all-or-nothing, no partial
+   credit); fill in the blank compares the typed text with each accepted answer after normalising
+   case, runs of space, curly quotes and a trailing full stop. A mixed paper grades one question at a
+   time, so the four rules never interact.
+3. **Marks are per question.** `score` is the sum of the marks of correctly answered questions;
    `totalMarks` is the sum over the whole paper. A weighted quiz scores correctly, and
    `percentage = round(score / totalMarks * 10000) / 100`.
-3. **An empty paper can never pass**, even if the pass mark is `0`.
-4. **Pass is `percentage >= passingScore`**, inclusive — 60% passes a 60% quiz.
+4. **An empty paper can never pass**, even if the pass mark is `0`.
+5. **Pass is `percentage >= passingScore`**, inclusive — 60% passes a 60% quiz.
 
 ## Expiry is lazy
 

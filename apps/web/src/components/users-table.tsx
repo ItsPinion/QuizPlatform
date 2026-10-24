@@ -1,16 +1,25 @@
 'use client';
 
 import type { AdminUser } from '@quiz/shared/admin';
-import { Loader2, ShieldCheck, ShieldOff, Trash2, UserCheck, UserX } from 'lucide-react';
+import {
+  ArrowUpRight,
+  Loader2,
+  ShieldCheck,
+  ShieldOff,
+  Trash2,
+  UserCheck,
+  UserX,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { client } from '@/lib/api';
 import { parseApiFailure, toApiFailure } from '@/lib/api-error';
 import { initials, relativeDay } from '@/lib/admin-params';
+import { cn } from '@/lib/utils';
 
 interface Props {
   users: AdminUser[];
@@ -214,6 +223,18 @@ export function UsersTable({ users, currentUserId }: Props) {
                       {busy ? (
                         <Loader2 className="text-muted-foreground size-4 animate-spin" />
                       ) : null}
+
+                      {/* The name is a link too, but a row whose only route to the
+                          profile is guessing that is not a table you can use. */}
+                      <Link
+                        href={`/admin/users/${user.id}`}
+                        className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
+                        title={`Open ${user.name}'s profile, history and performance`}
+                      >
+                        <ArrowUpRight />
+                        <span className="hidden sm:inline">View</span>
+                        <span className="sr-only sm:hidden">View {user.name}</span>
+                      </Link>
 
                       <Button
                         variant="ghost"

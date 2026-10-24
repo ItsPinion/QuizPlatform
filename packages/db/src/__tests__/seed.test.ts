@@ -100,10 +100,12 @@ describe('database CLI scripts', () => {
       users: 4,
       categories: 10,
       quizzes: 10,
-      questions: 47,
+      questions: 49,
       attempts: 14,
     });
-    expect(rows.options).toBe(188); // 47 questions × 4 options
+    // Four per multiple-choice question, two per true/false, one per accepted
+    // fill-in-the-blank answer, five on the one multiple-answer question.
+    expect(rows.options).toBe(192);
     expect(rows.answers).toBeGreaterThan(50);
   });
 
@@ -184,11 +186,12 @@ describe('seeded data integrity', () => {
     });
   });
 
-  it('gives every quiz at least three questions with exactly one correct option each', async () => {
+  it('gives every quiz at least three questions, each with a key in its own format', async () => {
     const rows = await db
       .select({
         quizId: schema.quizzes.id,
-        questions: countDistinct(schema.questions.id),
+        type: schema.questions.type,
+        questionId: schema.questions.id,
         options: count(schema.options.id),
         correctOptions: sum(
           sql<number>`case when ${schema.options.isCorrect} = 1 then 1 else 0 end`,
@@ -197,14 +200,43 @@ describe('seeded data integrity', () => {
       .from(schema.quizzes)
       .innerJoin(schema.questions, eq(schema.questions.quizId, schema.quizzes.id))
       .innerJoin(schema.options, eq(schema.options.questionId, schema.questions.id))
-      .groupBy(schema.quizzes.id);
+      .groupBy(schema.quizzes.id, schema.questions.id)
+      .orderBy(asc(schema.quizzes.id));
 
-    expect(rows).toHaveLength(10);
+    expect(new Set(rows.map((row) => row.quizId)).size).toBe(10);
+
     for (const row of rows) {
-      expect(row.questions).toBeGreaterThanOrEqual(3);
-      expect(Number(row.correctOptions)).toBe(row.questions);
-      expect(row.options).toBe(row.questions * 4);
+      const options = Number(row.options ?? 0);
+      const correct = Number(row.correctOptions ?? 0);
+
+      // §10's formats are graded differently, so "how many options are right"
+      // is not one rule: a fill-in-the-blank accepts all of them, a
+      // multiple-answer question accepts two or more, and the singles take one.
+      if (row.type === 'FILL_BLANK') {
+        expect(correct).toBe(options);
+        expect(options).toBeGreaterThanOrEqual(1);
+      } else if (row.type === 'MULTI') {
+        expect(correct).toBeGreaterThanOrEqual(2);
+        expect(correct).toBeLessThan(options);
+      } else if (row.type === 'TRUE_FALSE') {
+        expect(options).toBe(2);
+        expect(correct).toBe(1);
+      } else {
+        expect(options).toBe(4);
+        expect(correct).toBe(1);
+      }
     }
+  });
+
+  it('demonstrates every question format the product supports', async () => {
+    const rows = await db
+      .select({ type: schema.questions.type, n: count() })
+      .from(schema.questions)
+      .groupBy(schema.questions.type);
+
+    expect(new Set(rows.map((row) => row.type))).toEqual(
+      new Set(['MCQ', 'MULTI', 'TRUE_FALSE', 'FILL_BLANK']),
+    );
   });
 
   it('keeps attempt percentages consistent with scores and pass marks', async () => {

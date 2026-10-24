@@ -2,7 +2,10 @@
 
 Day 5 could create a quiz but not fill it. Day 6 gives the console the two things that
 make a quiz a quiz: **categories** with a real CRUD screen, and **questions** with
-options, marks, difficulty and exactly one correct answer.
+options, marks, difficulty and a key. The key is one option for multiple choice and
+true/false, several for multiple answers, and the accepted-answer list for fill in the
+blank — the four formats are specified in
+[`advanced-features.md`](advanced-features.md) §10 and summarised below.
 
 Two ideas run through the whole day:
 
@@ -92,7 +95,7 @@ which is the "view quizzes under category" view from the spec.
 | Method   | Path                                     | Purpose                                      |
 | -------- | ---------------------------------------- | -------------------------------------------- |
 | `GET`    | `/api/admin/quizzes/:id/questions`       | A quiz's questions, ordered, with options    |
-| `POST`   | `/api/admin/quizzes/:id/questions`       | Append a question (2–6 options, one right)   |
+| `POST`   | `/api/admin/quizzes/:id/questions`       | Append a question in any format              |
 | `PATCH`  | `/api/admin/quizzes/:id/questions/order` | Reorder the whole list                       |
 | `GET`    | `/api/admin/questions/:id`               | One question                                 |
 | `PUT`    | `/api/admin/questions/:id`               | Replace text, marks and the whole option set |
@@ -126,6 +129,23 @@ The schema (`packages/shared/src/question.ts`) enforces:
 | `correctIndex` inside the option set            | `422`   |
 | marks 1–10, whole numbers                       | `422`   |
 | difficulty `EASY` / `MEDIUM` / `HARD`           | `422`   |
+
+### The other three formats
+
+`type` defaults to `MCQ`, so the payload above is still a valid single-answer question. The
+rest change what the key means rather than what an option is:
+
+| `type`       | Body                                                    | Extra rule                                    |
+| ------------ | ------------------------------------------------------- | --------------------------------------------- |
+| `MCQ`        | `options` + `correctIndex`                              | exactly one key                               |
+| `MULTI`      | `options` + `correctIndexes: [0, 2]`                    | at least two, no duplicates, in range         |
+| `TRUE_FALSE` | `correctIndex: 0` (`True`) or `1` (`False`), no options | the server writes the pair                    |
+| `FILL_BLANK` | `options` = the accepted spellings, no `correctIndex`   | at least one; every listed answer is accepted |
+
+Any format may also carry `imageUrl` (a full `https://` URL) and `codeSnippet` (up to 4000
+characters); both render above the options and neither affects grading. A question's type is
+fixed after creation: changing it would reinterpret every answer already recorded against the
+row.
 
 A new question is appended with `position = max + 1`, so authoring matches the order
 things were written.
@@ -181,8 +201,10 @@ The quiz edit page carries the whole authoring surface:
 - Question list with position, difficulty badge, marks and option count.
 - Expand a question to see its options, with the correct one highlighted and the
   explanation underneath.
-- **Add question** opens an inline form: text, option rows with a radio for the correct
-  one (add/remove rows, 2–6), marks, difficulty, explanation.
+- **Add question** opens an inline form: the format picker first, then the fields that format
+  needs — option rows with a radio for the key (add/remove, 2–6) or checkboxes for a
+  multiple-answer question, a true/false switch, or the accepted-answer list for a fill in the
+  blank — plus an optional image URL, code snippet, marks, difficulty and explanation.
 - **Edit** reuses the same form with option ids preserved; **↑ / ↓** reorder; **Delete**
   is a two-step confirm and is disabled when students have answered.
 

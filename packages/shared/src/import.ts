@@ -10,16 +10,29 @@
  *
  * The columns mirror the single-question form exactly:
  *
- *   question, option1, option2, option3, option4, correct, explanation, marks, difficulty
+ *   question, option1..4, correct, explanation, marks, difficulty, type, image, code
  *
- * `correct` is 1-based (`1` = option1), which is what a human writes in a
- * spreadsheet. `option3`/`option4` may be blank for a true two-option question;
- * `explanation`, `marks` and `difficulty` are optional.
+ * Everything after `difficulty` is optional, so a file written for the original
+ * single-answer importer still uploads unchanged — it is simply a file of
+ * `MCQ` rows. `type` is what makes the same file able to carry the other three
+ * formats:
+ *
+ * | type         | `option1..4`                     | `correct`                        |
+ * | ------------ | -------------------------------- | -------------------------------- |
+ * | `MCQ`        | the options (2 or more)          | the 1-based number of the key    |
+ * | `MULTI`      | the options (2 or more)          | two or more numbers, `1\|3\|4`   |
+ * | `TRUE_FALSE` | blank — the pair is fixed        | `1`, `2`, `true` or `false`      |
+ * | `FILL_BLANK` | one accepted answer per cell     | blank — every listed one is right|
+ *
+ * `type` defaults to `MCQ`, `correct` is 1-based because that is what a human
+ * writes in a spreadsheet, and `image`/`code` apply to any format: a picture of
+ * a sentence is a fill-in-the-blank question with an image above it.
  */
 import { z } from 'zod';
 
 import { difficultySchema } from './index';
-import { MAX_MARKS, MAX_OPTIONS, MIN_OPTIONS } from './question';
+import { MAX_CODE_SNIPPET, MAX_IMAGE_URL, MAX_MARKS, MAX_OPTIONS, MIN_OPTIONS } from './question';
+import { QUESTION_TYPES, TRUE_FALSE_OPTIONS, type QuestionType } from './question-type';
 
 export const IMPORT_COLUMNS = [
   'question',
@@ -31,6 +44,9 @@ export const IMPORT_COLUMNS = [
   'explanation',
   'marks',
   'difficulty',
+  'type',
+  'image',
+  'code',
 ] as const;
 
 /** The header row, as the console shows it and the docs print it. */
@@ -108,11 +124,23 @@ export function parseCsv(text: string): string[][] {
 /*  Rows → questions                                                          */
 /* -------------------------------------------------------------------------- */
 
-/** One parsed question, in the shape the question form submits. */
+/**
+ * One parsed question, in the shape the question form submits.
+ *
+ * It is deliberately *resolved* rather than raw: `correctIndexes` is already the
+ * list the grader needs, `TRUE_FALSE` already carries its pair, and
+ * `FILL_BLANK` already treats every listed answer as correct. The API can hand
+ * this straight to `createQuestion`, so an imported question and a typed one
+ * take the same path and obey the same rules.
+ */
 export const importQuestionSchema = z.object({
+  type: z.enum(QUESTION_TYPES),
   questionText: z.string(),
-  options: z.array(z.string()).min(MIN_OPTIONS).max(MAX_OPTIONS),
-  correctIndex: z.number().int().min(0),
+  options: z.array(z.string()).max(MAX_OPTIONS),
+  /** Indices into `options`. Empty only for `FILL_BLANK`, where none is needed. */
+  correctIndexes: z.array(z.number().int().min(0)),
+  imageUrl: z.string().nullable(),
+  codeSnippet: z.string().nullable(),
   explanation: z.string().nullable(),
   marks: z.number().int().min(1).max(MAX_MARKS),
   difficulty: difficultySchema,
@@ -132,6 +160,42 @@ export interface ImportResult {
 
 function cellAt(row: readonly string[], index: number): string {
   return (row[index] ?? '').trim();
+}
+
+/**
+ * Read the `correct` cell as a list of 1-based option numbers.
+ *
+ * One number for `MCQ`, several for `MULTI`. Separators are forgiving — `|`,
+ * `;`, `,` and spaces — because a spreadsheet cell holding `1, 3` is written by
+ * a person, and a comma inside a quoted cell arrives here intact.
+ */
+function parseIndexList(raw: string): number[] | null {
+  const parts = raw
+    .split(/[|;,\s]+/)
+    .map((part) => part.trim())
+    .filter((part) => part !== '');
+
+  if (parts.length === 0) return null;
+
+  const indexes: number[] = [];
+
+  for (const part of parts) {
+    const value = Number(part);
+    if (!Number.isInteger(value) || value < 1) return null;
+    indexes.push(value - 1);
+  }
+
+  return [...new Set(indexes)];
+}
+
+/** A true/false row may name its key in either the spreadsheet's language or the author's. */
+function parseTrueFalseKey(raw: string): number | null {
+  const value = raw.trim().toLowerCase();
+
+  if (value === 'true' || value === 't' || value === '1') return 0;
+  if (value === 'false' || value === 'f' || value === '2') return 1;
+
+  return null;
 }
 
 /**
@@ -185,39 +249,122 @@ export function parseQuestionImportRows(rows: string[][]): ImportResult {
 
   data.forEach((row, index) => {
     const line = index + 1;
+
+    const fail = (message: string) => issues.push({ line, message });
+
     const questionText = cellAt(row, 0);
 
     if (questionText.length < 5) {
-      issues.push({ line, message: 'Question text must be at least 5 characters.' });
+      fail('Question text must be at least 5 characters.');
       return;
     }
 
-    const rawOptions = [1, 2, 3, 4].map((column) => cellAt(row, column));
-    const options = rawOptions.filter((option) => option.length > 0);
+    const typeRaw = (cellAt(row, 9) || 'MCQ').toUpperCase();
+    const type = QUESTION_TYPES.find((candidate) => candidate === typeRaw) as
+      QuestionType | undefined;
 
-    if (options.length < MIN_OPTIONS) {
-      issues.push({ line, message: `Give at least ${MIN_OPTIONS} options.` });
+    if (!type) {
+      fail(`"type" must be one of ${QUESTION_TYPES.join(', ')} (got "${cellAt(row, 9)}").`);
       return;
     }
 
-    const correctRaw = cellAt(row, 5);
-    const correct = Number(correctRaw);
+    const typedOptions = [1, 2, 3, 4].map((column) => cellAt(row, column));
+    const providedOptions = typedOptions.filter((option) => option.length > 0);
 
-    if (!Number.isInteger(correct) || correct < 1 || correct > options.length) {
-      issues.push({
-        line,
-        message: `"correct" must be a column number between 1 and ${options.length} (got "${correctRaw}").`,
-      });
-      return;
+    let options: string[];
+    let correctIndexes: number[];
+
+    if (type === 'TRUE_FALSE') {
+      // The pair is fixed on purpose: letting a file write "Yes/No" or "T/F"
+      // would produce the same question in four vocabularies, and the console
+      // would show whichever one the file happened to use.
+      if (providedOptions.length > 0) {
+        fail(
+          'A true/false question always uses the fixed True/False pair — leave option1–option4 blank.',
+        );
+        return;
+      }
+
+      options = [...TRUE_FALSE_OPTIONS];
+
+      const key = parseTrueFalseKey(cellAt(row, 5));
+
+      if (key === null) {
+        fail(
+          `"correct" must be true or false (or 1 or 2) for a true/false question (got "${cellAt(row, 5)}").`,
+        );
+        return;
+      }
+
+      correctIndexes = [key];
+    } else if (type === 'FILL_BLANK') {
+      if (providedOptions.length < 1) {
+        fail('Give at least one accepted answer in option1–option4.');
+        return;
+      }
+
+      const lower = new Set(providedOptions.map((option) => option.toLowerCase()));
+
+      if (lower.size !== providedOptions.length) {
+        fail('Accepted answers must be different from each other.');
+        return;
+      }
+
+      // Every listed answer is correct, so the key is the whole list. The
+      // `correct` column is not read: there is nothing for it to say.
+      options = providedOptions;
+      correctIndexes = providedOptions.map((_, optionIndex) => optionIndex);
+    } else {
+      if (providedOptions.length < MIN_OPTIONS) {
+        fail(`Give at least ${MIN_OPTIONS} options.`);
+        return;
+      }
+
+      const parsed = parseIndexList(cellAt(row, 5));
+
+      if (parsed === null) {
+        fail(
+          type === 'MULTI'
+            ? `"correct" must list option numbers, for example 1|3 (got "${cellAt(row, 5)}").`
+            : `"correct" must be a column number (got "${cellAt(row, 5)}").`,
+        );
+        return;
+      }
+
+      const outOfRange = parsed.filter((value) => value >= providedOptions.length);
+
+      if (outOfRange.length > 0) {
+        fail(
+          `"correct" must be between 1 and ${providedOptions.length} (got "${cellAt(row, 5)}").`,
+        );
+        return;
+      }
+
+      // A blank option in the middle shifts nothing: `correct` counts the
+      // options that actually exist, in order, which is what a human sees.
+      if (type === 'MULTI') {
+        if (parsed.length < 2) {
+          fail(
+            `A multi-answer question needs at least two correct options (got "${cellAt(row, 5)}").`,
+          );
+          return;
+        }
+      } else if (parsed.length > 1) {
+        fail(
+          `A multiple-choice question has exactly one correct option — use type = MULTI for several (got "${cellAt(row, 5)}").`,
+        );
+        return;
+      }
+
+      options = providedOptions;
+      correctIndexes = parsed.sort((left, right) => left - right);
     }
 
-    // A blank option in the middle shifts nothing: `correct` counts the
-    // options that actually exist, in order, which is what a human sees.
     const marksRaw = cellAt(row, 7);
     const marks = marksRaw === '' ? 1 : Number(marksRaw);
 
     if (!Number.isInteger(marks) || marks < 1 || marks > MAX_MARKS) {
-      issues.push({ line, message: `"marks" must be a whole number from 1 to ${MAX_MARKS}.` });
+      fail(`"marks" must be a whole number from 1 to ${MAX_MARKS}.`);
       return;
     }
 
@@ -225,16 +372,41 @@ export function parseQuestionImportRows(rows: string[][]): ImportResult {
     const difficulty = difficultySchema.safeParse(difficultyRaw);
 
     if (!difficulty.success) {
-      issues.push({ line, message: '"difficulty" must be EASY, MEDIUM or HARD.' });
+      fail('"difficulty" must be EASY, MEDIUM or HARD.');
+      return;
+    }
+
+    const imageUrl = cellAt(row, 10) || null;
+
+    if (imageUrl !== null) {
+      if (imageUrl.length > MAX_IMAGE_URL) {
+        fail(`"image" must be at most ${MAX_IMAGE_URL} characters.`);
+        return;
+      }
+
+      if (!/^(https?:\/\/|\/)/.test(imageUrl)) {
+        fail('"image" must be a full https:// URL or a path starting with /.');
+        return;
+      }
+    }
+
+    const codeSnippetRaw = row[11] ?? '';
+    const codeSnippet = codeSnippetRaw.trim() === '' ? null : codeSnippetRaw;
+
+    if (codeSnippet !== null && codeSnippet.length > MAX_CODE_SNIPPET) {
+      fail(`"code" must be at most ${MAX_CODE_SNIPPET} characters.`);
       return;
     }
 
     const explanation = cellAt(row, 6);
 
     questions.push({
+      type,
       questionText,
       options,
-      correctIndex: correct - 1,
+      correctIndexes,
+      imageUrl,
+      codeSnippet,
       explanation: explanation === '' ? null : explanation,
       marks,
       difficulty: difficulty.data,

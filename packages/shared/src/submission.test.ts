@@ -218,6 +218,7 @@ describe('result wire shape', () => {
     penalty: 0,
     negativeMarks: 0,
     certificateCode: null,
+    formats: [{ type: 'MCQ', total: 4, correct: 2, incorrect: 1, unanswered: 1 }],
   };
 
   it('parses a graded result', () => {

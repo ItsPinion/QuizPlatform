@@ -359,13 +359,22 @@ describe('PUT /api/student/attempts/:id/answers/:questionId', () => {
     expect(saved.status).toBe(200);
 
     const savedBody = await json<{
-      answer: { questionId: string; selectedOptionId: string };
+      answer: {
+        questionId: string;
+        selectedOptionId: string;
+        selectedOptionIds: string[];
+        answerText: string | null;
+      };
       progress: { answered: number; unanswered: number; total: number };
     }>(saved);
 
     expect(savedBody.answer).toEqual({
       questionId: question.id,
       selectedOptionId: firstOption.id,
+      // A single-answer question leaves the other two shapes empty, so the wire
+      // shape is the same for every format.
+      selectedOptionIds: [],
+      answerText: null,
     });
     expect(savedBody.progress.answered).toBe(1);
     expect(savedBody.progress.total).toBe(body.questions.length);
@@ -387,7 +396,9 @@ describe('PUT /api/student/attempts/:id/answers/:questionId', () => {
 
     // Round-trips through the session payload.
     const after = await session(cookie, attemptId);
-    expect(after.answers).toEqual([{ questionId: question.id, selectedOptionId: null }]);
+    expect(after.answers).toEqual([
+      { questionId: question.id, selectedOptionId: null, selectedOptionIds: [], answerText: null },
+    ]);
   });
 
   it('rejects an option from another question and a question from another quiz', async () => {

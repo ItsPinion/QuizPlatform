@@ -358,28 +358,116 @@ Two conventions behind the table:
 
 ---
 
-## 10. What is not built, and why
+## 10. Question formats — all of §10's list, and the one that is not
 
-**Question types other than multiple choice.** The specification itself puts
-these under _Future Enhancement_ (§10): multiple correct answers, true/false,
-fill in the blanks, match the following, image-based and code-based questions are
-listed after the one type the first version must support, and that type —
-"multiple choice, one correct answer" — is what is built.
+§10 of the brief names six "future enhancement" question types and asks for
+multiple choice first. This build supports six, in four grading shapes:
 
-That is a scope line the brief draws, not one this build invented. It is still
-worth saying what the line costs and why crossing it is not a small change:
+| Brief's name             | Type         | What it stores                                     | How it is graded                          |
+| ------------------------ | ------------ | -------------------------------------------------- | ----------------------------------------- |
+| multiple choice          | `MCQ`        | options, one flagged correct                       | the chosen option is the flag             |
+| multiple correct answers | `MULTI`      | options, two or more flagged correct               | the chosen **set** must equal the key set |
+| true / false             | `TRUE_FALSE` | the fixed pair `True`/`False`, one flagged correct | the chosen option is the flag             |
+| fill in the blanks       | `FILL_BLANK` | accepted answers, every one flagged correct        | typed text, compared after normalisation  |
+| image-based questions    | _any type_   | `questions.image_url`                              | same as the type it decorates             |
+| code-based questions     | _any type_   | `questions.code_snippet`                           | same as the type it decorates             |
 
-- every question type needs its own **grader** (a set of correct answers, a
-  normalised string, an ordered pairing), its own **review layout**, and its own
-  **import column shape**;
-- the timer, autosave, shuffle and negative marking are all written against
-  "exactly one selected option per question" — the seed, the attempt payload and
-  the answer table all assume it;
-- a true/false question is already expressible (two options, one correct), so the
-  gap is narrower than it looks for the type people ask for first.
+**Image-based and code-based are presentation, not grading.** A question with a
+picture is not a question type: it is a multiple-choice (or multi-answer, or
+fill-in-the-blank) question with an image above the prompt. Modelling it as a
+fourth grading branch would have meant three code paths that all do the same
+thing and drift apart at the first bug fix. The columns are on `questions`, and
+both consoles render the image and the code block above the options for every
+type.
 
-The schema stores a `questions` row whose options are rows, so adding a `type`
-discriminator later is a migration plus a grader, not a rewrite. Nothing here
-pretends otherwise.
+**True/false is a real type, despite being two options.** It exists so the
+authoring screen never asks anyone to type the words "True" and "False" and get
+the order wrong: the server writes the pair from `TRUE_FALSE_OPTIONS`, and the
+form asks a single question — is the statement true? A hand-written two-option
+multiple-choice question still works and still grades; it just does not claim to
+be this type.
+
+### The contract, in one place
+
+- **Vocabulary** — `packages/shared/src/question-type.ts` is the only list:
+  `MCQ`, `MULTI`, `TRUE_FALSE`, `FILL_BLANK`, plus the helpers every layer uses
+  (`isChoiceType`, `isMultiSelect`, `hidesOptionsWhileRunning`,
+  `QUESTION_TYPE_LABELS`, `QUESTION_TYPE_HINTS`).
+- **Authoring** — `questionInputSchema` in `packages/shared/src/question.ts`.
+  One payload shape, refined per type: `MULTI` needs ≥2 correct indices and no
+  duplicates, `FILL_BLANK` needs at least one accepted answer, `TRUE_FALSE` may
+  omit its options and may not invent its own. `resolveQuestionInput` turns that
+  payload into what the database stores, so create and edit cannot disagree. A
+  question's type is fixed once created — changing it would reinterpret every
+  answer already recorded against the row.
+- **Answering** — `saveAnswerSchema` accepts exactly one of `optionId`,
+  `optionIds` (a set of at most six) or `answerText` (1000 characters, trimmed).
+  The wrong one for the question's type is refused with `422
+ANSWER_SHAPE_MISMATCH`; an option that belongs to another question is `422
+OPTION_NOT_FOUND`. A blank typed answer counts as unanswered, not as wrong, so
+  skipping a fill-in-the-blank does not cost negative marks.
+- **Grading** — `gradeAttempt` in `packages/shared/src/attempt.ts`. Beyond the
+  legacy arithmetic (`penalty = round(neg × incorrect, 2)`, `score = max(0,
+earned − penalty)`), `MULTI` is all-or-nothing on the set — partial credit was
+  rejected because the pass mark and the negative-marking penalty are both
+  written against "a question is right or wrong" — and `FILL_BLANK` compares the
+  typed answer with `answerMatches`, which normalises case, runs of space, curly
+  quotes and a trailing full stop before comparing. Everything a person cannot
+  see is forgiven; everything they can is not ("postgres" is not "postgre").
+- **The paper** — a running attempt never carries correctness flags, and a
+  `FILL_BLANK` question ships **no options at all**, because its options _are_
+  the answer key. That is the one place where the key and the option list are
+  the same array.
+- **The result** — `formats` reports `{type, total, correct, incorrect,
+unanswered}` in `QUESTION_TYPES` order on submit, on retry, on the attempt
+  result and on the review. The result card shows the breakdown only when more
+  than one format appears, because a single row saying "multiple choice 10/10"
+  is noise.
+- **Review** — `answerVerdict` gives every format the same verdict vocabulary,
+  and the review screen shows the accepted answers for a fill-in-the-blank, the
+  full key set for a multi-answer, and the typed text next to the right answer.
+
+### Import
+
+The CSV importer carries all four formats. The file is the same shape as before
+with three optional columns appended — `type`, `image`, `code` — so a file
+written for the single-answer importer still imports unchanged.
+
+| type         | `option1`–`option4`          | `correct`                         |
+| ------------ | ---------------------------- | --------------------------------- |
+| `MCQ`        | the options (two or more)    | one 1-based number                |
+| `MULTI`      | the options (two or more)    | two or more, e.g. `1              | 3   | 4`  |
+| `TRUE_FALSE` | blank — the pair is fixed    | `true`/`false`, or `1`/`2`        |
+| `FILL_BLANK` | one accepted answer per cell | blank — every listed one is right |
+
+`image` takes a full `https://` URL and `code` takes a snippet; quote a cell that
+contains commas or newlines. The browser parses the file with the same function
+the API uses, so the preview's row count, format labels and error messages are
+exactly what the server would produce.
+
+### Match the following — deliberately not built
+
+This is the one item on §10's list that is not in the build, and it is a
+decision rather than an omission.
+
+A matching question is not another way to choose an option; it is a different
+_shape of answer_: a set of ordered pairs. Storing it well needs a third table
+(`question_pairs`), a new answer column (a JSON map, not an option id), a
+different runner (drag or select per row, not radio buttons), a different review
+layout, a different import shape (two columns per pair, not one option per
+cell), and — most importantly — a scoring rule the platform does not have. A
+matching question with four pairs is naturally out of four; the existing grader
+is all-or-nothing per question because the pass mark, the negative-marking
+penalty and the attempt totals all assume a question is worth its marks or
+nothing. Adding half-marks here would change `score`, `percentage` and `passed`
+for every paper that contains one.
+
+Doing all of that properly is a week of work that touches the grading contract
+the rest of the platform is tested against; doing it as a thin wrapper over
+`MULTI` — "pick the four options in the right order" — would produce a question
+that looks like matching in the editor and grades like something else in the
+review. The platform is better with four honest formats than five, one of which
+lies about how it scores. If matching is wanted next, the first commit is a
+decision about partial credit, not a new table.
 
 Everything else in §26 is implemented and covered by the tests named above.

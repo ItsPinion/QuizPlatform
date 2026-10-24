@@ -128,7 +128,7 @@ export const studentQuizRoutes = new Hono<AppEnv>()
     const attemptId = idSchema.parse(c.req.param('id'));
     const questionId = idSchema.parse(c.req.param('questionId'));
 
-    const result = await saveAnswer(attemptId, questionId, c.req.valid('json').optionId, user.id);
+    const result = await saveAnswer(attemptId, questionId, c.req.valid('json'), user.id);
 
     return c.json(saveAnswerResponseSchema.parse(result), 200);
   })

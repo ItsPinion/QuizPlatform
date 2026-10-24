@@ -227,6 +227,29 @@ async function main(): Promise<void> {
     String(changePassword.status),
   );
 
+  // The administrators' own account screen: the same form the students have on
+  // `/student/profile`, on the console's own rail.
+  const accountPage = await admin.page('/admin/profile');
+  check(
+    '4',
+    'the console offers a change-password screen',
+    accountPage.status === 200 && /change password/i.test(accountPage.html),
+    String(accountPage.status),
+  );
+  check(
+    '4',
+    'the account screen is linked from the console rail',
+    accountPage.html.includes('href="/admin/profile"'),
+    '',
+  );
+  const accountAsStudent = await student.page('/admin/profile');
+  check(
+    '4',
+    'a student cannot open the admin account screen',
+    accountAsStudent.status === 307 || accountAsStudent.status === 302,
+    String(accountAsStudent.status),
+  );
+
   /* ── §3.1 Admin capabilities ───────────────────────────────────────────── */
   const session = await admin.api('/api/auth/me');
   check(
@@ -850,6 +873,227 @@ async function main(): Promise<void> {
     committed.status === 200 && committed.body.created.length === 1,
     String(committed.status),
   );
+
+  /* ── §10 Question formats ──────────────────────────────────────────────── */
+  // A quiz of its own, so nothing here disturbs the §11–14 paper above. It is
+  // deleted in the cleanup at the bottom of this file.
+  const formatsQuiz = await admin.api('/api/admin/quizzes', 'POST', {
+    title: 'Audit Formats',
+    description: 'Every question format, created by the spec audit.',
+    // A seeded category, so the run leaves nothing behind for the next one.
+    categoryName: 'JavaScript',
+    difficulty: 'MEDIUM',
+    durationMinutes: 15,
+    passingScore: 50,
+    maxAttempts: 2,
+  });
+  const formatsQuizId = formatsQuiz.body.quiz.id;
+
+  const authorFormat = (payload: Record<string, unknown>) =>
+    admin.api(`/api/admin/quizzes/${formatsQuizId}/questions`, 'POST', payload);
+
+  const multi = await authorFormat({
+    type: 'MULTI',
+    questionText: 'Which of these are falsy in JavaScript?',
+    options: [{ text: '0' }, { text: '"0"' }, { text: 'null' }, { text: '[]' }],
+    correctIndexes: [0, 2],
+    codeSnippet: 'const values = [0, "0", null, []];',
+  });
+  check(
+    '10',
+    'multiple correct answers: authored with two keys',
+    multi.status === 201 &&
+      multi.body.question.options.filter((option: any) => option.isCorrect).length === 2,
+    String(multi.status),
+  );
+
+  const truthy = await authorFormat({
+    type: 'TRUE_FALSE',
+    questionText: 'HTTP is a stateless protocol.',
+    correctIndex: 0,
+  });
+  check(
+    '10',
+    'true/false: the pair is written by the server',
+    truthy.status === 201 &&
+      truthy.body.question.options.map((option: any) => option.text).join('/') === 'True/False',
+    String(truthy.status),
+  );
+
+  const blank = await authorFormat({
+    type: 'FILL_BLANK',
+    questionText: 'Which keyword starts a function in Python?',
+    options: [{ text: 'def' }, { text: 'define' }],
+  });
+  check(
+    '10',
+    'fill in the blank: every accepted answer is stored',
+    blank.status === 201 && blank.body.question.options.every((option: any) => option.isCorrect),
+    String(blank.status),
+  );
+
+  const illustrated = await authorFormat({
+    questionText: 'What does this dial show?',
+    options: [{ text: 'Twelve' }, { text: 'Eleven' }],
+    correctIndex: 0,
+    imageUrl: 'https://placehold.co/480x480/png?text=12-hour+dial',
+  });
+  check(
+    '10',
+    'an image is presentation on any format',
+    illustrated.status === 201 &&
+      illustrated.body.question.imageUrl === 'https://placehold.co/480x480/png?text=12-hour+dial',
+    String(illustrated.status),
+  );
+
+  const halfKey = await authorFormat({
+    type: 'MULTI',
+    questionText: 'This one only has one key.',
+    options: [{ text: 'A' }, { text: 'B' }],
+    correctIndexes: [0],
+  });
+  check(
+    '10',
+    'a multiple-answer question with one key is refused',
+    halfKey.status === 422,
+    String(halfKey.status),
+  );
+
+  const formatCsv = [
+    'question,option1,option2,option3,option4,correct,explanation,marks,difficulty,type,image,code',
+    'Which keyword returns from a Python function?,return,yield,,,,,1,,FILL_BLANK,,',
+    'Which values are falsy?,0,NaN,null,[],1|3|4,,1,,MULTI,,',
+    'CSS is a programming language,,,,,false,,1,,TRUE_FALSE,,',
+    'Which tag holds the page body?,<body>,<head>,,,1,,1,,MCQ,https://example.com/a.png,',
+  ].join('\n');
+
+  const importedFormats = await admin.api(
+    `/api/admin/quizzes/${formatsQuizId}/questions/import`,
+    'POST',
+    { text: formatCsv },
+  );
+  check(
+    '10',
+    'import: one file carries all four formats',
+    importedFormats.status === 200 && importedFormats.body.accepted === 4,
+    `${importedFormats.status} · accepted ${importedFormats.body?.accepted ?? -1}`,
+  );
+  check(
+    '10',
+    'import: every format is recognised',
+    importedFormats.body?.questions?.map((row: any) => row.type).join(',') ===
+      'FILL_BLANK,MULTI,TRUE_FALSE,MCQ',
+    String(importedFormats.body?.questions?.map((row: any) => row.type).join(',')),
+  );
+
+  const formatsPublished = await admin.api(`/api/admin/quizzes/${formatsQuizId}/publish`, 'POST');
+  check(
+    '10',
+    'the formats quiz is publishable',
+    formatsPublished.status === 200,
+    String(formatsPublished.status),
+  );
+
+  const formatAttempt = await player.api(`/api/student/quizzes/${formatsQuizId}/start`, 'POST');
+  const formatAttemptId = formatAttempt.body.attemptId;
+  const formatPaper = await player.api(`/api/student/attempts/${formatAttemptId}`);
+  const paperQuestions: any[] = formatPaper.body?.questions ?? [];
+  const byType = (type: string) => paperQuestions.filter((entry) => entry.type === type);
+
+  check(
+    '10',
+    'the paper labels every format',
+    formatPaper.status === 200 &&
+      ['MCQ', 'MULTI', 'TRUE_FALSE', 'FILL_BLANK'].every((type) => byType(type).length > 0),
+    paperQuestions.map((entry) => entry.type).join(','),
+  );
+  check(
+    '10',
+    'a fill in the blank ships no options while it is running',
+    byType('FILL_BLANK').every((entry) => entry.options.length === 0),
+    `${byType('FILL_BLANK')[0]?.options?.length ?? -1} option(s)`,
+  );
+  check(
+    '10',
+    'no correctness reaches the student',
+    !JSON.stringify(formatPaper.body).includes('isCorrect'),
+    '',
+  );
+
+  const mcqPaper = byType('MCQ')[0];
+  const multiPaper = byType('MULTI')[0];
+  const truthyPaper = byType('TRUE_FALSE')[0];
+  const blankPaper = byType('FILL_BLANK')[0];
+
+  const saveFormat = (questionId: string, body: Record<string, unknown>) =>
+    player.api(`/api/student/attempts/${formatAttemptId}/answers/${questionId}`, 'PUT', body);
+
+  await saveFormat(mcqPaper.id, { optionId: mcqPaper.options[0].id });
+  await saveFormat(truthyPaper.id, { optionId: truthyPaper.options[0].id });
+  const saveSet = await saveFormat(multiPaper.id, {
+    optionIds: [multiPaper.options[0].id, multiPaper.options[2].id],
+  });
+  check('10', 'a set of options is saved', saveSet.status === 200, String(saveSet.status));
+
+  const saveText = await saveFormat(blankPaper.id, { answerText: '  DEF. ' });
+  check('10', 'a typed answer is saved', saveText.status === 200, String(saveText.status));
+
+  const wrongShape = await saveFormat(blankPaper.id, { optionId: mcqPaper.options[0].id });
+  check(
+    '10',
+    'the wrong answer shape for the format is refused',
+    wrongShape.status === 422,
+    String(wrongShape.status),
+  );
+
+  const formatSubmit = await player.api(`/api/student/attempts/${formatAttemptId}/submit`, 'POST');
+  const formatResult = formatSubmit.body?.result ?? {};
+  check(
+    '10',
+    'grading: the set and the typed answer are both correct',
+    formatResult.correctAnswers === 4 && formatResult.unanswered === 4,
+    `${formatResult.correctAnswers ?? -1} correct · ${formatResult.unanswered ?? -1} unanswered`,
+  );
+  check(
+    '10',
+    'the result breaks the paper down by format',
+    JSON.stringify(formatResult.formats?.map((row: any) => row.type)) ===
+      JSON.stringify(['MCQ', 'MULTI', 'TRUE_FALSE', 'FILL_BLANK']) &&
+      formatResult.formats.every((row: any) => row.correct === 1),
+    JSON.stringify(formatResult.formats ?? []).slice(0, 120),
+  );
+
+  const formatReview = await player.api(`/api/student/attempts/${formatAttemptId}/review`);
+  const reviewedBlank = (formatReview.body?.questions ?? []).find(
+    (entry: any) => entry.type === 'FILL_BLANK',
+  );
+  const reviewedMulti = (formatReview.body?.questions ?? []).find(
+    (entry: any) => entry.type === 'MULTI',
+  );
+  check(
+    '10',
+    'review: the typed answer and the accepted list',
+    reviewedBlank?.answerText === 'DEF.' &&
+      reviewedBlank?.verdict === 'CORRECT' &&
+      reviewedBlank?.options.filter((option: any) => option.isCorrect).length === 2,
+    String(reviewedBlank?.verdict),
+  );
+  check(
+    '10',
+    'review: every option ticked on a multi-answer question',
+    reviewedMulti?.selectedOptionIds?.length === 2 && reviewedMulti?.verdict === 'CORRECT',
+    String(reviewedMulti?.verdict),
+  );
+
+  const formatsPage = await player.page(`/student/attempt/${formatAttemptId}/review`);
+  check(
+    '10',
+    'the review page shows the format breakdown',
+    formatsPage.status === 200 && /by format/i.test(textOf(formatsPage.html)),
+    String(formatsPage.status),
+  );
+
+  await admin.api(`/api/admin/quizzes/${formatsQuizId}`, 'DELETE');
 
   /* ── §25 The spec's endpoint list ──────────────────────────────────────── */
   // Canonical paths this build serves. A POST probed with an empty body proves

@@ -247,6 +247,7 @@ describe('result presentation', () => {
     penalty: 0,
     negativeMarks: 0,
     certificateCode: null,
+    formats: [{ type: 'MCQ' as const, total: 3, correct: 2, incorrect: 1, unanswered: 0 }],
   };
 
   it('formats a percentage without trailing zeros', () => {

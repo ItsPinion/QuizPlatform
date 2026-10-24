@@ -12,6 +12,12 @@
 import { z } from 'zod';
 
 import { attemptStatusSchema, difficultySchema } from './index';
+import {
+  answerMatches,
+  isMultiSelect,
+  questionTypeSchema,
+  type QuestionType,
+} from './question-type';
 import { attemptResultSchema } from './submission';
 
 /* -------------------------------------------------------------------------- */
@@ -36,6 +42,41 @@ export function reviewVerdict(
   if (selectedOptionId == null) return 'UNANSWERED';
   if (correctOptionId != null && selectedOptionId === correctOptionId) return 'CORRECT';
   return 'INCORRECT';
+}
+
+/**
+ * The verdict for a question in any format.
+ *
+ * `reviewVerdict` above is the single-answer case and stays exactly as it was;
+ * this is the version the API uses once §10's formats exist, and it is the same
+ * logic as the grader — a review must never disagree with the score that was
+ * handed out.
+ */
+export function answerVerdict(input: {
+  type: QuestionType;
+  options: readonly { id: string; isCorrect: boolean; text: string }[];
+  selectedOptionIds: readonly string[];
+  answerText: string | null;
+}): ReviewVerdict {
+  if (input.type === 'FILL_BLANK') {
+    const accepted = input.options
+      .filter((option) => option.isCorrect)
+      .map((option) => option.text);
+    if (input.answerText == null || input.answerText.trim() === '') return 'UNANSWERED';
+    return answerMatches(input.answerText, accepted) ? 'CORRECT' : 'INCORRECT';
+  }
+
+  const chosen = input.options.filter((option) => input.selectedOptionIds.includes(option.id));
+  if (chosen.length === 0) return 'UNANSWERED';
+
+  if (isMultiSelect(input.type)) {
+    const key = input.options.filter((option) => option.isCorrect);
+    if (chosen.length !== key.length) return 'INCORRECT';
+    const chosenIds = new Set(chosen.map((option) => option.id));
+    return key.every((option) => chosenIds.has(option.id)) ? 'CORRECT' : 'INCORRECT';
+  }
+
+  return chosen.length === 1 && chosen[0]!.isCorrect ? 'CORRECT' : 'INCORRECT';
 }
 
 /** Marks a question earned: full marks or nothing, per the Day 8 grader. */
@@ -75,12 +116,20 @@ export type ReviewOption = z.infer<typeof reviewOptionSchema>;
 export const reviewQuestionSchema = z.object({
   id: z.string(),
   position: z.number(),
+  /** Which format the question asked in (§10). */
+  type: questionTypeSchema.default('MCQ'),
   questionText: z.string(),
+  imageUrl: z.string().nullable().default(null),
+  codeSnippet: z.string().nullable().default(null),
   marks: z.number(),
   difficulty: difficultySchema,
   explanation: z.string().nullable(),
   selectedOptionId: z.string().nullable(),
+  /** Every option the student ticked. One entry on single-answer questions. */
+  selectedOptionIds: z.array(z.string()).default([]),
   correctOptionId: z.string().nullable(),
+  /** What they typed on a fill-in-the-blank question; null on the others. */
+  answerText: z.string().nullable().default(null),
   verdict: reviewVerdictSchema,
   earnedMarks: z.number(),
   options: z.array(reviewOptionSchema),

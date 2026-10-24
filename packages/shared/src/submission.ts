@@ -13,6 +13,14 @@
  */
 import { z } from 'zod';
 
+import {
+  answerMatches,
+  isMultiSelect,
+  QUESTION_TYPES,
+  questionTypeSchema,
+  type QuestionType,
+} from './question-type';
+
 /* -------------------------------------------------------------------------- */
 /*  Grading                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -20,17 +28,25 @@ import { z } from 'zod';
 export interface GradableOption {
   id: string;
   isCorrect: boolean;
+  /** The option's text. Only fill-in-the-blank needs it: there the text *is* the key. */
+  text?: string;
 }
 
 export interface GradableQuestion {
   id: string;
   marks: number;
+  /** Defaults to `MCQ` so a caller that predates §10 keeps grading the same way. */
+  type?: QuestionType;
   options: readonly GradableOption[];
 }
 
 export interface GradableAnswer {
   questionId: string;
   selectedOptionId: string | null;
+  /** The set picked on a `MULTI` question. Empty on every other type. */
+  selectedOptionIds?: readonly string[];
+  /** What the student typed on a `FILL_BLANK` question. */
+  answerText?: string | null;
 }
 
 export interface GradeBreakdown {
@@ -49,6 +65,8 @@ export interface GradeBreakdown {
   penalty: number;
   /** The per-wrong-answer penalty the paper was graded with. */
   negativeMarks: number;
+  /** Per-format tally of the paper (§10). Empty only for a paper with no questions. */
+  formats: FormatBreakdown[];
 }
 
 /**
@@ -65,6 +83,114 @@ export interface GradeBreakdown {
  * the quiz mid-attempt, and grading against what is actually on the paper is the
  * defensible choice (see docs/submission-and-scoring.md).
  */
+/** A typed answer counts as given only when something remains after trimming. */
+function answerTextIsPresent(answer: GradableAnswer | undefined): boolean {
+  return typeof answer?.answerText === 'string' && answer.answerText.trim() !== '';
+}
+
+/**
+ * The options a student actually chose, restricted to ones this question has.
+ *
+ * A `MULTI` answer carries its set; every other type carries the single
+ * selection, which is returned as a one-item list so both shapes share the
+ * "did they pick anything" question above.
+ */
+function chosenOptions(
+  question: GradableQuestion,
+  answer: GradableAnswer | undefined,
+): GradableOption[] {
+  const ids = answer?.selectedOptionIds?.length
+    ? answer.selectedOptionIds
+    : answer?.selectedOptionId
+      ? [answer.selectedOptionId]
+      : [];
+
+  return question.options.filter((option) => ids.includes(option.id));
+}
+
+/**
+ * Was the question answered correctly?
+ *
+ * Three shapes, one per answer format:
+ *
+ * - single answer (`MCQ`, `TRUE_FALSE`, image and code questions) — the one
+ *   chosen option is the key;
+ * - `MULTI` — the chosen set equals the key set, so a half-right answer scores
+ *   nothing. That is the strict reading of "multiple correct answers", and the
+ *   alternative (partial credit) would make a paper's total depend on how many
+ *   boxes the author ticked;
+ * - `FILL_BLANK` — any accepted spelling matches, after `normaliseAnswer`.
+ */
+function isQuestionCorrect(
+  question: GradableQuestion,
+  type: QuestionType,
+  answer: GradableAnswer | undefined,
+): boolean {
+  if (type === 'FILL_BLANK') {
+    const accepted = question.options
+      .filter((option) => option.isCorrect)
+      .map((option) => option.text ?? '');
+    return answerMatches(answer?.answerText ?? null, accepted);
+  }
+
+  const chosen = chosenOptions(question, answer);
+  const key = question.options.filter((option) => option.isCorrect);
+
+  if (isMultiSelect(type)) {
+    if (chosen.length !== key.length) return false;
+    const chosenIds = new Set(chosen.map((option) => option.id));
+    return key.every((option) => chosenIds.has(option.id));
+  }
+
+  return chosen.length === 1 && chosen[0]!.isCorrect;
+}
+
+/**
+ * The paper tallied by format (§10).
+ *
+ * One implementation, used by the grader and by every later read of a finished
+ * attempt — the result card shows the same split whether it arrived from a
+ * submit or from a page reload, because both come through here.
+ */
+export function formatBreakdown(input: {
+  questions: readonly GradableQuestion[];
+  answers: readonly GradableAnswer[];
+}): FormatBreakdown[] {
+  const byQuestion = new Map<string, GradableAnswer>();
+  for (const answer of input.answers) byQuestion.set(answer.questionId, answer);
+
+  const tally = new Map<QuestionType, { total: number; correct: number; unanswered: number }>();
+
+  for (const question of input.questions) {
+    const type = question.type ?? 'MCQ';
+    const bucket = tally.get(type) ?? { total: 0, correct: 0, unanswered: 0 };
+    const answer = byQuestion.get(question.id);
+
+    bucket.total += 1;
+
+    const answered =
+      type === 'FILL_BLANK'
+        ? answerTextIsPresent(answer)
+        : chosenOptions(question, answer).length > 0;
+
+    if (!answered) bucket.unanswered += 1;
+    else if (isQuestionCorrect(question, type, answer)) bucket.correct += 1;
+
+    tally.set(type, bucket);
+  }
+
+  return QUESTION_TYPES.filter((type) => tally.has(type)).map((type) => {
+    const bucket = tally.get(type)!;
+    return {
+      type,
+      total: bucket.total,
+      correct: bucket.correct,
+      incorrect: bucket.total - bucket.correct - bucket.unanswered,
+      unanswered: bucket.unanswered,
+    };
+  });
+}
+
 export function gradeAttempt(input: {
   questions: readonly GradableQuestion[];
   answers: readonly GradableAnswer[];
@@ -79,8 +205,8 @@ export function gradeAttempt(input: {
   const negativeMarks = Math.max(0, input.negativeMarks ?? 0);
   // Last write wins: the unique index makes duplicates impossible, but a caller
   // building the array by hand should not be able to double-count.
-  const byQuestion = new Map<string, string | null>();
-  for (const answer of input.answers) byQuestion.set(answer.questionId, answer.selectedOptionId);
+  const byQuestion = new Map<string, GradableAnswer>();
+  for (const answer of input.answers) byQuestion.set(answer.questionId, answer);
 
   let correctAnswers = 0;
   let incorrectAnswers = 0;
@@ -91,14 +217,20 @@ export function gradeAttempt(input: {
   for (const question of input.questions) {
     totalMarks += question.marks;
 
-    const selectedId = byQuestion.get(question.id) ?? null;
-    const selected = selectedId
-      ? (question.options.find((option) => option.id === selectedId) ?? null)
-      : null;
+    const answer = byQuestion.get(question.id);
+    const type = question.type ?? 'MCQ';
 
-    if (!selected) {
+    const answered =
+      type === 'FILL_BLANK'
+        ? answerTextIsPresent(answer)
+        : chosenOptions(question, answer).length > 0;
+
+    if (!answered) {
       unanswered += 1;
-    } else if (selected.isCorrect) {
+      continue;
+    }
+
+    if (isQuestionCorrect(question, type, answer)) {
       correctAnswers += 1;
       earned += question.marks;
     } else {
@@ -128,6 +260,9 @@ export function gradeAttempt(input: {
     status: passed ? 'PASSED' : 'FAILED',
     penalty,
     negativeMarks,
+    // The paper's mix, in the spec's own order, so the result card can say what
+    // was answered correctly *by format* rather than only in total.
+    formats: formatBreakdown(input),
   };
 }
 
@@ -175,6 +310,22 @@ export function wasAutoSubmitted(
 export const attemptResultStatusSchema = z.enum(['PASSED', 'FAILED']);
 export type AttemptResultStatus = z.infer<typeof attemptResultStatusSchema>;
 
+/**
+ * How the paper was answered, by format.
+ *
+ * The result card shows "3 correct" today; §10's mix of formats makes "3 of 4
+ * multiple choice, 1 of 2 fill in the blank" the more useful sentence, and the
+ * split comes from the server so the client never re-grades to find it.
+ */
+export const formatBreakdownSchema = z.object({
+  type: questionTypeSchema,
+  total: z.number(),
+  correct: z.number(),
+  incorrect: z.number(),
+  unanswered: z.number(),
+});
+export type FormatBreakdown = z.infer<typeof formatBreakdownSchema>;
+
 export const attemptResultSchema = z.object({
   score: z.number(),
   totalMarks: z.number(),
@@ -202,6 +353,8 @@ export const attemptResultSchema = z.object({
    * the screen telling half the story.
    */
   certificateCode: z.string().nullable().default(null),
+  /** Per-format tally of the paper (§10). */
+  formats: z.array(formatBreakdownSchema).default([]),
 });
 export type AttemptResult = z.infer<typeof attemptResultSchema>;
 

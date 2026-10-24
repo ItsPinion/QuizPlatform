@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+import { FormatBreakdownList } from '@/components/format-breakdown';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -106,6 +107,11 @@ export function AttemptResultCard({ result, quizTitle, reviewHref = null }: Prop
               </div>
             ))}
           </div>
+
+          <FormatBreakdownList
+            formats={result.formats}
+            className="border-border/70 bg-background/40 rounded-lg border px-3 py-2"
+          />
 
           {result.penalty > 0 ? (
             <p className="border-destructive/30 bg-destructive/10 text-destructive flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px]">

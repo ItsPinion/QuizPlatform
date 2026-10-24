@@ -10,6 +10,7 @@
     "./admin": "./src/admin.ts",
     "./quiz": "./src/quiz.ts",
     "./question": "./src/question.ts",
+    "./question-type": "./src/question-type.ts",
     "./attempt": "./src/attempt.ts",
     "./submission": "./src/submission.ts",
     "./review": "./src/review.ts",

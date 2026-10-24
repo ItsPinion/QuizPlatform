@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
 
 import type { AdminQuestion, QuestionInput, QuestionListResponse } from '@quiz/shared/question';
+import { resolveQuestionInput } from '@quiz/shared/question';
+import type { QuestionType } from '@quiz/shared/question-type';
 import type { ImportQuestion } from '@quiz/shared/import';
 import { db, schema } from '@quiz/db';
 
@@ -48,8 +50,11 @@ function toAdminQuestion(
   return {
     id: row.id,
     quizId: row.quizId,
+    type: row.type as QuestionType,
     questionText: row.questionText,
     explanation: row.explanation,
+    imageUrl: row.imageUrl,
+    codeSnippet: row.codeSnippet,
     marks: row.marks,
     difficulty: row.difficulty,
     position: row.position,
@@ -127,11 +132,17 @@ export async function getQuestion(id: string): Promise<AdminQuestion> {
  * the whole write is refused rather than blanking their answer.
  */
 async function writeOptions(questionId: string, input: QuestionInput): Promise<void> {
+  const resolved = resolveQuestionInput(input);
   const existing = await db.select().from(options).where(eq(options.questionId, questionId));
 
   const sentIds = input.options
     .map((option) => option.id)
     .filter((id): id is string => Boolean(id));
+
+  // A true/false question writes its own pair, so the ids of the stored rows are
+  // the ones to keep — the form never sends ids for it.
+  const keptIds = resolved.type === 'TRUE_FALSE' ? existing.map((row) => row.id) : sentIds;
+
   const foreign = sentIds.filter((id) => !existing.some((row) => row.id === id));
 
   if (foreign.length > 0) {
@@ -142,7 +153,7 @@ async function writeOptions(questionId: string, input: QuestionInput): Promise<v
     );
   }
 
-  const removed = existing.filter((row) => !sentIds.includes(row.id));
+  const removed = existing.filter((row) => !keptIds.includes(row.id));
 
   if (removed.length > 0) {
     const used = await db
@@ -172,21 +183,25 @@ async function writeOptions(questionId: string, input: QuestionInput): Promise<v
     );
   }
 
-  for (const [index, option] of input.options.entries()) {
-    const isCorrect = index === input.correctIndex;
+  for (const [index, text] of resolved.options.entries()) {
+    const isCorrect = resolved.correctIndexes.includes(index);
+    const existingRow =
+      resolved.type === 'TRUE_FALSE'
+        ? existing[index]
+        : existing.find((row) => row.id === sentIds[index]);
 
-    if (option.id) {
+    if (existingRow) {
       await db
         .update(options)
-        .set({ optionText: option.text, isCorrect, position: index })
-        .where(eq(options.id, option.id));
+        .set({ optionText: text, isCorrect, position: index })
+        .where(eq(options.id, existingRow.id));
       continue;
     }
 
     await db.insert(options).values({
       id: randomUUID(),
       questionId,
-      optionText: option.text,
+      optionText: text,
       isCorrect,
       position: index,
     });
@@ -208,10 +223,13 @@ export async function createQuestion(quizId: string, input: QuestionInput): Prom
   await db.insert(questions).values({
     id,
     quizId,
+    type: input.type ?? 'MCQ',
     questionText: input.questionText,
     explanation: input.explanation,
     marks: input.marks,
     difficulty: input.difficulty,
+    imageUrl: input.imageUrl ?? null,
+    codeSnippet: input.codeSnippet ?? null,
     position: Number(nextPosition),
   });
 
@@ -233,10 +251,13 @@ export async function replaceQuestion(id: string, input: QuestionInput): Promise
   await db
     .update(questions)
     .set({
+      type: input.type ?? 'MCQ',
       questionText: input.questionText,
       explanation: input.explanation,
       marks: input.marks,
       difficulty: input.difficulty,
+      imageUrl: input.imageUrl ?? null,
+      codeSnippet: input.codeSnippet ?? null,
     })
     .where(eq(questions.id, id));
 
@@ -361,6 +382,10 @@ export async function countAnsweredQuestions(quizId: string): Promise<number> {
  * `parseQuestionImport`. A 200-row file is 200 small writes — slower than one
  * multi-row insert, and far more important that an import cannot bypass a rule
  * the form enforces.
+ *
+ * The parser has already resolved each row into what the format means — the
+ * `True`/`False` pair for a true/false row, the accepted-answer list for a
+ * fill-in-the-blank one — so nothing format-specific is decided here.
  */
 export async function importQuestions(
   quizId: string,
@@ -372,12 +397,18 @@ export async function importQuestions(
 
   for (const row of rows) {
     const question = await createQuestion(quizId, {
+      type: row.type,
+      imageUrl: row.imageUrl,
+      codeSnippet: row.codeSnippet,
       questionText: row.questionText,
       explanation: row.explanation,
       marks: row.marks,
       difficulty: row.difficulty,
-      options: row.options.map((text) => ({ text })),
-      correctIndex: row.correctIndex,
+      // `TRUE_FALSE` writes its own pair, and `createQuestion` rejects options it
+      // was not expecting, so a true/false row sends none.
+      options: row.type === 'TRUE_FALSE' ? [] : row.options.map((text) => ({ text })),
+      correctIndex: row.correctIndexes[0] ?? 0,
+      correctIndexes: row.correctIndexes,
     });
 
     created.push(question.id);

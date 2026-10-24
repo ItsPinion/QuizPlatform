@@ -2,6 +2,7 @@
 
 import type { AdminQuestion } from '@quiz/shared/question';
 import type { ImportResult } from '@quiz/shared/import';
+import { QUESTION_TYPE_LABELS } from '@quiz/shared/question-type';
 import {
   IMPORT_COLUMNS,
   IMPORT_HEADER,
@@ -37,6 +38,13 @@ import { parseApiFailure, toApiFailure } from '@/lib/api-error';
  *
  * The legacy binary `.xls` is not a zip and is refused with a one-line
  * instruction rather than a stack trace.
+ *
+ * Every format can be imported: the optional `type` column says what each row
+ * is, and the parser resolves it before the preview is shown — a multi-answer
+ * row lists several correct numbers, a true/false row may leave the options
+ * blank, and a fill-in-the-blank row puts each accepted spelling in an option
+ * cell. The preview labels each row with its format, so nothing arrives in the
+ * quiz as a surprise.
  */
 export function QuestionImport({
   quizId,
@@ -183,7 +191,8 @@ export function QuestionImport({
         <div>
           <p className="text-[13.5px] font-medium">Import questions</p>
           <p className="text-muted-foreground mt-0.5 text-[11.5px]">
-            CSV or Excel (.xlsx), one question per row. Nothing is saved until you press Import.
+            CSV or Excel (.xlsx), one question per row — all four question formats. Nothing is saved
+            until you press Import.
           </p>
         </div>
         <Button
@@ -241,9 +250,32 @@ export function QuestionImport({
           <p className="font-mono text-[11px] break-all">{IMPORT_COLUMNS.join(', ')}</p>
           <p>
             The header row is optional. <span className="font-mono">correct</span> is the option
-            number (1–4), not the answer text. Blank options are ignored, so a three-option question
+            number (1–4), not the answer text; blank options are ignored, so a three-option question
             works. Up to 200 rows per import.
           </p>
+          <dl className="grid gap-1 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-3">
+            <dt className="font-mono text-[11px]">MCQ</dt>
+            <dd>one number in correct, for example 2.</dd>
+            <dt className="font-mono text-[11px]">MULTI</dt>
+            <dd>
+              two or more numbers in correct, for example 1|3|4 — the student must pick exactly
+              those.
+            </dd>
+            <dt className="font-mono text-[11px]">TRUE_FALSE</dt>
+            <dd>
+              leave option1–option4 blank and write true or false in correct; the pair is fixed.
+            </dd>
+            <dt className="font-mono text-[11px]">FILL_BLANK</dt>
+            <dd>
+              put each accepted spelling in option1, option2… every listed one is accepted, so
+              correct stays blank.
+            </dd>
+            <dt className="font-mono text-[11px]">image / code</dt>
+            <dd>
+              optional for any format: a full https:// image, and a code snippet (quote the cell if
+              it contains commas or newlines).
+            </dd>
+          </dl>
         </div>
       </details>
 
@@ -294,9 +326,18 @@ export function QuestionImport({
           {accepted > 0 ? (
             <ul className="border-border/50 max-h-40 space-y-1 overflow-y-auto rounded-lg border p-2">
               {preview.questions.slice(0, 20).map((question, index) => (
-                <li key={index} className="text-[11.5px]">
-                  <span className="text-muted-foreground mr-1 font-mono">{index + 1}.</span>
-                  {question.questionText}
+                <li key={index} className="flex flex-wrap items-baseline gap-1.5 text-[11.5px]">
+                  <span className="text-muted-foreground font-mono">{index + 1}.</span>
+                  <Badge variant="outline" className="text-[9.5px] uppercase">
+                    {QUESTION_TYPE_LABELS[question.type]}
+                  </Badge>
+                  <span className="min-w-0">{question.questionText}</span>
+                  {question.imageUrl ? (
+                    <span className="text-muted-foreground text-[10.5px]">with an image</span>
+                  ) : null}
+                  {question.codeSnippet ? (
+                    <span className="text-muted-foreground text-[10.5px]">with code</span>
+                  ) : null}
                 </li>
               ))}
             </ul>

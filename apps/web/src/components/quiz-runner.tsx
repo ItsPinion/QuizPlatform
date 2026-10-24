@@ -2,15 +2,19 @@
 
 import type { AttemptSession } from '@quiz/shared/attempt';
 import { formatClock } from '@quiz/shared/attempt';
+import { QUESTION_TYPE_LABELS, isChoiceType, isMultiSelect } from '@quiz/shared/question-type';
 import type { AttemptResult } from '@quiz/shared/submission';
 import {
   ArrowLeft,
   ArrowRight,
   Check,
+  CheckCheck,
   CircleAlert,
   Clock,
+  Code2,
   Loader2,
   Lock,
+  PenLine,
   Send,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -21,6 +25,7 @@ import { PageHeader } from '@/components/cinema/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { client } from '@/lib/api';
 import { parseApiFailure, toApiFailure } from '@/lib/api-error';
 import { difficultyTone } from '@/lib/quiz-params';
@@ -31,25 +36,55 @@ interface Props {
   initial: AttemptSession;
 }
 
-type AnswerMap = Record<string, string | null>;
+/** How one question is answered locally, whatever the format. */
+interface LocalAnswer {
+  /** One id on a radio question, the set on a checkbox question, none for text. */
+  optionIds: string[];
+  /** What was typed on a fill-in-the-blank question. */
+  answerText: string;
+}
+
+type AnswerMap = Record<string, LocalAnswer>;
+
+const EMPTY: LocalAnswer = { optionIds: [], answerText: '' };
+
+function isAnswered(answer: LocalAnswer | undefined): boolean {
+  if (!answer) return false;
+  return answer.optionIds.length > 0 || answer.answerText.trim() !== '';
+}
 
 function toAnswerMap(session: AttemptSession): AnswerMap {
   return Object.fromEntries(
-    session.answers.map((answer) => [answer.questionId, answer.selectedOptionId]),
+    session.answers.map((answer) => [
+      answer.questionId,
+      {
+        optionIds: answer.selectedOptionIds.length
+          ? answer.selectedOptionIds
+          : answer.selectedOptionId
+            ? [answer.selectedOptionId]
+            : [],
+        answerText: answer.answerText ?? '',
+      },
+    ]),
   );
 }
 
+/** How long to wait after the last keystroke before saving typed text. */
+const TEXT_SAVE_DELAY_MS = 700;
+
 /**
- * The quiz taker.
+ * The quiz taker, in every format §10 defines.
  *
  * Four things are deliberately server-owned:
  *
  * - **the deadline** — the countdown is derived from `expiresAt`, and the tab
  *   re-reads it when it becomes visible again, so throttled timers or a system
  *   clock change cannot buy time;
- * - **the answer key** — the payload has no correctness flags at all;
- * - **the writes** — every selection is a `PUT`, and a rejected write is rolled
- *   back in the UI instead of being shown as saved;
+ * - **the answer key** — the payload has no correctness flags at all, and a
+ *   fill-in-the-blank question is sent with no options, because there the
+ *   options *are* the key;
+ * - **the writes** — every selection and every typed answer is a `PUT`, and a
+ *   rejected write is rolled back in the UI instead of being shown as saved;
  * - **the score** — `POST …/submit` grades the paper. The button and the
  *   deadline both call it, and whichever arrives second gets the stored result
  *   back (`alreadySubmitted: true`) instead of a second grade.
@@ -73,6 +108,8 @@ export function QuizRunner({ initial }: Props) {
   // A double click, the countdown and a manual submit must not race into three
   // submissions — the API is idempotent, but the UI should not be noisy either.
   const inFlight = useRef(false);
+  // Pending "save this text" timer, so typing does not fire a request per key.
+  const textTimer = useRef<number | null>(null);
 
   useEffect(() => {
     if (result) return;
@@ -88,6 +125,13 @@ export function QuizRunner({ initial }: Props) {
     const id = window.setInterval(tick, 1_000);
     return () => window.clearInterval(id);
   }, [result]);
+
+  useEffect(
+    () => () => {
+      if (textTimer.current !== null) window.clearTimeout(textTimer.current);
+    },
+    [],
+  );
 
   /**
    * Submit the paper — the student's click, or the clock reaching zero.
@@ -166,41 +210,79 @@ export function QuizRunner({ initial }: Props) {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [resync]);
 
-  const answered = useMemo(
-    () => questions.filter((question) => answers[question.id] != null).length,
-    [answers, questions],
+  /** Write one answer of any shape, rolling the UI back when the server refuses. */
+  const write = useCallback(
+    async (questionId: string, patch: LocalAnswer, body: Record<string, unknown>) => {
+      const previous = answers[questionId] ?? EMPTY;
+
+      setAnswers((map) => ({ ...map, [questionId]: patch }));
+      setSaving(questionId);
+      setError(null);
+
+      try {
+        const res = await client.api.student.attempts[':id'].answers[':questionId'].$put({
+          param: { id: initial.attempt.id, questionId },
+          json: body as never,
+        });
+
+        if (!res.ok) {
+          setAnswers((map) => ({ ...map, [questionId]: previous }));
+          setError(parseApiFailure(await res.json()).message);
+          return;
+        }
+
+        setSavedAt(Date.now());
+      } catch (cause) {
+        setAnswers((map) => ({ ...map, [questionId]: previous }));
+        setError(toApiFailure(cause).message);
+      } finally {
+        setSaving(null);
+      }
+    },
+    [answers, initial.attempt.id],
   );
 
-  async function select(questionId: string, optionId: string) {
-    if (expired || result) return;
+  const chooseOption = useCallback(
+    (questionId: string, optionId: string, multiple: boolean) => {
+      const existing = answers[questionId] ?? EMPTY;
 
-    const previous = answers[questionId] ?? null;
+      const optionIds = multiple
+        ? existing.optionIds.includes(optionId)
+          ? existing.optionIds.filter((id) => id !== optionId)
+          : [...existing.optionIds, optionId]
+        : [optionId];
 
-    // Optimistic: the radio should move the instant it is clicked.
-    setAnswers((map) => ({ ...map, [questionId]: optionId }));
-    setSaving(questionId);
-    setError(null);
+      void write(
+        questionId,
+        { optionIds, answerText: '' },
+        multiple ? { optionIds } : { optionId: optionIds[0] ?? null },
+      );
+    },
+    [answers, write],
+  );
 
-    try {
-      const res = await client.api.student.attempts[':id'].answers[':questionId'].$put({
-        param: { id: initial.attempt.id, questionId },
-        json: { optionId },
-      });
+  /** Typed answers save shortly after the last keystroke, and on blur. */
+  const changeText = useCallback(
+    (questionId: string, answerText: string) => {
+      setAnswers((map) => ({
+        ...map,
+        [questionId]: { optionIds: [], answerText },
+      }));
 
-      if (!res.ok) {
-        setAnswers((map) => ({ ...map, [questionId]: previous }));
-        setError(parseApiFailure(await res.json()).message);
-        return;
-      }
+      if (textTimer.current !== null) window.clearTimeout(textTimer.current);
 
-      setSavedAt(Date.now());
-    } catch (cause) {
-      setAnswers((map) => ({ ...map, [questionId]: previous }));
-      setError(toApiFailure(cause).message);
-    } finally {
-      setSaving(null);
-    }
-  }
+      textTimer.current = window.setTimeout(() => {
+        textTimer.current = null;
+        void write(questionId, { optionIds: [], answerText }, { answerText: answerText.trim() });
+      }, TEXT_SAVE_DELAY_MS);
+    },
+    [write],
+  );
+
+  const answered = useMemo(
+    () => questions.filter((question) => isAnswered(answers[question.id])).length,
+    [answers, questions],
+  );
 
   if (result) {
     return (
@@ -230,6 +312,9 @@ export function QuizRunner({ initial }: Props) {
 
   const percent = progressPercent(answered, questions.length);
   const unanswered = questions.length - answered;
+  const answer = answers[question.id] ?? EMPTY;
+  const multiple = isMultiSelect(question.type);
+  const typed = question.type === 'FILL_BLANK';
 
   return (
     <div className="space-y-6">
@@ -239,7 +324,7 @@ export function QuizRunner({ initial }: Props) {
           title={initial.quiz.title}
           aside={
             <>
-              <Badge variant="outline">Attempt</Badge>
+              <Badge variant="outline">{QUESTION_TYPE_LABELS[question.type]}</Badge>
               <Badge variant={difficultyTone(question.difficulty)} className="text-[9.5px]">
                 {question.difficulty}
               </Badge>
@@ -337,42 +422,108 @@ export function QuizRunner({ initial }: Props) {
                   ) : null}
                 </span>
               </div>
+
+              {question.imageUrl ? (
+                <figure className="border-border/70 mt-2 overflow-hidden rounded-lg border">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={question.imageUrl}
+                    alt="Figure for this question"
+                    className="max-h-72 w-full object-contain"
+                    loading="lazy"
+                  />
+                </figure>
+              ) : null}
+
+              {question.codeSnippet ? (
+                <div className="border-border/70 bg-muted/30 mt-2 overflow-x-auto rounded-lg border">
+                  <div className="text-muted-foreground border-border/60 flex items-center gap-1.5 border-b px-3 py-1.5 text-[10px] tracking-wide uppercase">
+                    <Code2 className="size-3" /> code
+                  </div>
+                  <pre className="px-3 py-2 text-[12px] leading-relaxed">
+                    <code>{question.codeSnippet}</code>
+                  </pre>
+                </div>
+              ) : null}
+
               <fieldset disabled={expired}>
-                <legend className="mt-1 text-[15px] leading-snug font-medium">
+                <legend className="mt-3 text-[15px] leading-snug font-medium">
                   {question.questionText}
                 </legend>
 
-                <div className="mt-3 space-y-2">
-                  {question.options.map((option, index) => {
-                    const selected = answers[question.id] === option.id;
+                {typed ? (
+                  <div className="mt-3 space-y-1.5">
+                    <label
+                      htmlFor={`answer-${question.id}`}
+                      className="text-muted-foreground text-[11.5px]"
+                    >
+                      Type your answer
+                    </label>
+                    <Input
+                      id={`answer-${question.id}`}
+                      value={answer.answerText}
+                      onChange={(event) => changeText(question.id, event.target.value)}
+                      onBlur={() =>
+                        void write(
+                          question.id,
+                          { optionIds: [], answerText: answer.answerText },
+                          { answerText: answer.answerText.trim() },
+                        )
+                      }
+                      placeholder="Your answer"
+                      autoComplete="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      aria-describedby={`answer-help-${question.id}`}
+                      className="max-w-md"
+                    />
+                    <p
+                      id={`answer-help-${question.id}`}
+                      className="text-muted-foreground text-[11px]"
+                    >
+                      Spelling is forgiving about case and spacing. Saves as you type.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {question.options.map((option, index) => {
+                      const selected = answer.optionIds.includes(option.id);
 
-                    return (
-                      <label
-                        key={option.id}
-                        className={cn(
-                          'flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 text-[13px] transition-colors',
-                          selected
-                            ? 'border-primary/50 bg-primary/10'
-                            : 'border-border/70 hover:bg-accent/40',
-                          expired && 'cursor-not-allowed opacity-70',
-                        )}
-                      >
-                        <input
-                          type="radio"
-                          name={`question-${question.id}`}
-                          value={option.id}
-                          checked={selected}
-                          onChange={() => select(question.id, option.id)}
-                          className="accent-primary mt-1 size-3.5"
-                        />
-                        <span className="text-muted-foreground mt-0.5 font-mono text-[10.5px]">
-                          {optionLetter(index)}
-                        </span>
-                        <span className="flex-1">{option.text}</span>
-                      </label>
-                    );
-                  })}
-                </div>
+                      return (
+                        <label
+                          key={option.id}
+                          className={cn(
+                            'flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 text-[13px] transition-colors',
+                            selected
+                              ? 'border-primary/50 bg-primary/10'
+                              : 'border-border/70 hover:bg-accent/40',
+                            expired && 'cursor-not-allowed opacity-70',
+                          )}
+                        >
+                          <input
+                            type={multiple ? 'checkbox' : 'radio'}
+                            name={`question-${question.id}`}
+                            value={option.id}
+                            checked={selected}
+                            onChange={() => chooseOption(question.id, option.id, multiple)}
+                            className="accent-primary mt-1 size-3.5"
+                          />
+                          <span className="text-muted-foreground mt-0.5 font-mono text-[10.5px]">
+                            {optionLetter(index)}
+                          </span>
+                          <span className="flex-1">{option.text}</span>
+                        </label>
+                      );
+                    })}
+
+                    {multiple ? (
+                      <p className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
+                        <CheckCheck className="size-3" />
+                        More than one is correct — tick every one. A missed box scores nothing.
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </fieldset>
             </CardHeader>
 
@@ -388,7 +539,7 @@ export function QuizRunner({ initial }: Props) {
               </Button>
 
               <span className="text-muted-foreground text-[11px]">
-                {answers[question.id] ? 'answered' : 'not answered yet'}
+                {isAnswered(answer) ? 'answered' : typed ? 'nothing typed yet' : 'not answered yet'}
               </span>
 
               <Button
@@ -404,8 +555,8 @@ export function QuizRunner({ initial }: Props) {
           </Card>
 
           <p className="text-muted-foreground text-[11.5px]">
-            <span className="text-foreground font-medium">Tip:</span> answers save as you click —
-            you can leave and come back without losing them, but the clock keeps running.
+            <span className="text-foreground font-medium">Tip:</span> answers save as you go — you
+            can leave and come back without losing them, but the clock keeps running.
           </p>
         </div>
 
@@ -417,7 +568,7 @@ export function QuizRunner({ initial }: Props) {
             <CardContent className="space-y-3">
               <div className="grid grid-cols-5 gap-1.5">
                 {questions.map((item, index) => {
-                  const isAnswered = answers[item.id] != null;
+                  const done = isAnswered(answers[item.id]);
                   const isCurrent = index === current;
 
                   return (
@@ -426,11 +577,11 @@ export function QuizRunner({ initial }: Props) {
                       type="button"
                       onClick={() => setCurrent(index)}
                       aria-current={isCurrent ? 'true' : undefined}
-                      aria-label={`Question ${index + 1}${isAnswered ? ', answered' : ', not answered'}`}
+                      aria-label={`Question ${index + 1}${done ? ', answered' : ', not answered'}`}
                       className={cn(
                         'grid h-7 place-items-center rounded-md border font-mono text-[11px] transition-colors',
                         isCurrent && 'ring-primary ring-offset-background ring-2 ring-offset-1',
-                        isAnswered
+                        done
                           ? 'border-primary/40 bg-primary/15 text-primary'
                           : 'border-border/70 text-muted-foreground hover:bg-accent/50',
                       )}
@@ -457,6 +608,22 @@ export function QuizRunner({ initial }: Props) {
                   <dd className="text-foreground tabular-nums">{initial.quiz.passingScore}%</dd>
                 </div>
               </dl>
+
+              <p className="text-muted-foreground flex items-start gap-1.5 border-t border-white/10 pt-2 text-[10.5px] leading-relaxed">
+                {isChoiceType(question.type) ? (
+                  <>
+                    <Check className="mt-0.5 size-3 shrink-0" />
+                    {isMultiSelect(question.type)
+                      ? 'Checkbox questions need every correct answer.'
+                      : 'Radio questions take a single answer.'}
+                  </>
+                ) : (
+                  <>
+                    <PenLine className="mt-0.5 size-3 shrink-0" />
+                    Typed answers are matched against the author's accepted list.
+                  </>
+                )}
+              </p>
             </CardContent>
           </Card>
 

@@ -16,6 +16,12 @@ export const DIFFICULTIES = ['EASY', 'MEDIUM', 'HARD'] as const;
 export const difficultySchema = z.enum(DIFFICULTIES);
 export type Difficulty = z.infer<typeof difficultySchema>;
 
+/**
+ * Question formats, re-exported so the database schema can constrain the column
+ * with the same list the API validates against.
+ */
+export const QUESTION_TYPE_LIST = ['MCQ', 'MULTI', 'TRUE_FALSE', 'FILL_BLANK'] as const;
+
 export const QUIZ_STATUSES = ['DRAFT', 'PUBLISHED', 'UNPUBLISHED'] as const;
 export const quizStatusSchema = z.enum(QUIZ_STATUSES);
 export type QuizStatus = z.infer<typeof quizStatusSchema>;

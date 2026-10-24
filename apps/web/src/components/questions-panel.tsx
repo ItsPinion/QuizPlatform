@@ -1,6 +1,7 @@
 'use client';
 
 import type { AdminQuestion } from '@quiz/shared/question';
+import { QUESTION_TYPE_LABELS } from '@quiz/shared/question-type';
 import {
   ArrowDown,
   ArrowUp,
@@ -23,7 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { client } from '@/lib/api';
 import { parseApiFailure, toApiFailure } from '@/lib/api-error';
-import { DIFFICULTY_TONE, moveItem, summarizeQuestions } from '@/lib/question-params';
+import { DIFFICULTY_TONE, moveItem, summarizeQuestions, typeSummary } from '@/lib/question-params';
 
 interface Props {
   quizId: string;
@@ -150,6 +151,7 @@ export function QuestionsPanel({ quizId, quizStatus, initialQuestions }: Props) 
           </span>
           <span>{summary.byDifficulty.MEDIUM} medium</span>
           <span>{summary.byDifficulty.HARD} hard</span>
+          <span className="text-muted-foreground">{typeSummary(summary)}</span>
           {summary.answered > 0 ? (
             <span className="text-warning">{summary.answered} answered · locked for deletion</span>
           ) : null}
@@ -229,12 +231,21 @@ export function QuestionsPanel({ quizId, quizStatus, initialQuestions }: Props) 
                     <Badge variant={DIFFICULTY_TONE[question.difficulty]} className="text-[9.5px]">
                       {question.difficulty}
                     </Badge>
+                    <Badge variant="outline" className="text-[9.5px]">
+                      {QUESTION_TYPE_LABELS[question.type]}
+                    </Badge>
                     <span>
                       {question.marks} mark{question.marks === 1 ? '' : 's'}
                     </span>
                     <span aria-hidden="true">·</span>
                     <span>
-                      {question.options.length} option{question.options.length === 1 ? '' : 's'}
+                      {question.type === 'FILL_BLANK'
+                        ? `${question.options.length} accepted answer${
+                            question.options.length === 1 ? '' : 's'
+                          }`
+                        : `${question.options.length} option${
+                            question.options.length === 1 ? '' : 's'
+                          }`}
                     </span>
                     {locked ? (
                       <>

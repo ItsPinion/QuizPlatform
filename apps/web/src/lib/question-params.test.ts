@@ -8,14 +8,18 @@ import {
   questionToForm,
   summarizeQuestions,
   toQuestionPayload,
+  typeSummary,
   validateQuestionForm,
 } from './question-params';
 
 const QUESTION: AdminQuestion = {
   id: 'q1',
   quizId: 'quiz1',
+  type: 'MCQ',
   questionText: 'Which one is correct?',
   explanation: 'Because it is.',
+  imageUrl: null,
+  codeSnippet: null,
   marks: 3,
   difficulty: 'HARD',
   position: 0,
@@ -35,9 +39,15 @@ describe('emptyQuestionForm', () => {
 
     expect(form.options).toHaveLength(4);
     expect(form.options.every((option) => option.text === '')).toBe(true);
-    expect(form.correctIndex).toBe(0);
+    expect(form.correctIndexes).toEqual([0]);
     expect(form.marks).toBe('1');
     expect(form.difficulty).toBe('MEDIUM');
+    expect(form.type).toBe('MCQ');
+  });
+
+  it('starts a fill in the blank with room for two accepted answers', () => {
+    expect(emptyQuestionForm('MEDIUM', 'FILL_BLANK').options).toHaveLength(2);
+    expect(emptyQuestionForm('MEDIUM', 'FILL_BLANK').type).toBe('FILL_BLANK');
   });
 });
 
@@ -49,8 +59,9 @@ describe('questionToForm', () => {
     expect(form.explanation).toBe('Because it is.');
     expect(form.marks).toBe('3');
     expect(form.difficulty).toBe('HARD');
-    expect(form.correctIndex).toBe(1);
+    expect(form.correctIndexes).toEqual([1]);
     expect(form.options.map((option) => option.id)).toEqual(['o1', 'o2', 'o3']);
+    expect(form.type).toBe('MCQ');
   });
 
   it('falls back to the first option when no correct one is set', () => {
@@ -59,20 +70,45 @@ describe('questionToForm', () => {
       options: QUESTION.options.map((option) => ({ ...option, isCorrect: false })),
     });
 
-    expect(form.correctIndex).toBe(0);
+    expect(form.correctIndexes).toEqual([0]);
+  });
+
+  it('reads every correct option of a multiple-answer question', () => {
+    const form = questionToForm({
+      ...QUESTION,
+      type: 'MULTI',
+      options: QUESTION.options.map((option) => ({ ...option, isCorrect: true })),
+    });
+
+    expect(form.correctIndexes).toEqual([0, 1, 2]);
+  });
+
+  it('rebuilds the true/false pair from the stored options', () => {
+    const form = questionToForm({
+      ...QUESTION,
+      type: 'TRUE_FALSE',
+      options: [
+        { id: 't', text: 'True', isCorrect: false, position: 0 },
+        { id: 'f', text: 'False', isCorrect: true, position: 1 },
+      ],
+    });
+
+    expect(form.options.map((option) => option.text)).toEqual(['True', 'False']);
+    expect(form.correctIndexes).toEqual([1]);
   });
 });
 
 describe('toQuestionPayload', () => {
   it('drops blank options and keeps the correct one correct', () => {
     const payload = toQuestionPayload({
+      ...emptyQuestionForm(),
       questionText: 'Pick Beta',
       explanation: '  ',
       marks: '2',
       difficulty: 'EASY',
       // The selected option sits below a blank row that will be removed.
       options: [{ id: 'o1', text: 'Alpha' }, { text: '   ' }, { id: 'o2', text: 'Beta' }],
-      correctIndex: 2,
+      correctIndexes: [2],
     });
 
     expect(payload.options).toEqual([
@@ -89,22 +125,69 @@ describe('toQuestionPayload', () => {
       ...emptyQuestionForm(),
       questionText: 'New question?',
       options: [{ text: 'A' }, { text: 'B' }],
-      correctIndex: 1,
+      correctIndexes: [1],
     });
 
     expect(payload.options).toEqual([{ text: 'A' }, { text: 'B' }]);
     expect(payload.correctIndex).toBe(1);
   });
+
+  it('sends every correct index for a multiple-answer question', () => {
+    const payload = toQuestionPayload({
+      ...emptyQuestionForm(),
+      type: 'MULTI',
+      questionText: 'Pick two',
+      options: [{ text: 'A' }, { text: 'B' }, { text: 'C' }],
+      correctIndexes: [0, 2],
+    });
+
+    expect('correctIndexes' in payload ? payload.correctIndexes : null).toEqual([0, 2]);
+  });
+
+  it('sends no indices for a fill in the blank — every answer is accepted', () => {
+    const payload = toQuestionPayload({
+      ...emptyQuestionForm('MEDIUM', 'FILL_BLANK'),
+      questionText: 'Name the stylesheet language.',
+      options: [{ text: 'CSS' }, { text: 'Cascading Style Sheets' }],
+      correctIndexes: [],
+    });
+
+    expect(payload.type).toBe('FILL_BLANK');
+    expect(payload.options).toEqual([{ text: 'CSS' }, { text: 'Cascading Style Sheets' }]);
+    expect('correctIndexes' in payload).toBe(false);
+  });
+
+  it('sends only the true/false answer, letting the server write the pair', () => {
+    const payload = toQuestionPayload({
+      ...emptyQuestionForm('MEDIUM', 'TRUE_FALSE'),
+      questionText: 'HTTP is stateless.',
+      options: [{ text: 'True' }, { text: 'False' }],
+      correctIndexes: [1],
+    });
+
+    expect(payload).toMatchObject({ type: 'TRUE_FALSE', options: [], correctIndex: 1 });
+  });
+
+  it('carries the image and the code block', () => {
+    const payload = toQuestionPayload({
+      ...emptyQuestionForm(),
+      questionText: 'What does this log?',
+      options: [{ text: '1' }, { text: '2' }],
+      codeSnippet: 'console.log([1].length);',
+      imageUrl: 'https://example.com/i.png',
+    });
+
+    expect(payload.codeSnippet).toBe('console.log([1].length);');
+    expect(payload.imageUrl).toBe('https://example.com/i.png');
+  });
 });
 
 describe('validateQuestionForm', () => {
   const base = {
+    ...emptyQuestionForm(),
     questionText: 'Is this a question?',
-    explanation: '',
-    marks: '1',
-    difficulty: 'MEDIUM' as const,
     options: [{ text: 'A' }, { text: 'B' }],
-    correctIndex: 0,
+    correctIndexes: [0],
   };
 
   it('accepts a complete form', () => {
@@ -127,7 +210,7 @@ describe('validateQuestionForm', () => {
       validateQuestionForm({
         ...base,
         options: [{ text: 'A' }, { text: 'B' }, { text: '' }],
-        correctIndex: 2,
+        correctIndexes: [2],
       }),
     ).toMatch(/which option is correct/i);
   });
@@ -137,6 +220,51 @@ describe('validateQuestionForm', () => {
     expect(validateQuestionForm({ ...base, marks: '11' })).toMatch(/between 1 and 10/);
     expect(validateQuestionForm({ ...base, marks: '2.5' })).toMatch(/between 1 and 10/);
     expect(validateQuestionForm({ ...base, marks: '10' })).toBeNull();
+  });
+
+  it('needs exactly one answer on a single-answer question', () => {
+    expect(validateQuestionForm({ ...base, correctIndexes: [] })).toMatch(
+      /which option is correct/i,
+    );
+    expect(validateQuestionForm({ ...base, correctIndexes: [0, 1] })).toMatch(/exactly one/);
+  });
+
+  it('needs two answers on a multiple-answer question', () => {
+    const multi = { ...base, type: 'MULTI' as const };
+
+    expect(validateQuestionForm({ ...multi, correctIndexes: [0] })).toMatch(/at least two/);
+    expect(validateQuestionForm({ ...multi, correctIndexes: [0, 1] })).toBeNull();
+  });
+
+  it('accepts a fill in the blank with one accepted answer and no index', () => {
+    expect(
+      validateQuestionForm({
+        ...base,
+        type: 'FILL_BLANK',
+        options: [{ text: 'CSS' }],
+        correctIndexes: [],
+      }),
+    ).toBeNull();
+
+    expect(
+      validateQuestionForm({ ...base, type: 'FILL_BLANK', options: [], correctIndexes: [] }),
+    ).toMatch(/at least one accepted answer/);
+  });
+
+  it('needs a true or false on the pair', () => {
+    expect(
+      validateQuestionForm({
+        ...base,
+        type: 'TRUE_FALSE',
+        options: [{ text: 'True' }, { text: 'False' }],
+        correctIndexes: [],
+      }),
+    ).toMatch(/true or false/i);
+  });
+
+  it('refuses an image URL that is not a URL', () => {
+    expect(validateQuestionForm({ ...base, imageUrl: 'diagram.png' })).toMatch(/http/);
+    expect(validateQuestionForm({ ...base, imageUrl: 'https://ok.example/i.png' })).toBeNull();
   });
 });
 
@@ -173,13 +301,26 @@ describe('summarizeQuestions', () => {
     expect(summary.byDifficulty).toEqual({ EASY: 2, MEDIUM: 0, HARD: 1 });
   });
 
+  it('counts the formats a paper mixes', () => {
+    const summary = summarizeQuestions([
+      QUESTION,
+      { ...QUESTION, id: 'q2', type: 'MULTI' },
+      { ...QUESTION, id: 'q3', type: 'FILL_BLANK' },
+    ]);
+
+    expect(summary.byType).toEqual({ MCQ: 1, MULTI: 1, TRUE_FALSE: 0, FILL_BLANK: 1 });
+    expect(typeSummary(summary)).toBe('3 formats');
+  });
+
   it('handles an empty quiz', () => {
     expect(summarizeQuestions([])).toEqual({
       total: 0,
       marks: 0,
       answered: 0,
       byDifficulty: { EASY: 0, MEDIUM: 0, HARD: 0 },
+      byType: { MCQ: 0, MULTI: 0, TRUE_FALSE: 0, FILL_BLANK: 0 },
     });
+    expect(typeSummary(summarizeQuestions([]))).toBe('no questions yet');
   });
 });
 

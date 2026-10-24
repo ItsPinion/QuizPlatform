@@ -7,9 +7,11 @@ import type {
   AttemptReview,
   ReviewQuestion,
 } from '@quiz/shared/review';
-import { earnedMarks, reviewCounts, reviewVerdict } from '@quiz/shared/review';
+import { answerVerdict, earnedMarks, reviewCounts } from '@quiz/shared/review';
 import type { AttemptResult } from '@quiz/shared/submission';
-import { timeTakenSeconds, wasAutoSubmitted } from '@quiz/shared/submission';
+import { formatBreakdown, timeTakenSeconds, wasAutoSubmitted } from '@quiz/shared/submission';
+import { parseIdOrder } from '@quiz/shared/attempt';
+import { isMultiSelect, type QuestionType } from '@quiz/shared/question-type';
 import { db, schema } from '@quiz/db';
 
 import { ApiError } from './errors';
@@ -86,10 +88,13 @@ export async function getAttemptReview(attemptId: string, userId: string): Promi
     .select({
       id: questions.id,
       position: questions.position,
+      type: questions.type,
       questionText: questions.questionText,
       marks: questions.marks,
       difficulty: questions.difficulty,
       explanation: questions.explanation,
+      imageUrl: questions.imageUrl,
+      codeSnippet: questions.codeSnippet,
     })
     .from(questions)
     .where(eq(questions.quizId, attempt.quizId))
@@ -112,16 +117,33 @@ export async function getAttemptReview(attemptId: string, userId: string): Promi
           .orderBy(asc(options.position), asc(options.optionText))
       : Promise.resolve([]),
     db
-      .select({ questionId: answers.questionId, selectedOptionId: answers.selectedOptionId })
+      .select({
+        questionId: answers.questionId,
+        selectedOptionId: answers.selectedOptionId,
+        selectedOptionIds: answers.selectedOptionIds,
+        answerText: answers.answerText,
+      })
       .from(answers)
       .where(eq(answers.attemptId, attemptId)),
   ]);
 
-  const selectedByQuestion = new Map(
-    answerRows.map((answer) => [answer.questionId, answer.selectedOptionId]),
-  );
+  const answerByQuestion = new Map(answerRows.map((answer) => [answer.questionId, answer]));
 
   const reviewQuestions: ReviewQuestion[] = questionRows.map((question) => {
+    const type = question.type as QuestionType;
+    const saved = answerByQuestion.get(question.id);
+
+    // A multiple-answer row carries its own set; the others carry one id.
+    const savedIds = (
+      parseIdOrder(saved?.selectedOptionIds).length > 0
+        ? parseIdOrder(saved?.selectedOptionIds)
+        : saved?.selectedOptionId
+          ? [saved.selectedOptionId]
+          : []
+    ).filter((id) =>
+      optionRows.some((option) => option.id === id && option.questionId === question.id),
+    );
+
     const questionOptions = optionRows
       .filter((option) => option.questionId === question.id)
       .map((option) => ({
@@ -129,27 +151,32 @@ export async function getAttemptReview(attemptId: string, userId: string): Promi
         text: option.text,
         position: option.position,
         isCorrect: option.isCorrect,
-        selected: option.id === selectedByQuestion.get(question.id),
+        // On a fill-in-the-blank the options are the accepted answers, not
+        // something anybody ticked — so nothing is marked as selected there.
+        selected: type === 'FILL_BLANK' ? false : savedIds.includes(option.id),
       }));
 
-    const correctOptionId = questionOptions.find((option) => option.isCorrect)?.id ?? null;
-    // Only a selection that is one of *this* question's options counts; a stale
-    // answer row from a deleted option reads as unanswered, exactly like Day 8's
-    // grader so the review and the score cannot disagree.
-    const saved = selectedByQuestion.get(question.id) ?? null;
-    const selectedOptionId = questionOptions.some((option) => option.id === saved) ? saved : null;
-
-    const verdict = reviewVerdict(selectedOptionId, correctOptionId);
+    const verdict = answerVerdict({
+      type,
+      options: questionOptions,
+      selectedOptionIds: savedIds,
+      answerText: saved?.answerText ?? null,
+    });
 
     return {
       id: question.id,
       position: question.position,
+      type,
       questionText: question.questionText,
+      imageUrl: question.imageUrl,
+      codeSnippet: question.codeSnippet,
       marks: question.marks,
       difficulty: question.difficulty,
       explanation: question.explanation,
-      selectedOptionId,
-      correctOptionId,
+      selectedOptionId: isMultiSelect(type) ? null : (savedIds[0] ?? null),
+      selectedOptionIds: savedIds,
+      correctOptionId: questionOptions.find((option) => option.isCorrect)?.id ?? null,
+      answerText: saved?.answerText ?? null,
       verdict,
       earnedMarks: earnedMarks(verdict, question.marks),
       options: questionOptions,
@@ -181,6 +208,22 @@ export async function getAttemptReview(attemptId: string, userId: string): Promi
     penalty: Number(attempt.penalty ?? 0),
     negativeMarks: Number(attempt.negativeMarks ?? 0),
     certificateCode: certificate?.code ?? null,
+    // Re-derived from the paper itself, the same way a reload of the result
+    // screen derives it, so the review and the result cannot disagree.
+    formats: formatBreakdown({
+      questions: reviewQuestions.map((question) => ({
+        id: question.id,
+        marks: question.marks,
+        type: question.type,
+        options: question.options,
+      })),
+      answers: reviewQuestions.map((question) => ({
+        questionId: question.id,
+        selectedOptionId: question.selectedOptionId,
+        selectedOptionIds: question.selectedOptionIds,
+        answerText: question.answerText,
+      })),
+    }),
   };
 
   return {
