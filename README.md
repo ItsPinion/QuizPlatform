@@ -256,7 +256,7 @@ quizplatform/
 │  │  └─ src/lib/              env parsing, error envelope
 │  └─ web/                     Next.js app (port 3000)
 │     ├─ src/app/              landing, /login, /register, /admin, /student
-│     ├─ src/app/admin/        layout · overview · analytics · users · quizzes · system
+│     ├─ src/app/admin/        layout · overview · analytics · users · quizzes · system · profile
 │     ├─ src/app/student/      dashboard · quizzes · attempt/[id] · results · review · leaderboard
 │     ├─ src/lib/session.ts    server-side session lookup (cookie → API)
 │     ├─ src/lib/api-server.ts cookie-forwarding RPC client for admin pages
@@ -268,6 +268,7 @@ quizplatform/
 │     ├─ src/lib/security-headers.ts    CSP + hardening headers, tested without Next
 │     ├─ src/lib/deployment-params.ts   verdict/status/runtime labels for /admin/system
 │     ├─ src/lib/landing.ts   server-side /api/landing fetch, Zod-validated
+│     ├─ src/components/question-form.tsx   the four-format authoring form
 │     ├─ src/components/score-trend-chart.tsx  server-rendered SVG trend line
 │     ├─ src/components/activity-chart.tsx     fourteen-day CSS bar chart
 │     ├─ src/components/category-breakdown.tsx per-category averages
