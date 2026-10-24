@@ -1,5 +1,6 @@
 import type { LeaderboardResponse } from '@quiz/shared/leaderboard';
 
+import { BuildBadge } from '@/components/build-badge';
 import { PageHeader } from '@/components/cinema/page-header';
 import { Award, Medal, ShieldCheck, Sparkles, Trophy } from 'lucide-react';
 import Link from 'next/link';
@@ -77,9 +78,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
               <ShieldCheck />
               STUDENT
             </Badge>
-            <Badge variant="outline" className="hidden sm:inline-flex">
-              Day 12 · leaderboard
-            </Badge>
+            <BuildBadge className="hidden sm:inline-flex">Day 12 · leaderboard</BuildBadge>
           </>
         }
       />

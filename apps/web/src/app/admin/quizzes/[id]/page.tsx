@@ -1,5 +1,6 @@
 import type { QuestionListResponse } from '@quiz/shared/question';
 
+import { BuildBadge } from '@/components/build-badge';
 import { PageHeader } from '@/components/cinema/page-header';
 import type { CategoryListResponse, QuizDetailResponse } from '@quiz/shared/quiz';
 import { ArrowLeft, CalendarClock, EyeOff, ListChecks, ShieldCheck } from 'lucide-react';
@@ -88,7 +89,7 @@ export default async function AdminQuizPage({ params }: PageProps) {
                 ADMIN
               </Badge>
               <Badge variant={statusTone(quiz.status)}>{quiz.status}</Badge>
-              <Badge variant="outline">Day 6 · question authoring</Badge>
+              <BuildBadge>Day 6 · question authoring</BuildBadge>
             </>
           }
         />

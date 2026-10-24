@@ -1,5 +1,6 @@
 import type { CategoryListResponse } from '@quiz/shared/quiz';
 
+import { BuildBadge } from '@/components/build-badge';
 import { PageHeader } from '@/components/cinema/page-header';
 import { ArrowLeft, Plus, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
@@ -58,7 +59,7 @@ export default async function NewQuizPage() {
                 <ShieldCheck />
                 ADMIN
               </Badge>
-              <Badge variant="outline">Day 5 · quiz management</Badge>
+              <BuildBadge>Day 5 · quiz management</BuildBadge>
             </>
           }
         />

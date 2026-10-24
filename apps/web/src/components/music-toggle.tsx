@@ -3,6 +3,16 @@
 import { Music4, VolumeX } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import {
+  AMBIENCE_START_EVENTS,
+  ambienceToggleLabel,
+  ambienceTooltip,
+  MUSIC_STORAGE_KEY,
+  parseMusicPreference,
+  serializeMusicPreference,
+  shouldArmStarters,
+  type MusicPreference,
+} from '@/lib/ambience';
 import { cn } from '@/lib/utils';
 
 /**
@@ -22,18 +32,22 @@ import { cn } from '@/lib/utils';
  * Rules it follows, because sound on a page is a hostile thing when it is done
  * carelessly:
  *
- *   1. **Off by default**, and never autoplayed. Browsers block it anyway; we
- *      would rather not try.
- *   2. **The preference is remembered**, but resuming still waits for a gesture
- *      (the first click or key press anywhere) because an `AudioContext`
- *      created without one stays suspended.
- *   3. **The toggle is a real button** with `aria-pressed` and a name that says
+ *   1. **Off by default**, and never autoplayed on a first visit. A browser
+ *      would block it anyway; we would rather not try.
+ *   2. **A remembered choice is the whole answer.** Muted once means muted until
+ *      the visitor says otherwise: no starters are armed, nothing plays, and the
+ *      tooltip says the choice was remembered.
+ *   3. **When it *is* wanted, it starts at the earliest legal moment.** The graph
+ *      is built immediately (suspended, silent) so the first permitted resume is
+ *      instant, and every plausible interaction is listened for — a pointer
+ *      move, a key press, a tap, a wheel, a click — not just a click, and all of
+ *      them passive so nothing is ever blocked. The attempt is repeated on each
+ *      one until the context is actually running.
+ *   4. **The toggle is a real button** with `aria-pressed` and a name that says
  *      what state it is in, not what clicking will do.
- *   4. Stopping ramps the gain to zero before closing the context, so there is
+ *   5. Stopping ramps the gain to zero before closing the context, so there is
  *      no click in the speakers.
  */
-
-const STORAGE_KEY = 'quiz:music';
 
 /** A-minor pentatonic: the notes that cannot sound wrong together. */
 const BELL_NOTES = [440, 523.25, 587.33, 659.25, 783.99];
@@ -194,29 +208,49 @@ function createEngine(): Engine | null {
 
 export function MusicToggle({ className }: { className?: string }) {
   const engine = useRef<Engine | null>(null);
+  const [preference, setPreference] = useState<MusicPreference>('unset');
   const [playing, setPlaying] = useState(false);
-  const [wanted, setWanted] = useState(false);
 
-  const start = useCallback(async () => {
-    if (engine.current) return;
+  /** Resume whatever graph exists; report whether it is actually running. */
+  const ensureRunning = useCallback(async (): Promise<boolean> => {
+    const current = engine.current;
 
-    const created = createEngine();
+    if (!current) return false;
 
-    if (!created) return;
-
-    engine.current = created;
-
-    // A context created before a gesture lands suspended; resume it here.
-    if (created.context.state === 'suspended') {
+    if (current.context.state !== 'running') {
       try {
-        await created.context.resume();
+        // Inside an interaction handler this is the call that matters; outside
+        // one the browser simply refuses, and a later attempt tries again.
+        await current.context.resume();
       } catch {
-        // The browser still wants a gesture. The toggle will try again.
+        return false;
       }
     }
 
-    setPlaying(created.context.state === 'running');
+    const running = engine.current?.context.state === 'running';
+    setPlaying(Boolean(running));
+
+    return Boolean(running);
   }, []);
+
+  /**
+   * Build the graph if it does not exist, then resume it.
+   *
+   * Building early is the latency trick: a suspended context is silent, and
+   * creating the oscillators now means the first permitted resume is a single
+   * call rather than a graph construction.
+   */
+  const start = useCallback(async (): Promise<boolean> => {
+    if (!engine.current) {
+      const created = createEngine();
+
+      if (!created) return false;
+
+      engine.current = created;
+    }
+
+    return ensureRunning();
+  }, [ensureRunning]);
 
   const stop = useCallback(() => {
     engine.current?.stop();
@@ -224,35 +258,78 @@ export function MusicToggle({ className }: { className?: string }) {
     setPlaying(false);
   }, []);
 
-  // Remember the preference; do not act on it until a gesture makes it legal.
+  // Read the remembered choice once. Until it is read the toggle is off, so a
+  // stored `on` cannot start anything before the component has decided to.
   useEffect(() => {
-    let stored = false;
+    let stored: MusicPreference = 'unset';
 
     try {
-      stored = window.localStorage.getItem(STORAGE_KEY) === 'on';
+      stored = parseMusicPreference(window.localStorage.getItem(MUSIC_STORAGE_KEY));
     } catch {
-      stored = false;
+      // Private mode: no preference, which means off.
+      stored = 'unset';
     }
 
-    if (!stored) return;
+    setPreference(stored);
+  }, []);
 
-    setWanted(true);
+  /**
+   * Music is wanted: start it as early as the browser allows.
+   *
+   * The graph is created immediately and resumed immediately — that succeeds
+   * outright when the visitor has already interacted with the page, or when the
+   * browser is lenient. If it does not, every plausible interaction is listened
+   * for, so a pointer move, a key press, a tap, a wheel or a click all count,
+   * not only a click. The listeners come off the moment the context is running.
+   */
+  useEffect(() => {
+    if (!shouldArmStarters(preference)) return;
 
-    const resume = () => {
-      window.removeEventListener('pointerdown', resume);
-      window.removeEventListener('keydown', resume);
-      void start();
+    let running = false;
+    let detached = false;
+
+    const detach = () => {
+      if (detached) return;
+
+      detached = true;
+
+      for (const type of AMBIENCE_START_EVENTS) {
+        window.removeEventListener(type, attempt);
+      }
     };
 
-    window.addEventListener('pointerdown', resume, { once: true });
-    window.addEventListener('keydown', resume, { once: true });
+    const settle = () => {
+      running = true;
+      setPlaying(true);
+      detach();
+    };
+
+    function attempt() {
+      if (running) return;
+
+      void ensureRunning().then((ok) => {
+        if (ok) settle();
+      });
+    }
+
+    for (const type of AMBIENCE_START_EVENTS) {
+      window.addEventListener(type, attempt, { passive: true });
+    }
+
+    void start().then((ok) => {
+      if (ok) settle();
+    });
 
     return () => {
-      window.removeEventListener('pointerdown', resume);
-      window.removeEventListener('keydown', resume);
-    };
-  }, [start]);
+      detached = true;
 
+      for (const type of AMBIENCE_START_EVENTS) {
+        window.removeEventListener(type, attempt);
+      }
+    };
+  }, [preference, ensureRunning, start]);
+
+  // Leaving the page stops the sound; coming back starts from the preference.
   useEffect(() => {
     return () => {
       engine.current?.stop();
@@ -260,40 +337,39 @@ export function MusicToggle({ className }: { className?: string }) {
     };
   }, []);
 
-  const toggle = () => {
-    if (playing) {
-      stop();
-      setWanted(false);
+  const persist = (next: 'on' | 'muted') => {
+    try {
+      window.localStorage.setItem(MUSIC_STORAGE_KEY, serializeMusicPreference(next));
+    } catch {
+      // Private mode: the choice simply does not survive the tab.
+    }
+  };
 
-      try {
-        window.localStorage.setItem(STORAGE_KEY, 'off');
-      } catch {
-        // Private mode: the preference simply does not persist.
-      }
+  const toggle = () => {
+    if (preference === 'on') {
+      stop();
+      setPreference('muted');
+      persist('muted');
 
       return;
     }
 
-    setWanted(true);
-
-    try {
-      window.localStorage.setItem(STORAGE_KEY, 'on');
-    } catch {
-      // As above.
-    }
-
+    setPreference('on');
+    persist('on');
+    // Inside the click, so this resume is the one the browser is most likely to
+    // grant; the effect above retries on any later interaction.
     void start();
   };
 
-  const active = playing || wanted;
+  const active = preference === 'on';
 
   return (
     <button
       type="button"
       onClick={toggle}
-      aria-pressed={playing}
-      aria-label={playing ? 'Turn off library ambience' : 'Play library ambience'}
-      title={playing ? 'Library ambience: on' : 'Library ambience: off'}
+      aria-pressed={active}
+      aria-label={ambienceToggleLabel(active)}
+      title={ambienceTooltip(playing, preference)}
       className={cn(
         'group inline-flex h-11 items-center gap-2 rounded-full border border-white/25 bg-transparent px-4 text-[10px] tracking-[0.2em] text-gray-300 uppercase transition-colors outline-none hover:border-white/60 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50',
         active && 'border-white/60 bg-white/8 text-white',
@@ -309,7 +385,7 @@ export function MusicToggle({ className }: { className?: string }) {
       ) : (
         <VolumeX aria-hidden className="size-3.5" />
       )}
-      <span className="hidden sm:inline">{playing ? 'Ambience' : 'Music'}</span>
+      <span className="hidden sm:inline">{active ? 'Ambience' : 'Music'}</span>
       <Music4 aria-hidden className="size-3.5 sm:hidden" />
     </button>
   );

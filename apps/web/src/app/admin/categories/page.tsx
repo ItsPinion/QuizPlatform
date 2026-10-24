@@ -1,5 +1,6 @@
 import type { CategoryListResponse } from '@quiz/shared/quiz';
 
+import { BuildBadge } from '@/components/build-badge';
 import { PageHeader } from '@/components/cinema/page-header';
 import { FolderTree, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
@@ -52,7 +53,7 @@ export default async function AdminCategoriesPage() {
               <ShieldCheck />
               ADMIN
             </Badge>
-            <Badge variant="outline">Day 6 · categories &amp; questions</Badge>
+            <BuildBadge>Day 6 · categories &amp; questions</BuildBadge>
           </>
         }
       />

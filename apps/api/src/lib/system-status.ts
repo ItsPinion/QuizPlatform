@@ -7,7 +7,14 @@ import {
 } from '@quiz/shared/deployment';
 import { db, getDatabaseConfig, schema } from '@quiz/db';
 
-import { env, allowedOrigins, APP_VERSION } from './env';
+import {
+  env,
+  allowedOrigins,
+  APP_VERSION,
+  demoAccounts,
+  developmentFeatures,
+  runtimeMode,
+} from './env';
 import { RATE_RULES } from './rate-limit';
 
 /** When this process began serving — the same anchor the health probe reports. */
@@ -22,6 +29,7 @@ const processStartedAt = Date.now();
 export function environmentSnapshot(): EnvironmentSnapshot {
   return {
     nodeEnv: env.NODE_ENV,
+    runtimeMode,
     databaseUrl: env.TURSO_DATABASE_URL ?? env.DATABASE_URL ?? null,
     databaseToken: env.TURSO_AUTH_TOKEN ?? null,
     jwtSecret: env.JWT_SECRET ?? null,
@@ -51,6 +59,8 @@ export async function getSystemStatus(): Promise<SystemStatus> {
     version: APP_VERSION,
     runtime: `node ${process.version}`,
     nodeEnv: env.NODE_ENV,
+    runtimeMode,
+    demoFeatures: developmentFeatures,
     uptimeSeconds: Math.round((Date.now() - processStartedAt) / 1000),
     startedAt,
     memoryMb: Math.round((process.memoryUsage().rss / 1024 / 1024) * 10) / 10,
@@ -99,6 +109,7 @@ export async function getSystemStatus(): Promise<SystemStatus> {
       sessionTtlSeconds: SESSION_TTL_SECONDS,
       trustedOrigins: [...allowedOrigins],
       apiInternalUrl: process.env.API_INTERNAL_URL ?? null,
+      demoAccounts,
     },
     summary,
   };

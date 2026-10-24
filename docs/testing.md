@@ -3,7 +3,7 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test         # 1,112 unit + integration tests across the four workspaces
+bun run test         # 1,164 unit + integration tests across the four workspaces
 bun run test:e2e     # 77 checks against a real HTTP server (own process, own port)
 bun run test:spec    # 220 probes against a running API + web (see the audit below)
 bun run deploy:check # the deployment gate (see docs/deployment.md)
@@ -18,12 +18,12 @@ tests.
 
 ## What runs where
 
-| Workspace      | Tests | Focus                                                                                                                                                                                                                       |
-| -------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@quiz/shared` | 386   | auth + content contracts, the four question formats, attempt clocks, the grader, dashboard, analytics, ranking, deployment rules, availability, passwords, certificates, email, CSV import of every format, `.xlsx` reading |
-| `@quiz/db`     | 63    | migrations replayed from scratch, schema constraints, seed integrity (all four formats present in the seed), Drizzle Kit wiring                                                                                             |
-| `@quiz/api`    | 355   | health/readiness, auth, guards, content, the four formats end to end, taking, grading, reviewing, stats, analytics, board, system, account, import, outbox                                                                  |
-| `@quiz/web`    | 308   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers, question-format helpers, the logo geometry, dropdown placement, the portalled select and category combobox, theming           |
+| Workspace      | Tests | Focus                                                                                                                                                                                                                                                      |
+| -------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@quiz/shared` | 403   | auth + content contracts, the four question formats, attempt clocks, the grader, dashboard, analytics, ranking, deployment and runtime-mode rules, availability, passwords, certificates, email, CSV import of every format, `.xlsx` reading               |
+| `@quiz/db`     | 63    | migrations replayed from scratch, schema constraints, seed integrity (all four formats present in the seed), Drizzle Kit wiring                                                                                                                            |
+| `@quiz/api`    | 363   | health/readiness, auth, guards, content, the four formats end to end, taking, grading, reviewing, stats, analytics, board, system, account, import, outbox, the origin policy in both modes                                                                |
+| `@quiz/web`    | 335   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers, question-format helpers, the logo geometry, dropdown placement, the portalled select and category combobox, theming, the ambience preference and start rules |
 
 Run one workspace at a time when you are iterating:
 
@@ -347,12 +347,58 @@ areas. Every one assumes a hostile caller; none of them re-asserts a happy path 
   limited to self plus the preview hosts, HSTS only in production, and the deliberate absence of
   `X-Frame-Options`.
 
+### Runtime modes and the production surface
+
+The switch that decides what a deployment may show is tested in both directions, because "off in
+production" is a security property rather than a preference.
+
+- **Resolution** (`@quiz/shared/src/environment.test.ts`, 15) — unset means production; `NODE_ENV`
+  is a fallback only in the unambiguous directions (`development`, `test`); an explicit `ENV_NODE`
+  wins over `NODE_ENV` either way; `prod`/`dev`/`live`/`showcase` are accepted spellings; a typo
+  (`staging`) resolves to **production** and reports the offending value; a blank value is ignored.
+- **The gates** — `developmentFeaturesEnabled` is true for development and demo only;
+  `demoAccountsEnabled` is false in production whatever `DEMO_ACCOUNTS` says, and `0` still hides
+  them in development.
+- **The origin policy** (`@quiz/api/src/__tests__/origins.test.ts`, 8) — a preview host is allowed
+  in development and refused in production, `e2b.app.example.com` is not a preview host, the
+  configured origin always passes, and `null`/unparseable/foreign origins never do. The file also
+  asserts that the suite itself runs as a development surface, so the fixtures cannot silently
+  change meaning.
+- **The deployment rule** (`@quiz/shared/src/deployment.test.ts`, +3) — `runtime-mode` passes in
+  production, warns in development and demo, and skips when a surface did not report a mode.
+
+- **The web's own view** (`@quiz/web/src/lib/runtime.test.ts`, 5) — the module re-imported
+  against a stubbed environment: production when nothing is set, production when `NODE_ENV` says so,
+  development from `NODE_ENV=development`, `ENV_NODE=demo` winning over `NODE_ENV=production`, and a
+  typo narrowing to production.
+
+The header's session state machine is tested in a DOM too
+(`apps/web/src/lib/use-session.test.ts`, 5): a server seed repaints a header that
+still says "guest", `adoptSession` publishes the account a sign-in returns, a
+sign-out clears it, and a stale server render never overwrites a live session.
+`apps/web/src/components/register-form.test.ts` (1) mounts the form beside a
+guest-seeded header, fills it, submits, and asserts the header reads "My
+dashboard" before any navigation — the reported bug, and it fails without the
+fix.
+
+The toggle itself is tested against a stand-in `AudioContext`
+(`apps/web/src/components/music-toggle.test.ts`, 6): a stored `on` builds a
+suspended graph and a **pointer move** (and a key press) starts it once the
+browser allows, a first visit stays silent until the button is pressed, a
+remembered mute never builds a graph at all, and pressing the button again
+stores `muted`.
+
+The ambience toggle's decisions are tested without an `AudioContext`
+(`@quiz/web/src/lib/ambience.test.ts`, 10): the stored `on`/`muted`/`off`/junk values, the round
+trip, the "only `on` arms the starters" rule, the breadth of the start-event list (a pointer move
+and a key press, not just a click), and the wording of the label and of the waiting/muted tooltips.
+
 ### Deployment coverage (Day 14)
 
 The deployment gate is a pure function, so it is tested as one — no process, no database, no HTTP.
-`packages/shared/src/deployment.test.ts` has **22** cases; the API and the page add **7** and **15**.
+`packages/shared/src/deployment.test.ts` has **25** cases; the API and the page add **7** and **15**.
 
-- **Every verdict path** — all eight checks passing → `ready`; a single warning → `attention`; a single
+- **Every verdict path** — all nine checks passing → `ready`; a single warning → `attention`; a single
   failure → `blocked` (a warning never outranks a failure).
 - **The environment rules, one test each** — a missing database URL fails; a `file:` URL fails in
   production and warns in development; a remote URL with an empty token fails; the token check is
@@ -362,7 +408,7 @@ The deployment gate is a pure function, so it is tested as one — no process, n
   limit and an out-of-range body cap warn while their defaults pass.
 - **The contract** — the id order is fixed (`database-url` … `body-limit`), every result carries a
   label, a detail and a nullable hint, `summarizeChecks` counts per status, and `summaryLabel` reads
-  `8 of 8 checks pass` / `7 of 8 checks pass · 1 warning`.
+  `9 of 9 checks pass` / `8 of 9 checks pass · 1 warning`.
 - **The system report** (`@quiz/api`, 7) — `/api/admin/system` returns the schema-validated document,
   its counts equal the five table counts, the checks are honest about a `file:` database (verdict
   `attention` in a test process), no token/secret/hash appears anywhere in the serialised body, the

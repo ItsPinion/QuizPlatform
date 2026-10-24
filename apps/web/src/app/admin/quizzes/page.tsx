@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, EyeOff, ListChecks, Plus, Search, ShieldCheck } 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { BuildBadge } from '@/components/build-badge';
 import { PageHeader } from '@/components/cinema/page-header';
 import { QuizPublishButton } from '@/components/quiz-publish-button';
 import { StatCard } from '@/components/stat-card';
@@ -76,9 +77,7 @@ export default async function AdminQuizzesPage({ searchParams }: PageProps) {
               <ShieldCheck />
               ADMIN
             </Badge>
-            <Badge variant="outline" className="hidden sm:inline-flex">
-              Day 5 · quiz management
-            </Badge>
+            <BuildBadge className="hidden sm:inline-flex">Day 5 · quiz management</BuildBadge>
             <Link
               href="/admin/quizzes/new"
               className={cn(buttonVariants({ size: 'sm' }), 'h-10 rounded-full px-5')}

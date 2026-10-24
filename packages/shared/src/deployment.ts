@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { runtimeModeSchema, type RuntimeMode } from './environment';
+
 /**
  * Deployment readiness (Day 14).
  *
@@ -54,6 +56,11 @@ export type DeploymentSummary = z.infer<typeof deploymentSummarySchema>;
  */
 export interface EnvironmentSnapshot {
   nodeEnv: string;
+  /**
+   * The `ENV_NODE` mode, when the caller knows it. Absent means "not reported"
+   * and the rule is skipped — never that the environment is production.
+   */
+  runtimeMode?: RuntimeMode | null;
   databaseUrl?: string | null;
   databaseToken?: string | null;
   jwtSecret?: string | null;
@@ -225,7 +232,7 @@ export function evaluateEnvironment(snapshot: EnvironmentSnapshot): DeploymentCh
         'web-origin',
         'Web origin',
         'warn',
-        'WEB_ORIGIN is not set, so only the localhost defaults are trusted.',
+        'WEB_ORIGIN is not set, so the API falls back to http://localhost:3000 and trusts nothing else.',
         'Set WEB_ORIGIN to the public URL of the web app.',
       ),
     );
@@ -307,6 +314,36 @@ export function evaluateEnvironment(snapshot: EnvironmentSnapshot): DeploymentCh
         snapshot.nodeEnv === 'test' ? 'skip' : 'warn',
         `NODE_ENV=${snapshot.nodeEnv} — development behaviour (pretty JSON, non-Secure cookies).`,
         'Set NODE_ENV=production on the deployed service.',
+      ),
+    );
+  }
+
+  /* ----------------------------- demo surface ---------------------------- */
+
+  const mode = snapshot.runtimeMode ?? null;
+
+  if (!mode) {
+    checks.push(
+      check('runtime-mode', 'Demo surface', 'skip', 'Not reported by this surface.', null),
+    );
+  } else if (mode === 'production') {
+    checks.push(
+      check(
+        'runtime-mode',
+        'Demo surface',
+        'pass',
+        'ENV_NODE is unset or production: demo logins, build-plan badges and preview hosts are off.',
+        null,
+      ),
+    );
+  } else {
+    checks.push(
+      check(
+        'runtime-mode',
+        'Demo surface',
+        'warn',
+        `ENV_NODE=${mode}: demo logins, build-plan badges and preview hosts are on.`,
+        'Unset ENV_NODE (or set it to production) on a public deployment.',
       ),
     );
   }
@@ -410,6 +447,10 @@ export const systemStatusSchema = z.object({
     version: z.string(),
     runtime: z.string(),
     nodeEnv: z.string(),
+    /** `ENV_NODE`, resolved: what this process is allowed to show. */
+    runtimeMode: runtimeModeSchema,
+    /** True only in a development or demo environment. */
+    demoFeatures: z.boolean(),
     uptimeSeconds: z.number(),
     startedAt: z.string(),
     memoryMb: z.number(),
@@ -438,6 +479,8 @@ export const systemStatusSchema = z.object({
     sessionTtlSeconds: z.number(),
     trustedOrigins: z.array(z.string()),
     apiInternalUrl: z.string().nullable(),
+    /** Are the seeded demo logins advertised right now? */
+    demoAccounts: z.boolean(),
   }),
   summary: deploymentSummarySchema,
 });

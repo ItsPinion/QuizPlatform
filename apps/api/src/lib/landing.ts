@@ -15,7 +15,7 @@ import { db, getDatabaseConfig, schema } from '@quiz/db';
 import { QUESTION_TYPES } from '@quiz/shared/question-type';
 
 import { classifyDatabaseError } from './db-errors';
-import { APP_VERSION, env } from './env';
+import { APP_VERSION, demoAccounts, env, runtimeMode } from './env';
 
 const { attempts, categories, options, questions, quizzes, users } = schema;
 
@@ -154,7 +154,7 @@ export async function buildLandingPayload(): Promise<LandingPayload> {
 
   const shape = buildShape(published);
 
-  const [sampleQuestion, sampleResult, demoAccounts] = await Promise.all([
+  const [sampleQuestion, sampleResult, demoLogins] = await Promise.all([
     pickQuestion(published),
     pickResult(),
     resolveDemoAccounts(),
@@ -172,6 +172,10 @@ export async function buildLandingPayload(): Promise<LandingPayload> {
       nodeEnv: env.NODE_ENV,
       uptimeSeconds: Math.round(process.uptime()),
     },
+    runtime: {
+      mode: runtimeMode,
+      demoFeatures: demoEnabled(),
+    },
     database: { ...config, connected: true, latencyMs },
     counts,
     shape,
@@ -184,7 +188,7 @@ export async function buildLandingPayload(): Promise<LandingPayload> {
     formats,
     sampleQuestion,
     sampleResult,
-    demo: { enabled: demoEnabled(), accounts: demoAccounts },
+    demo: { enabled: demoEnabled(), accounts: demoLogins },
     unavailableReason: null,
   };
 }
@@ -334,9 +338,16 @@ async function pickResult(): Promise<LandingResult | null> {
   };
 }
 
-/** `DEMO_ACCOUNTS=0` turns the printed credentials off. On by default: this is a demo. */
+/**
+ * Are the printed credentials allowed on this deployment?
+ *
+ * Two keys, both of which have to be turned: the environment has to be a
+ * development or demo one (`ENV_NODE`), *and* `DEMO_ACCOUNTS` must not be `0`.
+ * A production deployment therefore cannot publish a way in even if the flag is
+ * left at `1` — the gate lives in `@quiz/shared/environment`, not here.
+ */
 export function demoEnabled(): boolean {
-  return process.env.DEMO_ACCOUNTS !== '0';
+  return demoAccounts;
 }
 
 /**
@@ -415,6 +426,10 @@ export function emptyLandingPayload(reason: unknown): LandingPayload {
       runtime: `node ${process.version}`,
       nodeEnv: env.NODE_ENV,
       uptimeSeconds: Math.round(process.uptime()),
+    },
+    runtime: {
+      mode: runtimeMode,
+      demoFeatures: demoEnabled(),
     },
     database: { ...safeConfig(), connected: false, latencyMs: null },
     counts: {

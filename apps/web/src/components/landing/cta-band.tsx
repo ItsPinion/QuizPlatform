@@ -119,9 +119,11 @@ export function CtaBand({
               </>
             ) : (
               <p className="text-muted-foreground border-border/60 bg-background/40 rounded-lg border px-3 py-3 text-[11.5px] leading-relaxed">
-                {demo?.enabled === false
-                  ? 'Demo credentials are not published on this deployment (DEMO_ACCOUNTS=0).'
-                  : 'No demo accounts in this database — run bun run db:seed to load them.'}
+                {payload?.runtime.demoFeatures === false
+                  ? 'This deployment does not publish demo credentials. Sign in with the account you registered with.'
+                  : demo?.enabled === false
+                    ? 'Demo credentials are switched off on this deployment (DEMO_ACCOUNTS=0).'
+                    : 'No demo accounts in this database yet — run bun run db:seed to load them.'}
               </p>
             )}
           </div>

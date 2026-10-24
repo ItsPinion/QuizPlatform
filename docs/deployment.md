@@ -8,10 +8,10 @@ This milestone adds four things:
 
 | File                                     | What it is                                                                      |
 | ---------------------------------------- | ------------------------------------------------------------------------------- |
-| `packages/shared/src/deployment.ts`      | The eight rules, the verdict, the response schema — pure, no `process.env`      |
+| `packages/shared/src/deployment.ts`      | The nine rules, the verdict, the response schema — pure, no `process.env`       |
 | `apps/api/src/lib/system-status.ts`      | A redacted self-report: what the process is, what it is connected to, the rules |
 | `apps/web/src/app/admin/system/page.tsx` | The operator console — the same report, readable                                |
-| `scripts/deploy-check.ts`                | `bun run deploy:check`: the same rules locally, eight live probes against a URL |
+| `scripts/deploy-check.ts`                | `bun run deploy:check`: the same rules locally, nine live probes against a URL  |
 
 Plus `Dockerfile`, `docs/deployment.md` (this page), the `#deployment` section on the landing page and
 the environment matrix in `.env.example`.
@@ -64,7 +64,8 @@ environment — real environment variables win, which is what a hosting platform
 
 | Variable                         | Read by  | Production                     | Default                 | Notes                                                                  |
 | -------------------------------- | -------- | ------------------------------ | ----------------------- | ---------------------------------------------------------------------- |
-| `NODE_ENV`                       | both     | **required** `production`      | `development`           | Turns off pretty JSON and marks the cookie `Secure`                    |
+| `NODE_ENV`                       | both     | **required** `production`      | `development`           | Secure cookies and React's production build — _not_ the demo switch    |
+| `ENV_NODE`                       | both     | **leave unset** (=production)  | `production`            | Demo logins, build badges, preview origins. See `runtime-modes.md`     |
 | `TURSO_DATABASE_URL`             | API, CLI | **required**                   | —                       | `libsql://…` in production; `file:` only for local work and tests      |
 | `TURSO_AUTH_TOKEN`               | API, CLI | **required**                   | —                       | Mint per database; rotate by minting and redeploying                   |
 | `JWT_SECRET`                     | API      | **required**, ≥32 characters   | insecure dev secret     | `openssl rand -base64 48`. Changing it signs everyone out              |
@@ -78,29 +79,35 @@ environment — real environment variables win, which is what a hosting platform
 | `DATABASE_URL`                   | API, CLI | optional                       | —                       | Alias for `TURSO_DATABASE_URL`, for platforms that insist on this name |
 | `NEXT_PUBLIC_API_BASE_URL`       | web      | optional, usually empty        | `''` (same origin)      | Only for a split deployment where the browser calls another origin     |
 | `SKIP_DB_PREFLIGHT`              | CLI      | never                          | —                       | `1` lets `drizzle-kit generate` run without credentials                |
-| `DEMO_ACCOUNTS`                  | API      | **set to `0`**                 | `1` (published)         | `0` removes the seeded logins from `/api/landing` and the landing page |
+| `DEMO_ACCOUNTS`                  | API      | irrelevant — off regardless    | `1` in dev/demo         | `0` hides the seeded logins in development; cannot enable them in prod |
 
 `.env.example` is the same list as a template. `bun run deploy:check` prints the effective values
 (names, lengths, redacted URLs — never the secrets) without starting anything.
 
+`ENV_NODE` is the one switch worth reading twice: it says what a deployment is _allowed to show_,
+and it defaults to production when it is missing — including when it is misspelled, which prints a
+warning and narrows rather than widens. [`runtime-modes.md`](runtime-modes.md) has the resolution
+table and the full feature matrix.
+
 ---
 
-## 4. The eight checks
+## 4. The nine checks
 
 `evaluateEnvironment(snapshot)` in `packages/shared/src/deployment.ts` runs these in a fixed order. It
 takes a plain object rather than reading `process.env`, so a test can describe a production
 deployment in three lines and the API can hand over exactly what it is willing to expose.
 
-| #   | id                 | Label              | Fails when                                                      | Warns when                                        |
-| --- | ------------------ | ------------------ | --------------------------------------------------------------- | ------------------------------------------------- |
-| 1   | `database-url`     | Database URL       | unset; in production a `file:` URL; not a libsql/https/file URL | a `file:` URL outside production                  |
-| 2   | `database-token`   | Database token     | a remote URL with an empty token                                | — (skipped for `file:`)                           |
-| 3   | `jwt-secret`       | Session secret     | unset in production; under 32 characters in production          | unset or short outside production                 |
-| 4   | `web-origin`       | Web origin         | not a valid http(s) URL                                         | unset; plain `http` in production                 |
-| 5   | `api-internal-url` | API proxy target   | not a valid http(s) URL                                         | unset, so the web app keeps its localhost default |
-| 6   | `node-env`         | Runtime mode       | —                                                               | anything but `production` (skipped under `test`)  |
-| 7   | `rate-limit`       | Sign-in rate limit | —                                                               | the limiter is disabled (`0`)                     |
-| 8   | `body-limit`       | Request body cap   | —                                                               | outside 1 KB – 5 MB                               |
+| #   | id                 | Label              | Fails when                                                      | Warns when                                                     |
+| --- | ------------------ | ------------------ | --------------------------------------------------------------- | -------------------------------------------------------------- |
+| 1   | `database-url`     | Database URL       | unset; in production a `file:` URL; not a libsql/https/file URL | a `file:` URL outside production                               |
+| 2   | `database-token`   | Database token     | a remote URL with an empty token                                | — (skipped for `file:`)                                        |
+| 3   | `jwt-secret`       | Session secret     | unset in production; under 32 characters in production          | unset or short outside production                              |
+| 4   | `web-origin`       | Web origin         | not a valid http(s) URL                                         | unset; plain `http` in production                              |
+| 5   | `api-internal-url` | API proxy target   | not a valid http(s) URL                                         | unset, so the web app keeps its localhost default              |
+| 6   | `node-env`         | Runtime mode       | —                                                               | anything but `production` (skipped under `test`)               |
+| 7   | `runtime-mode`     | Demo surface       | —                                                               | `ENV_NODE` is `development` or `demo`; skipped when unreported |
+| 8   | `rate-limit`       | Sign-in rate limit | —                                                               | the limiter is disabled (`0`)                                  |
+| 9   | `body-limit`       | Request body cap   | —                                                               | outside 1 KB – 5 MB                                            |
 
 **Verdict.** Any `fail` → `blocked`. Otherwise any `warn` → `attention`. Otherwise `ready`. A `skip`
 is neutral: it means "this surface does not have that fact", not "fine".
@@ -294,7 +301,7 @@ checklist nobody runs.
 - [ ] `bun run deploy:check` says `ready` (or the warnings are understood).
 - [ ] Migrations applied **before** the new API started, and the API log shows no migration attempt.
 - [ ] `/api/health/db` reports `turso`, latency in the tens of milliseconds, and counts that match.
-- [ ] `deploy:check --url` passes all eight probes against the public hostname.
+- [ ] `deploy:check --url` passes all nine probes against the public hostname.
 - [ ] Admin sign-in works; `/admin/system` agrees with the CLI.
 - [ ] One real student attempt: start → answer → submit → result → review → leaderboard.
 - [ ] An expired attempt is refused, not graded.
@@ -313,7 +320,7 @@ checklist nobody runs.
 | `service`  | name, version, runtime, `NODE_ENV`, uptime, start time, RSS memory                                               |
 | `database` | `target` (`turso` / `file` / `unconfigured`), a redacted `urlHint`, latency, row counts                          |
 | `settings` | the effective limits: rate limit, window, registration cap, body cap, session TTL, trusted origins, proxy target |
-| `summary`  | the verdict plus the eight checks with their detail and remediation hint                                         |
+| `summary`  | the verdict plus the nine checks with their detail and remediation hint                                          |
 
 What it **never** contains: a token, a secret, a password hash, or a full database URL with
 credentials. The `urlHint` is produced by `getDatabaseConfig()` with the same redaction the health
@@ -370,7 +377,9 @@ alone is safe unless the schema changed; the readiness probe will say so.
 | `✖ Invalid environment configuration` at boot                                | a value failed the Zod schema (`API_PORT` out of range, a bad number)                   | read the printed issue list; every variable has a default               |
 | `deploy:check` exits `2`                                                     | the script could not run (bad `--url`)                                                  | pass an absolute `http(s)` URL                                          |
 | The landing page shows dashes and "no published question"                    | `/api/landing` could not read the database, or nothing is published                     | read the page's warning bar; then `/api/health/db` and the API log      |
-| The landing page prints demo passwords                                       | `DEMO_ACCOUNTS` is unset, and unset means on                                            | set `DEMO_ACCOUNTS=0` before a public deploy                            |
+| The landing page prints demo passwords                                       | `ENV_NODE=demo` or `development` on a public host                                       | unset `ENV_NODE`; production never publishes them, whatever else is set |
+| A `Day N · …` badge appears in the console on a public deployment            | the web process has `ENV_NODE` set, or was built with it                                | unset it and rebuild the web app                                        |
+| `403 CROSS_ORIGIN_BLOCKED` from the sandbox preview host                     | `ENV_NODE` is not set, so preview hosts are refused                                     | set `ENV_NODE=development` for the sandbox, never on a real deploy      |
 
 ---
 
@@ -430,7 +439,7 @@ still `QUEUED`, bounded per call, and is safe to call from a cron.
 - `bun run test` — **844** unit/integration tests across the four packages, including the 22 new
   deployment-rule tests, the 7 system-status tests and the 15 presentation-helper tests.
 - `bun run test:e2e` — **75** HTTP checks against a live seeded server, including `/api/admin/system`
-  (200 with eight checks and no secret in the payload; 403 for a student; 401 anonymous).
+  (200 with nine checks and no secret in the payload; 403 for a student; 401 anonymous).
 - `bun run deploy:check` — the production-shaped environment passes 8/8 and a bare checkout is
   blocked; both paths are exercised by hand in this milestone.
 - `bun run build` — the production build of both apps, then `next start` + `tsx src/index.ts` served

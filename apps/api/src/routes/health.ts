@@ -3,7 +3,7 @@ import type { DatabaseStatus, Health } from '@quiz/shared';
 import { Hono } from 'hono';
 
 import { classifyDatabaseError, describeError, isRejectedRequest } from '../lib/db-errors';
-import { APP_VERSION } from '../lib/env';
+import { APP_VERSION, developmentFeatures } from '../lib/env';
 import { errorBody } from '../lib/errors';
 
 const startedAt = Date.now();
@@ -76,7 +76,7 @@ export const healthRoutes = new Hono()
                 reason,
               },
             ),
-            ...(process.env.NODE_ENV === 'production' ? {} : { target: config.target }),
+            ...(developmentFeatures ? { target: config.target } : {}),
           },
           503,
         );
@@ -96,7 +96,7 @@ export const healthRoutes = new Hono()
               : 'The API is running but cannot reach the database.',
             { hint, reason },
           ),
-          ...(process.env.NODE_ENV === 'production' ? {} : { target: config.target }),
+          ...(developmentFeatures ? { target: config.target } : {}),
         },
         503,
       );

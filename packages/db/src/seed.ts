@@ -7,6 +7,7 @@ import { db } from './index';
 import { loadEnvFiles } from './load-env';
 import { resolveDatabaseConfig } from './env';
 import { certificateCode, normalizeCertificateCode } from '@quiz/shared/certificate';
+import { readRuntimeMode } from '@quiz/shared/environment';
 import type { QuestionType } from '@quiz/shared/question-type';
 import { certificateEmail, resultEmail, welcomeEmail } from '@quiz/shared/email';
 
@@ -116,6 +117,28 @@ async function resetData() {
 
 async function main() {
   const config = resolveDatabaseConfig();
+
+  /*
+   * A production deployment does not get demo data unless somebody says so
+   * twice.
+   *
+   * The seed writes fictional students, quizzes and graded attempts — useful to
+   * look at a laptop, wrong in a real database. `--force` is already the "I mean
+   * it" flag, so it doubles as the override here rather than inventing another.
+   */
+  const mode = readRuntimeMode({
+    ENV_NODE: process.env.ENV_NODE,
+    NODE_ENV: process.env.NODE_ENV,
+  }).mode;
+
+  if (mode === 'production' && config.target === 'turso' && !FORCE) {
+    console.error(
+      `✖ Refusing to seed demo data into ${config.urlHint}: this environment is production (ENV_NODE is unset).\n` +
+        '  A showcase deployment should set ENV_NODE=demo. To seed this database deliberately, re-run with --force.',
+    );
+    process.exit(1);
+  }
+
   console.log(`▸ Seeding ${config.urlHint} (${config.target})`);
 
   const existing = await db.select({ id: users.id }).from(users).limit(1);

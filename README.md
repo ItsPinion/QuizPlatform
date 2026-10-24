@@ -18,11 +18,14 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 > position always resolved — and a hardening pass: rate-limited sign-ins that cannot lock the real
 > owner out, a same-origin guard on every write, scoped JWTs, a body-size cap, `no-store` and a CSP —
 > with an adversarial suite that attacks each of the nine areas the spec names — and, last, a
-> deployment that can be checked rather than remembered: eight environment rules with one verdict,
+> deployment that can be checked rather than remembered: nine environment rules with one verdict,
 > a redacted system screen an operator can read, a `bun run deploy:check` gate that runs the same
-> rules locally and eight live probes against a real URL, one Dockerfile with two targets, and the
+> rules locally and nine live probes against a real URL, one Dockerfile with two targets, and the
 > runbook for migrate, verify and roll back.
-> **1,112 automated tests, a 77-check end-to-end smoke run and a 220-probe spec audit.** Feature complete: all fourteen days shipped.
+>
+> And a switch that fails closed: `ENV_NODE` is production unless a deployment says otherwise, so the
+> demo logins, the build-plan badges and the preview origins never leak into a real one.
+> **1,164 automated tests, a 77-check end-to-end smoke run and a 220-probe spec audit.** Feature complete: all fourteen days shipped.
 
 ---
 
@@ -314,7 +317,8 @@ quizplatform/
 │  ├─ admin-analytics.md         windows, definitions, queries, the cross-user sweep, charts
 │  ├─ leaderboard.md            metrics, periods, ranking rules, the screen, tests
 │  ├─ security.md               threat model, controls, rate limits, CSP, trade-offs
-│  ├─ deployment.md            env matrix, the eight checks, deploy order, rollback, runbook
+│  ├─ runtime-modes.md         ENV_NODE: production by default, what demo features are
+│  ├─ deployment.md            env matrix, the nine checks, deploy order, rollback, runbook
 │  ├─ ui.md                    the bento surface: primitives, motion rules, what was left out
 │  ├─ authorization.md         role model, guards, redirect rules, failure modes
 │  └─ testing.md               test inventory, manual QA, security trade-offs
@@ -392,22 +396,22 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 1,112 tests, all workspaces through Turbo
+bun run test                    # 1,164 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
 bun run test:e2e                # 77 checks against a live server + throwaway DB
 bun run test:spec               # 220 probes, one per spec promise (needs both servers up)
 bun run deploy:check            # the deployment gate (see docs/deployment.md)
 ```
 
-**1,112 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
+**1,164 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
 
-**`@quiz/shared`** (386) — scrypt record format, unique salts, correct/wrong passwords, unicode
+**`@quiz/shared`** (403) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
 auth contracts (trimming, lowercased emails, stripped unknown keys, the exact password policy,
 session constants), plus the Day 4 admin contracts: query coercion and defaults, the
 `updateUserSchema` refine that rejects an empty body while stripping fields the dashboard must
 never write, the credential-free user row shape, and the stats/list response schemas. Day 14 adds the
-deployment gate (`deployment.test.ts`, 22): each of the eight environment rules in both production and
+deployment gate (`deployment.test.ts`, 25): each of the nine environment rules in both production and
 development, every verdict path (a warning never outranks a failure), the fixed check order, and the
 summary arithmetic behind `5 of 6 checks pass · 1 warning`. `landing.test.ts` (16) covers the landing
 payload schema, the range and duration labels (`15–25 min`, `60–70%`, `57.1%`) and the headline-number
@@ -423,7 +427,7 @@ integrity (quiz/question/option counts, the per-format key rules, attempt percen
 marks and pass thresholds, answers matching option correctness, unique password hashes, enough
 history for the Day 10–12 dashboards).
 
-**`@quiz/api`** (355) — service banner, health payload shape, request IDs, security headers, CORS
+**`@quiz/api`** (363) — service banner, health payload shape, request IDs, security headers, CORS
 allow/deny, the DB readiness probe with live counts, credential-free URL hints, the 503 envelope when
 the database is unreachable, `/api/meta` roadmap, and the 404 error envelope. Day 14 adds the system
 report: the schema-validated document, counts that match the tables, checks that are honest about a
@@ -552,7 +556,7 @@ email search, empty values, unknown roles), pagination, both sorts, 422s for bad
 lookups, 404/422 handling, promotion/demotion, deactivation lockout and restoration, `SELF_LOCKOUT`
 for self-demotion and self-deactivation, and 401/403 on every admin route.
 
-**`@quiz/web`** (308) — the error-envelope narrowing every auth form relies on (API error codes,
+**`@quiz/web`** (335) — the error-envelope narrowing every auth form relies on (API error codes,
 Zod issue extraction, fallbacks for malformed bodies, network-error mapping), the Day 3 page guard
 rules, the Day 4 directory parameters, the Day 5 quiz helpers, the Day 6 question-form helpers, and
 the Day 7–9 student helpers: catalogue filter parsing with `toStudentQuery`/`quizzesHref` round-trips
@@ -575,7 +579,14 @@ further out than the window — and `select.test.ts` (6) plus `category-combobox
 real components in jsdom and prove the list is portalled to `<body>`, fixed and above the console's
 own layers rather than trapped under the next card. `dashboard-params.test.ts` also covers the
 dashboard's pass mark: it is averaged from the student's own catalogue, and the chart label becomes a
-range (`pass 60–70%`) when the catalogue disagrees with itself — there is no hardcoded 60 in the UI. `hero-params.test.ts` covers the
+range (`pass 60–70%`) when the catalogue disagrees with itself — there is no hardcoded 60 in the UI. `runtime.test.ts` (5) pins the web half of `ENV_NODE` — production when nothing is set, `demo` when it
+is set, and a typo narrowing rather than widening; `use-session.test.ts` (5) proves a server seed
+repaints a header that still says "guest", that `adoptSession` publishes a sign-in without a second
+request, and that sign-out clears it; `register-form.test.ts` (1) mounts the form next to a
+guest-seeded header and asserts the header reads "My dashboard" before any navigation. `ambience.test.ts`
+(10) covers the music preference and the start rules, and `music-toggle.test.ts` (6) proves in jsdom
+that a pointer move — not just a click — starts a wanted drone, that a remembered mute builds no audio
+graph at all, and that pressing the button again stores `muted`. `hero-params.test.ts` covers the
 landing page's two calls to action: a visitor is asked to sign up, a
 student is sent to the catalogue, an administrator to the console, and neither signed-in role is ever
 pointed at `/login`. `nav-sections.test.ts` covers the bar: segment-aware active matching
@@ -686,19 +697,20 @@ the demo logins: all of it comes from the payload. The components contain copy a
 
 `GET /api/landing` is public and `no-store`. It answers with:
 
-| Field               | Contents                                                                                                 |
-| ------------------- | -------------------------------------------------------------------------------------------------------- |
-| `service`           | name, version, runtime, `NODE_ENV`, uptime — the same values `/api/health` reports                       |
-| `database`          | `target`, redacted `urlHint`, `connected`, `latencyMs`                                                   |
-| `counts`            | users, categories, quizzes, published quizzes, questions, attempts, graded, passed, pass rate, average % |
-| `shape`             | the published catalogue's min/max/average duration, pass mark and question count                         |
-| `categories`        | name, total quizzes, published quizzes — drives the console shot                                         |
-| `quizzes`           | **published only**: title, category, difficulty, duration, pass mark, attempt limit, questions           |
-| `formats`           | questions per format, in enum order, zeros included — the landing page's four-format block               |
-| `sampleQuestion`    | the first question of the fullest published quiz — text, marks, options. **No key, no explanation**      |
-| `sampleResult`      | one graded attempt: marks, counts, percentage, pass flag, time taken. **No user, no join**               |
-| `demo`              | the seeded accounts **that exist in the users table**, or `enabled: false` when `DEMO_ACCOUNTS=0`        |
-| `unavailableReason` | `null`, or why the database could not be read                                                            |
+| Field               | Contents                                                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `service`           | name, version, runtime, `NODE_ENV`, uptime — the same values `/api/health` reports                                                               |
+| `runtime`           | `mode` (`production` \| `development` \| `demo`) and `demoFeatures` — the API's own `ENV_NODE` answer                                            |
+| `database`          | `target`, redacted `urlHint`, `connected`, `latencyMs`                                                                                           |
+| `counts`            | users, categories, quizzes, published quizzes, questions, attempts, graded, passed, pass rate, average %                                         |
+| `shape`             | the published catalogue's min/max/average duration, pass mark and question count                                                                 |
+| `categories`        | name, total quizzes, published quizzes — drives the console shot                                                                                 |
+| `quizzes`           | **published only**: title, category, difficulty, duration, pass mark, attempt limit, questions                                                   |
+| `formats`           | questions per format, in enum order, zeros included — the landing page's four-format block                                                       |
+| `sampleQuestion`    | the first question of the fullest published quiz — text, marks, options. **No key, no explanation**                                              |
+| `sampleResult`      | one graded attempt: marks, counts, percentage, pass flag, time taken. **No user, no join**                                                       |
+| `demo`              | the seeded accounts **that exist in the users table** — `enabled: false` in production, where nothing is published whatever `DEMO_ACCOUNTS` says |
+| `unavailableReason` | `null`, or why the database could not be read                                                                                                    |
 
 Three decisions keep it safe:
 
@@ -710,8 +722,10 @@ Three decisions keep it safe:
   `database.connected: false` and an `unavailableReason` (`emptyLandingPayload`). The page then shows
   its empty states and a thin warning bar — an honest blank, never an invented quiz.
 - **Demo logins are verified, not asserted.** `resolveDemoAccounts` intersects the seed fixture with
-  the actual `users` rows, so a reseeded or renamed database advertises nothing that does not work;
-  `DEMO_ACCOUNTS=0` hides the block entirely for a real deployment.
+  the actual `users` rows, so a reseeded or renamed database advertises nothing that does not work.
+  They are published only in a development or demo environment: `ENV_NODE` unset means production,
+  where `demo.enabled` is `false` and no flag can change it (see
+  [`docs/runtime-modes.md`](docs/runtime-modes.md)).
 
 The hero's two buttons come from `lib/hero-params.ts` and depend on the session: a visitor gets
 **Get started** (→ `/register`), a student gets **Take a quiz** (→ `/student/quizzes`), an
@@ -728,8 +742,10 @@ Below `lg` the links move into a drawer that traps Tab, closes on Escape and res
 The page also has a visual language beyond the data: a hand-drawn pixel bookshelf
 (`library-scene.tsx`), an ambient layer of aurora blobs, stars and rising dust (`atmosphere.tsx`),
 glowing borders and light sweeps, and a **Music** button in the header that synthesises a reading-room
-drone with Web Audio — off by default, never autoplayed, remembered once you turn it on. All of it is
-decorative, `aria-hidden`, compositor-only, and switched off under `prefers-reduced-motion`. See
+drone with Web Audio — off by default, never autoplayed on a first visit, the choice remembered once
+you make it, and a remembered mute is never overridden. Once music is wanted it starts at the
+earliest legal interaction and listens for a pointer move and a key press as well as a click. All of
+it is decorative, `aria-hidden`, compositor-only, and switched off under `prefers-reduced-motion`. See
 [`docs/ui.md`](docs/ui.md) §7.
 
 The hero's live pill starts from the server's snapshot and then polls `/api/health/db` once a minute,
@@ -1386,7 +1402,7 @@ Full detail is in [`docs/security.md`](docs/security.md).
 The platform is meant to leave the laptop, so the last milestone makes shipping a thing you can check.
 Every fact below is produced by the code, not by this document.
 
-### The gate: eight rules, one verdict
+### The gate: nine rules, one verdict
 
 `packages/shared/src/deployment.ts` exports `evaluateEnvironment(snapshot)` — a pure function over a
 plain object, so it runs before a build, inside the API and in a test with no process involved.
@@ -1399,11 +1415,26 @@ plain object, so it runs before a build, inside the API and in a test with no pr
 | 4   | Web origin         | not a valid http(s) URL                    | unset, or plain `http` in production              |
 | 5   | API proxy target   | not a valid http(s) URL                    | unset, so the localhost default stays             |
 | 6   | Runtime mode       | —                                          | `NODE_ENV` is not `production`                    |
-| 7   | Sign-in rate limit | —                                          | the limiter is disabled (`AUTH_RATE_LIMIT_MAX=0`) |
-| 8   | Request body cap   | —                                          | outside 1 KB – 5 MB                               |
+| 7   | Demo surface       | —                                          | `ENV_NODE` is `development` or `demo`             |
+| 8   | Sign-in rate limit | —                                          | the limiter is disabled (`AUTH_RATE_LIMIT_MAX=0`) |
+| 9   | Request body cap   | —                                          | outside 1 KB – 5 MB                               |
 
 Any failure → `blocked`, otherwise any warning → `attention`, otherwise `ready`. The asymmetry is the
-point: the same missing secret must stop a release and must not stop `bun dev`.
+point: the same missing secret must stop a release and must not stop `bun dev`. A showcase deployment
+therefore reports `attention` on purpose — it is publishing credentials.
+
+### Two modes, one switch
+
+`ENV_NODE` decides what a deployment may **show**: `production` (the default, including when the
+variable is missing), `development` (a laptop or CI) or `demo` (a showcase, deliberately). Demo
+logins, the `Day N · …` build-plan badges, preview-host origins, pretty JSON and the request log all
+live behind it; the CORS allowlist drops the localhost aliases in production, and `db:seed` refuses a
+remote database there unless forced. `NODE_ENV` keeps its own job — Secure cookies, React's
+development checks — and can never publish a password.
+
+The resolution table, the feature matrix and the operator surfaces are in
+[`docs/runtime-modes.md`](docs/runtime-modes.md). The short version: **unset means production**, a
+typo falls back to production with a warning, and an explicit `ENV_NODE` always wins.
 
 ### Three surfaces, one implementation
 
@@ -1456,7 +1487,9 @@ are in [`docs/deployment.md`](docs/deployment.md).
 
 | Variable                         | Required | Default                 | Used by                 |
 | -------------------------------- | -------- | ----------------------- | ----------------------- |
+| `ENV_NODE`                       | no       | `production`            | both                    |
 | `NODE_ENV`                       | in prod  | `development`           | both                    |
+| `DEMO_ACCOUNTS`                  | no       | `1` in dev/demo         | api (`0` hides them)    |
 | `TURSO_DATABASE_URL`             | yes      | —                       | db, api, drizzle-kit    |
 | `TURSO_AUTH_TOKEN`               | yes      | —                       | db, api, drizzle-kit    |
 | `DATABASE_URL`                   | no       | —                       | alias for the URL above |
@@ -1512,8 +1545,8 @@ Day 14 (done): deployment & docs. Eight environment rules in one pure function, 
 places — `bun run deploy:check` before a build, `GET /api/admin/system` from inside the process, and
 `deploy:check --url` over the wire after the deploy — with a verdict of `ready`, `attention` or
 `blocked`; a redacted system screen at `/admin/system`; one `Dockerfile` with `api` and `web` targets;
-and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 1,112 Vitest tests
-and a 75-check end-to-end smoke run.
+and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 1,164 Vitest tests
+and a 77-check end-to-end smoke run.
 
 Day 13 (done): testing & security. Rate limiting on the auth routes (a hard per-address block and a
 soft per-account one that can never lock the owner out), a same-origin guard on every state-changing

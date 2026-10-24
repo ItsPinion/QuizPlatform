@@ -22,6 +22,7 @@
  */
 import { evaluateEnvironment, summarizeChecks } from '@quiz/shared/deployment';
 import type { CheckStatus, DeploymentCheck } from '@quiz/shared/deployment';
+import { readRuntimeMode } from '@quiz/shared/environment';
 import { loadEnvFiles } from '@quiz/db/load-env';
 
 interface Check {
@@ -70,7 +71,13 @@ function localChecks(): DeploymentCheck[] {
   loadEnvFiles();
 
   return evaluateEnvironment({
-    nodeEnv: process.env.NODE_ENV ?? 'development',
+    // No default of `development` here: an unset mode is production, which is
+    // exactly what the API would run as.
+    nodeEnv: process.env.NODE_ENV ?? 'production',
+    runtimeMode: readRuntimeMode({
+      ENV_NODE: process.env.ENV_NODE,
+      NODE_ENV: process.env.NODE_ENV,
+    }).mode,
     databaseUrl: process.env.TURSO_DATABASE_URL ?? process.env.DATABASE_URL ?? null,
     databaseToken: process.env.TURSO_AUTH_TOKEN ?? null,
     jwtSecret: process.env.JWT_SECRET ?? null,
@@ -327,6 +334,12 @@ async function main() {
     if (!process.env.NODE_ENV || process.env.NODE_ENV !== 'production') {
       console.log(
         '  Tip: deployment platforms set NODE_ENV=production for you; locally it is usually unset.\n',
+      );
+    }
+
+    if (!process.env.ENV_NODE) {
+      console.log(
+        '  Note: ENV_NODE is unset, so this deployment runs as production (no demo logins or build badges).\n',
       );
     }
 

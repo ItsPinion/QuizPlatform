@@ -1,5 +1,6 @@
 import type { AdminAnalytics } from '@quiz/shared/analytics';
 
+import { BuildBadge } from '@/components/build-badge';
 import { PageHeader } from '@/components/cinema/page-header';
 import { percentChange } from '@quiz/shared/analytics';
 import {
@@ -75,7 +76,7 @@ export default async function AdminAnalyticsPage({ searchParams }: PageProps) {
                 <ShieldCheck />
                 ADMIN
               </Badge>
-              <Badge variant="outline">Day 11 · analytics</Badge>
+              <BuildBadge>Day 11 · analytics</BuildBadge>
             </>
           }
         />

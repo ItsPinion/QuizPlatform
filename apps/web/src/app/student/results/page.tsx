@@ -6,6 +6,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { BuildBadge } from '@/components/build-badge';
 import { PageHeader } from '@/components/cinema/page-header';
 import { StatCard } from '@/components/stat-card';
 import { Badge } from '@/components/ui/badge';
@@ -78,7 +79,7 @@ export default async function ResultsPage({ searchParams }: PageProps) {
         label="Student · the record"
         title="Your results"
         description="Every attempt, newest first. Open a finished one to walk the paper question by question — what you picked, what was right, and why."
-        aside={<Badge variant="outline">Day 9 · results &amp; review</Badge>}
+        aside={<BuildBadge>Day 9 · results &amp; review</BuildBadge>}
       />
 
       <div className="grid gap-3 sm:grid-cols-4">

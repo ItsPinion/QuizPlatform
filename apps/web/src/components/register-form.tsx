@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { client } from '@/lib/api';
 import { parseApiFailure, toApiFailure, type ApiFailure } from '@/lib/api-error';
 import { PASSWORD_RULES, passwordProgress } from '@/lib/auth-params';
+import { adoptSession } from '@/lib/use-session';
 import { cn } from '@/lib/utils';
 
 /**
@@ -95,6 +96,13 @@ export function RegisterForm() {
 
       // Straight into the catalogue: a brand-new account has nothing to see on a
       // dashboard yet, and the empty state is not the point of signing up.
+      //
+      // The account is published to the header *before* the navigation — the
+      // session snapshot on this page still says "guest", and without this the
+      // bar keeps showing "Sign up" to somebody who has just signed up.
+      const session = await res.json();
+
+      adoptSession(session.user);
       router.replace('/student/quizzes');
       router.refresh();
     } catch (cause) {

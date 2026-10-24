@@ -15,6 +15,7 @@ const GOOD_SECRET = 'a'.repeat(48);
 /** A deployment that should come out clean. */
 const production: EnvironmentSnapshot = {
   nodeEnv: 'production',
+  runtimeMode: 'production',
   databaseUrl: 'libsql://quiz-org.turso.io',
   databaseToken: 'token-value',
   jwtSecret: GOOD_SECRET,
@@ -40,6 +41,7 @@ describe('evaluateEnvironment', () => {
       'web-origin',
       'api-internal-url',
       'node-env',
+      'runtime-mode',
       'rate-limit',
       'body-limit',
     ]);
@@ -182,6 +184,24 @@ describe('summarizeChecks', () => {
     expect(summary.pass).toBeGreaterThan(0);
   });
 
+  it('says which demo surface the environment is running', () => {
+    expect(byId(production).get('runtime-mode')!.status).toBe('pass');
+
+    const dev = byId({ ...production, runtimeMode: 'development' }).get('runtime-mode')!;
+
+    expect(dev.status).toBe('warn');
+    expect(dev.detail).toMatch(/ENV_NODE=development/);
+    expect(dev.hint).toMatch(/production/i);
+
+    expect(byId({ ...production, runtimeMode: 'demo' }).get('runtime-mode')!.status).toBe('warn');
+  });
+
+  it('skips the demo rule when the surface did not report a mode', () => {
+    const entry = byId({ ...production, runtimeMode: undefined }).get('runtime-mode')!;
+
+    expect(entry.status).toBe('skip');
+  });
+
   it('counts every status once', () => {
     const summary = summarizeChecks(evaluateEnvironment(production));
 
@@ -207,6 +227,8 @@ describe('systemStatusSchema', () => {
       version: '0.1.0',
       runtime: 'node v22.0.0',
       nodeEnv: 'production',
+      runtimeMode: 'production' as const,
+      demoFeatures: false,
       uptimeSeconds: 120,
       startedAt: '2026-03-15T12:00:00.000Z',
       memoryMb: 92,
@@ -226,6 +248,7 @@ describe('systemStatusSchema', () => {
       sessionTtlSeconds: 604_800,
       trustedOrigins: ['https://quiz.example.com'],
       apiInternalUrl: 'http://quiz-api:3001',
+      demoAccounts: false,
     },
     summary: summarizeChecks(evaluateEnvironment(production)),
   };

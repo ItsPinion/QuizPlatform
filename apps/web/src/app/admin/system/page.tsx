@@ -1,5 +1,6 @@
 import type { SystemStatus } from '@quiz/shared/deployment';
 
+import { BuildBadge } from '@/components/build-badge';
 import { PageHeader } from '@/components/cinema/page-header';
 import { summaryLabel } from '@quiz/shared/deployment';
 import {
@@ -127,7 +128,7 @@ export default async function AdminSystemPage() {
               <ShieldCheck />
               ADMIN
             </Badge>
-            <Badge variant="outline">Day 14 · deployment</Badge>
+            <BuildBadge>Day 14 · deployment</BuildBadge>
           </>
         }
       />
@@ -169,8 +170,11 @@ export default async function AdminSystemPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="font-mono text-[13px]">{service.nodeEnv}</div>
+            <div className="font-mono text-[13px]">
+              {service.nodeEnv} · {service.runtimeMode}
+            </div>
             <div className="text-muted-foreground text-[10.5px]">
+              demo surface {service.demoFeatures ? 'on' : 'off'} ·{' '}
               {runtimeLabel(service.memoryMb, service.uptimeSeconds)}
             </div>
           </CardContent>
@@ -296,6 +300,12 @@ export default async function AdminSystemPage() {
                 <span className="text-muted-foreground shrink-0">Trusted origins</span>
                 <span className="truncate text-right font-mono text-[11px]">
                   {settings.trustedOrigins.join(', ')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Demo logins</span>
+                <span className="font-mono text-[11px]">
+                  {settings.demoAccounts ? 'published' : 'off'}
                 </span>
               </div>
             </CardContent>

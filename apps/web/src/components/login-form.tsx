@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { client } from '@/lib/api';
 import { parseApiFailure, toApiFailure, type ApiFailure } from '@/lib/api-error';
 import { demoFillAnnouncement, homeFor, roleLabel } from '@/lib/auth-params';
+import { adoptSession } from '@/lib/use-session';
 import { cn } from '@/lib/utils';
 
 /**
@@ -98,11 +99,17 @@ export function LoginForm({ next = '/', demo = [] }: LoginFormProps) {
         return;
       }
 
-      // Where they were going, or where their role lives. Refresh so server
-      // components re-render with the new session cookie.
+      // Where they were going, or where their role lives.
+      //
+      // The header learns who signed in *here*, before the navigation: the
+      // module snapshot still says "guest" from the page they arrived on, and a
+      // header that reads it would keep offering "Sign up" over the dashboard
+      // button until a hard reload. Refresh so the server components that read
+      // the cookie agree.
       const session = await res.json();
       const destination = next === '/' ? homeFor(session.user.role) : next;
 
+      adoptSession(session.user);
       router.replace(destination);
       router.refresh();
     } catch (cause) {

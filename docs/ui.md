@@ -428,12 +428,29 @@ file; the reading-room drone is synthesised with Web Audio:
 | Movement | the filter sweeps 620 → 980 Hz over ~26 s; a tremolo runs at 0.05 Hz                   |
 | Bells    | occasional sines from A-minor pentatonic, 3.4 s decay, through a 0.42 s feedback delay |
 
-It is **off by default and never autoplays**. The choice is remembered in
-`localStorage`, but resuming still waits for a pointer or key gesture, because a
-context created without one stays suspended. The button is a real
-`<button aria-pressed>` named "Play/Turn off library ambience", and stopping
-ramps the gain down over half a second before the context closes so there is no
-click in the speakers.
+It is **off by default and never autoplays on a first visit**, and a remembered
+choice is the whole answer: `quiz:music` holds `on` or `muted`, and a remembered
+mute arms nothing and starts nothing until the button is pressed again. (The
+older `off` value is still honoured as a mute.)
+
+When it _is_ wanted, it starts at the earliest legal moment:
+
+- the graph is built immediately and kept suspended, so the first permitted
+  resume is one call rather than an engine construction;
+- a resume is attempted at once — which succeeds outright when the visitor has
+  already interacted with the page — and then again on **every** plausible
+  interaction: `pointermove`, `pointerdown`, `keydown`, `touchstart`, `wheel`,
+  `scroll` and `click`, all registered `{ passive: true }`. A mouse move counts
+  where the browser honours it, and a key press or tap always does;
+- the listeners come off the moment the context reports `running`.
+
+The button is a real `<button aria-pressed>` named "Play/Turn off library
+ambience"; its `title` explains the in-between state (_"waiting for a click, a
+key press or a pointer move to start"_) and says when a mute was remembered.
+Stopping ramps the gain down over half a second before the context closes, so
+there is no click in the speakers. The decisions live in
+`apps/web/src/lib/ambience.ts` and are unit-tested there; the component only
+owns the graph.
 
 ### Glow, everywhere
 

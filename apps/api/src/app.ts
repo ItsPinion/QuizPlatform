@@ -6,7 +6,7 @@ import { prettyJSON } from 'hono/pretty-json';
 import { requestId } from 'hono/request-id';
 import { secureHeaders } from 'hono/secure-headers';
 
-import { APP_VERSION, env, isAllowedOrigin } from './lib/env';
+import { APP_VERSION, developmentFeatures, env, isAllowedOrigin, runtimeMode } from './lib/env';
 import { errorHandler, notFoundHandler } from './lib/errors';
 import { requireSameOrigin } from './middleware/origin';
 import type { AppEnv } from './lib/types';
@@ -72,7 +72,15 @@ export const app = new Hono<AppEnv>()
   )
   // CSRF belt-and-braces: a foreign origin cannot drive a state-changing call.
   .use(requireSameOrigin)
-  .use(prettyJSON({ space: 2 }))
+  // Pretty printing is a development affordance; a machine reads production.
+  .use(async (c, next) => {
+    if (!developmentFeatures) {
+      await next();
+      return;
+    }
+
+    await prettyJSON({ space: 2 })(c, next);
+  })
   .use(
     cors({
       // A function, not the array: preview hosts match by suffix. Returning
@@ -88,7 +96,7 @@ export const app = new Hono<AppEnv>()
   .use(async (c, next) => {
     // The logger middleware must be awaited, otherwise the context is never
     // finalised and Hono answers with a 500.
-    if (env.NODE_ENV === 'production') {
+    if (!developmentFeatures) {
       await next();
       return;
     }
@@ -101,6 +109,8 @@ export const app = new Hono<AppEnv>()
         name: 'quiz-api',
         version: APP_VERSION,
         message: 'Quiz Platform API is running.',
+        /** What this process is allowed to show. Absent ENV_NODE means production. */
+        runtime: { mode: runtimeMode, demoFeatures: developmentFeatures },
         endpoints: [
           '/api/health',
           '/api/health/db',

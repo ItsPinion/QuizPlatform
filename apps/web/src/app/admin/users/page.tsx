@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Search, ShieldCheck, SlidersHorizontal, Users } 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { BuildBadge } from '@/components/build-badge';
 import { PageHeader } from '@/components/cinema/page-header';
 import { StatCard } from '@/components/stat-card';
 import { UsersTable } from '@/components/users-table';
@@ -68,7 +69,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
               <ShieldCheck />
               ADMIN
             </Badge>
-            <Badge variant="outline">Day 4 · user management</Badge>
+            <BuildBadge>Day 4 · user management</BuildBadge>
           </>
         }
       />

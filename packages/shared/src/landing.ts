@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { runtimeModeSchema } from './environment';
 import { questionTypeSchema } from './question-type';
 
 /**
@@ -134,6 +135,18 @@ export const landingPayloadSchema = z.object({
     runtime: z.string(),
     nodeEnv: z.string(),
     uptimeSeconds: z.number().int(),
+  }),
+  /**
+   * Which surface this deployment is serving.
+   *
+   * The API is the authority: the web app renders what this says rather than
+   * reading its own copy of the environment, so a page can never advertise a
+   * demo login that the API would refuse to honour.
+   */
+  runtime: z.object({
+    mode: runtimeModeSchema,
+    /** True only in a development or demo environment. */
+    demoFeatures: z.boolean(),
   }),
   database: z.object({
     target: z.enum(['turso', 'file', 'unconfigured']),

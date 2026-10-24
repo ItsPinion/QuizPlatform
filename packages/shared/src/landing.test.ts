@@ -98,6 +98,7 @@ function payload(overrides: Partial<LandingPayload> = {}): LandingPayload {
       unanswered: 0,
       timeTakenSeconds: 724,
     },
+    runtime: { mode: 'development', demoFeatures: true },
     demo: { enabled: true, accounts: [] },
     unavailableReason: null,
     ...overrides,

@@ -157,9 +157,15 @@ regression to `SameSite=None`, a future non-cookie scheme.
 - `POST /api/auth/logout` is exempt: refusing it would let a stale request keep a victim signed in.
 - Everything else from a foreign origin is `403 CROSS_ORIGIN_BLOCKED`.
 
-Allowed origins are the configured web origin, `localhost`, and the sandbox preview hosts
-(`*.e2b.app`, `*.e2b.dev`, `*.arena.ai`), matched by suffix in `isAllowedOrigin`. CORS uses the same
-predicate and simply omits the header for anyone else.
+Allowed origins are the configured web origin, plus — only while `ENV_NODE` says this is a
+development or demo surface — the `localhost:3000` aliases and the sandbox preview hosts
+(`*.e2b.app`, `*.e2b.dev`, `*.arena.ai`, matched as whole suffixes, so `e2b.app.example.com` is not
+one of ours). A production deployment trusts `WEB_ORIGIN` alone.
+
+The policy is a pure function, `originAllowed(origin, { allowedOrigins, allowPreviewHosts })` in
+`apps/api/src/lib/env.ts`, so both answers are provable in one test run rather than only on a
+deployment. CORS uses the same predicate and simply omits the header for anyone else. See
+[`runtime-modes.md`](runtime-modes.md).
 
 ---
 
@@ -205,10 +211,10 @@ on every response — session data must not land in a shared cache or a proxy.
 
 ## 11. Verification
 
-| Suite                                                                                | What it proves                                                                                           |
-| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `security.test.ts` (51)                                                              | the nine areas above, plus rate limiting, the origin guard, the body cap and cache headers               |
-| `auth.test.ts`, `auth-lib.test.ts`, `authorization.test.ts`                          | session lifecycle, guards, `SELF_LOCKOUT`, deactivation                                                  |
-| `admin-*.test.ts`, `student-*.test.ts`, `submissions.test.ts`, `leaderboard.test.ts` | the feature contracts those attacks probe                                                                |
-| `security-headers.test.ts` (8)                                                       | the CSP directives, the preview allowance, HSTS only in production                                       |
-| `test:e2e` (73)                                                                      | the real process: headers on the wire, a blocked foreign origin, a `413`, and a `429` with `Retry-After` |
+| Suite                                                                                | What it proves                                                                                                           |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `security.test.ts` (51) + `origins.test.ts` (8)                                      | the nine areas above, plus rate limiting, the origin guard, the body cap, cache headers and the production origin policy |
+| `auth.test.ts`, `auth-lib.test.ts`, `authorization.test.ts`                          | session lifecycle, guards, `SELF_LOCKOUT`, deactivation                                                                  |
+| `admin-*.test.ts`, `student-*.test.ts`, `submissions.test.ts`, `leaderboard.test.ts` | the feature contracts those attacks probe                                                                                |
+| `security-headers.test.ts` (8)                                                       | the CSP directives, the preview allowance, HSTS only in production                                                       |
+| `test:e2e` (73)                                                                      | the real process: headers on the wire, a blocked foreign origin, a `413`, and a `429` with `Retry-After`                 |

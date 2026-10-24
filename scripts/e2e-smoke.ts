@@ -151,7 +151,11 @@ try {
     cwd: API_DIR,
     env: {
       ...process.env,
+      // Deterministic: this run asserts the development surface (demo logins on,
+      // preview hosts trusted), whatever the shell happens to export.
       NODE_ENV: 'development',
+      ENV_NODE: 'development',
+      DEMO_ACCOUNTS: '1',
       API_PORT: String(port),
       TURSO_DATABASE_URL: DATABASE_URL,
       DATABASE_URL: '',
@@ -2069,7 +2073,14 @@ try {
     expectStatus(res, 200);
 
     interface SystemBody {
-      service: { name: string; runtime: string; nodeEnv: string; uptimeSeconds: number };
+      service: {
+        name: string;
+        runtime: string;
+        nodeEnv: string;
+        runtimeMode: string;
+        demoFeatures: boolean;
+        uptimeSeconds: number;
+      };
       database: {
         target: string;
         urlHint: string;
@@ -2077,7 +2088,12 @@ try {
         latencyMs: number | null;
         counts: { users: number; quizzes: number } | null;
       };
-      settings: { authRateLimitMax: number; maxBodyBytes: number; trustedOrigins: string[] };
+      settings: {
+        authRateLimitMax: number;
+        maxBodyBytes: number;
+        trustedOrigins: string[];
+        demoAccounts: boolean;
+      };
       summary: {
         verdict: string;
         pass: number;
@@ -2093,14 +2109,23 @@ try {
     if (!['ready', 'attention', 'blocked'].includes(body.summary.verdict)) {
       throw new Error(`unexpected verdict ${body.summary.verdict}`);
     }
-    if (body.summary.checks.length !== 8) {
-      throw new Error(`expected 8 checks, got ${body.summary.checks.length}`);
+    if (body.summary.checks.length !== 9) {
+      throw new Error(`expected 9 checks, got ${body.summary.checks.length}`);
     }
     if (!body.database.connected || !body.database.counts) {
       throw new Error('expected a connected database with counts');
     }
     if (body.database.counts.users < 2) throw new Error('expected the seeded accounts');
     if (body.settings.trustedOrigins.length < 1) throw new Error('no trusted origins reported');
+
+    // This run boots the API with NODE_ENV=development, so it must describe
+    // itself as a development surface — and therefore publish the demo logins.
+    if (body.service.runtimeMode !== 'development') {
+      throw new Error(`expected a development runtime mode, got ${body.service.runtimeMode}`);
+    }
+    if (!body.service.demoFeatures || !body.settings.demoAccounts) {
+      throw new Error('the demo surface should be on in development');
+    }
 
     // Nothing secret may cross the wire, even to an administrator.
     for (const forbidden of ['authToken', 'jwtSecret', 'passwordHash', 'TURSO_AUTH_TOKEN']) {
@@ -2109,7 +2134,7 @@ try {
 
     if (res.headers.get('cache-control') !== 'no-store') throw new Error('response was cacheable');
 
-    return `200 · ${body.summary.verdict} · ${body.summary.checks.length} checks · ${body.database.target}`;
+    return `200 · ${body.summary.verdict} · ${body.summary.checks.length} checks · ${body.database.target} · ${body.service.runtimeMode}`;
   });
 
   await check('GET /api/admin/system is closed to students and anonymous callers', async () => {
@@ -2178,8 +2203,15 @@ try {
     const body = JSON.parse(raw) as {
       sampleQuestion: { options: string[] } | null;
       sampleResult: { marks: number; totalMarks: number } | null;
-      demo: { accounts: { email: string; exists: boolean }[] };
+      demo: { enabled: boolean; accounts: { email: string; exists: boolean }[] };
+      runtime: { mode: string; demoFeatures: boolean };
     };
+
+    // The page renders its demo block from this, not from a variable of its own.
+    if (body.runtime.mode !== 'development' || !body.runtime.demoFeatures) {
+      throw new Error(`unexpected runtime block ${JSON.stringify(body.runtime)}`);
+    }
+    if (!body.demo.enabled) throw new Error('demo logins should be published in development');
 
     if (!body.sampleQuestion || body.sampleQuestion.options.length < 2) {
       throw new Error('expected a sample question with options');

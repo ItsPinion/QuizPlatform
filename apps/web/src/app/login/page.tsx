@@ -24,9 +24,12 @@ export default async function LoginPage({
   const next = safeNextPath(params.next);
 
   // The demo accounts are the ones this deployment actually has — read from the
-  // database, not typed into the page. `DEMO_ACCOUNTS=0` turns them off.
+  // database, not typed into the page. The API decides whether they are
+  // published at all: production never is (`ENV_NODE` unset), and
+  // `DEMO_ACCOUNTS=0` hides them in development too.
   const [payload, session] = await Promise.all([fetchLanding(), getSession()]);
   const demo = payload?.demo.enabled ? payload.demo.accounts : [];
+  const demoSurface = payload?.runtime.demoFeatures ?? false;
   const continuing = next !== '/';
 
   return (
@@ -69,13 +72,15 @@ export default async function LoginPage({
         </p>
       </div>
 
-      <p className="text-muted-foreground/80 mt-4 px-1 text-[11.5px] leading-relaxed">
-        {demo.length > 0
-          ? 'The demo buttons fill the form with accounts that exist in this database. Nothing is submitted until you press Sign in.'
-          : payload
-            ? 'No demo accounts are published on this deployment. Use the account you registered with.'
-            : 'Demo accounts are unavailable right now — the API did not answer. The form still works for an account you already have.'}
-      </p>
+      {demoSurface ? (
+        <p className="text-muted-foreground/80 mt-4 px-1 text-[11.5px] leading-relaxed">
+          {demo.length > 0
+            ? 'The demo buttons fill the form with accounts that exist in this database. Nothing is submitted until you press Sign in.'
+            : payload
+              ? 'No demo accounts are published on this deployment. Use the account you registered with.'
+              : 'Demo accounts are unavailable right now — the API did not answer. The form still works for an account you already have.'}
+        </p>
+      ) : null}
     </AuthShell>
   );
 }

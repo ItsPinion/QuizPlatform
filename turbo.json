@@ -4,6 +4,8 @@
   "globalDependencies": [".env"],
   "globalEnv": [
     "NODE_ENV",
+    "ENV_NODE",
+    "DEMO_ACCOUNTS",
     "TURSO_DATABASE_URL",
     "DATABASE_URL",
     "TURSO_AUTH_TOKEN",

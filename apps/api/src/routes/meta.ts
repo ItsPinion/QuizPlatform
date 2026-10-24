@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 
-import { APP_VERSION } from '../lib/env';
+import { APP_VERSION, developmentFeatures, runtimeMode } from '../lib/env';
 
 /**
  * Discovery endpoint: what this API exposes today.
@@ -15,6 +15,12 @@ export const metaRoutes = new Hono().get('/', (c) =>
       name: 'Quiz Platform API',
       version: APP_VERSION,
       status: 'feature complete',
+      /**
+       * `ENV_NODE` decides what this process may show: demo logins, build-plan
+       * badges and preview hosts exist only in development and demo. Unset is
+       * production. See `docs/runtime-modes.md`.
+       */
+      runtime: { mode: runtimeMode, demoFeatures: developmentFeatures },
       docs: {
         'GET /api/health': 'Liveness probe',
         'GET /api/health/db': 'Database readiness probe with row counts',
@@ -72,7 +78,7 @@ export const metaRoutes = new Hono().get('/', (c) =>
         docs: 'docs/security.md',
       },
       deployment: {
-        gate: 'GET /api/admin/system evaluates the eight environment rules',
+        gate: 'GET /api/admin/system evaluates the environment and demo-surface rules',
         check: 'bun run deploy:check — the same rules locally, live probes with --url',
         containers: 'Dockerfile targets: api (port 3001) and web (port 3000)',
         migrate: 'drizzle-kit migrate is a release step, never a request path',

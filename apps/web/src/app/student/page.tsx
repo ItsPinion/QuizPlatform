@@ -17,6 +17,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { BuildBadge } from '@/components/build-badge';
 import { ActivityChart } from '@/components/activity-chart';
 import { CategoryBreakdown } from '@/components/category-breakdown';
 import { PageHeader, SectionBar } from '@/components/cinema/page-header';
@@ -188,7 +189,7 @@ export default async function StudentPage() {
               <UserRound className="size-3" />
               STUDENT
             </Badge>
-            <Badge variant="outline">Day 10 · dashboard</Badge>
+            <BuildBadge>Day 10 · dashboard</BuildBadge>
           </>
         }
       />

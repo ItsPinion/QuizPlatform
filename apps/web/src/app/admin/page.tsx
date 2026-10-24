@@ -12,6 +12,7 @@ import {
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { BuildBadge } from '@/components/build-badge';
 import { PageHeader } from '@/components/cinema/page-header';
 import { StatCard } from '@/components/stat-card';
 import { Badge } from '@/components/ui/badge';
@@ -90,7 +91,7 @@ export default async function AdminOverviewPage() {
               <ShieldCheck />
               ADMIN
             </Badge>
-            <Badge variant="outline">Day 4 · dashboard</Badge>
+            <BuildBadge>Day 4 · dashboard</BuildBadge>
           </>
         }
       />

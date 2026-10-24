@@ -68,20 +68,44 @@ function fromSeed(seed: AuthUser | null): SessionState {
  * server render. That distinction is the whole trick — a `.next` server handles
  * many requests in one process, so seeding shared state from the first request
  * would leak that visitor's session into everybody else's HTML.
+ *
+ * The seed also *wins over a stale snapshot*, which is what makes the header
+ * correct the instant after somebody signs in or registers: the snapshot may
+ * still say "guest" from the page they arrived on, while the server rendering
+ * the page they are navigating to has just read the new cookie. Trusting the
+ * snapshot there is exactly the bug where a brand-new account still sees
+ * "Sign up" in the bar.
  */
+function preferSeed(seed: AuthUser | null | undefined, fallback: SessionState): SessionState {
+  if (seed && (fallback.status !== 'authenticated' || fallback.user.id !== seed.id)) {
+    return { status: 'authenticated', user: seed };
+  }
+
+  return fallback;
+}
+
 export function useSession(seed?: AuthUser | null): SessionState {
-  const [state, setState] = useState<SessionState>(() =>
-    snapshot.status === 'loading' && seed !== undefined ? fromSeed(seed) : snapshot,
-  );
+  const [state, setState] = useState<SessionState>(() => preferSeed(seed, snapshot));
+
+  // Reconcile when the *identity* the server handed us changes — never on every
+  // render, because the seed object is rebuilt each time and comparing by
+  // reference would publish on every pass.
+  const seedKey = seed === undefined ? 'unreported' : seed === null ? 'guest' : seed.id;
 
   useEffect(() => {
     listeners.add(setState);
 
-    if (snapshot.status === 'loading') {
-      // Adopt the server's answer for the other callers on this page, then let
-      // the fetch confirm it.
-      if (seed !== undefined) publish(fromSeed(seed));
-      void fetchSession();
+    const current = preferSeed(seed, snapshot);
+
+    if (seed) {
+      if (current !== snapshot) publish(current);
+      else setState(snapshot);
+    } else if (snapshot.status === 'loading') {
+      // The server said nobody is signed in (or did not say): adopt that answer
+      // for the other callers on this page. Fetching again only when the page
+      // did not read the session at all keeps the header to one request.
+      if (seed === null) publish({ status: 'guest' });
+      else void fetchSession();
     } else {
       // A change between render and effect — a sign-out in another tab's worth.
       setState(snapshot);
@@ -90,10 +114,10 @@ export function useSession(seed?: AuthUser | null): SessionState {
     return () => {
       listeners.delete(setState);
     };
-    // The seed is a server answer for one render; re-running on a new one would
-    // overwrite a live client state with a stale one.
+    // The seed is a server answer for one navigation; re-running on a new
+    // identity adopts that answer, re-running on a re-render would not.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [seedKey]);
 
   return state;
 }
@@ -106,6 +130,19 @@ export async function signOutEverywhere(): Promise<void> {
     publish({ status: 'guest' });
     inFlight = Promise.resolve();
   }
+}
+
+/**
+ * After a login or register: adopt the account the API just signed in.
+ *
+ * Publishing the returned user rather than clearing the cache means the header
+ * is right in the same tick as the navigation — no "loading" skeleton, no
+ * second request, and no frame where a signed-in visitor is offered "Sign up".
+ * `inFlight` becomes a settled promise so nothing re-fetches over the top of it.
+ */
+export function adoptSession(user: AuthUser): void {
+  publish({ status: 'authenticated', user });
+  inFlight = Promise.resolve();
 }
 
 /** After a login or register: forget the cached "guest" so the next read is real. */
