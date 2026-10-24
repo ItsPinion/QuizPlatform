@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { RegisterForm } from '@/components/register-form';
 import { fetchLanding } from '@/lib/landing';
+import { getSession } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,11 +15,11 @@ export const metadata: Metadata = {
 };
 
 export default async function RegisterPage() {
-  const payload = await fetchLanding();
+  const [payload, session] = await Promise.all([fetchLanding(), getSession()]);
   const quizzes = payload?.counts.publishedQuizzes ?? 0;
 
   return (
-    <AuthShell payload={payload} kind="register">
+    <AuthShell payload={payload} kind="register" user={session?.user ?? null}>
       <div className="glow-frame border-border/70 bg-card/70 card-sheen relative rounded-2xl border p-6 shadow-[0_40px_120px_-70px] shadow-black sm:p-8">
         <h1
           id="register-heading"

@@ -74,9 +74,11 @@ export function SiteFooter({ payload }: { payload?: LandingPayload | null } = {}
 
           {COLUMNS.map((column) => (
             <div key={column.title}>
-              <h3 className="text-muted-foreground text-[10px] font-medium tracking-[0.16em] uppercase">
+              {/* h2, not h3: these columns are sections of the footer, and an h3 here
+                  skips a level on any page whose only heading is the h1 (the 404). */}
+              <h2 className="text-muted-foreground text-[10px] font-medium tracking-[0.16em] uppercase">
                 {column.title}
-              </h3>
+              </h2>
               <ul className="mt-3 space-y-2">
                 {column.links.map((link) => (
                   <li key={link.label}>

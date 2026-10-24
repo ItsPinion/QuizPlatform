@@ -1,15 +1,15 @@
 import { headlineNumbers } from '@quiz/shared/landing';
 
-import { getSession } from '@/lib/session';
-import { Atmosphere } from '@/components/landing/atmosphere';
+import { CinemaHero } from '@/components/cinema/hero';
+import { Film } from '@/components/cinema/film';
 import { CtaBand } from '@/components/landing/cta-band';
-import { Hero } from '@/components/landing/hero';
 import { PlatformBento } from '@/components/landing/platform-bento';
 import { SectionHeading } from '@/components/landing/section-heading';
 import { Tour } from '@/components/landing/tour';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import { SkipLink } from '@/components/skip-link';
+import { getSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import { fetchLanding } from '@/lib/landing';
 
@@ -37,7 +37,6 @@ export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
   const [payload, session] = await Promise.all([fetchLanding(), getSession()]);
-  const role = session?.user.role ?? null;
   const numbers = payload ? headlineNumbers(payload) : [];
 
   /**
@@ -60,46 +59,53 @@ export default async function HomePage() {
     : {};
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="relative flex min-h-dvh flex-col bg-black">
       <SkipLink />
 
-      <SiteHeader version={payload?.service.version} />
+      <SiteHeader version={payload?.service.version} user={session?.user ?? null} />
 
-      <main id="main" className="relative flex-1 overflow-hidden">
-        <Atmosphere />
+      {/*
+        The first screen: a 100dvh frame with the film behind it. The hero owns
+        its own background (the video is inside it, not behind the whole
+        document) so everything below the fold is solid black — one long video
+        would cost battery for a section nobody is looking at.
+      */}
+      <main id="main" tabIndex={-1} className="relative flex-1 outline-none">
+        <div className="relative isolate">
+          <Film />
+          <CinemaHero payload={payload} user={session?.user ?? null} />
+        </div>
 
         {unavailable ? (
           <div
             role="status"
-            className="border-destructive/30 bg-destructive/10 text-destructive border-b px-5 py-2 text-center text-[11.5px] sm:px-8"
+            className="border-b border-white/15 bg-white/8 px-5 py-3 text-center text-[11.5px] tracking-[0.08em] text-white/80 uppercase sm:px-8"
           >
             Live data is unavailable right now — {unavailable}. The page is showing its empty states
             rather than guessed numbers.
           </div>
         ) : null}
 
-        <Hero payload={payload} role={role} />
-
         {/* ------------------------------- numbers ------------------------------ */}
         {numbers.length > 0 ? (
-          <section className="border-border/60 border-b">
-            <div className="mx-auto grid w-full max-w-6xl grid-cols-2 gap-y-8 px-5 py-10 sm:px-8 lg:grid-cols-4">
+          <section className="border-b border-white/8">
+            <div className="mx-auto grid w-full max-w-6xl grid-cols-2 gap-y-10 px-6 py-14 sm:px-8 lg:grid-cols-4">
               {numbers.map((item, index) => (
                 <div
                   key={item.label}
                   style={{ '--reveal-delay': `${index * 90}ms` } as React.CSSProperties}
                   className={cn(
                     'reveal',
-                    'border-border/50 border-l pl-5 lg:pl-8',
+                    'border-l border-white/10 pl-6 lg:pl-8',
                     index === 0 && 'border-l-0 pl-0 lg:pl-0',
                     index === 2 && 'border-l-0 pl-0 lg:border-l lg:pl-8',
                   )}
                 >
-                  <div className="text-3xl font-semibold tracking-tight tabular-nums">
+                  <div className="font-display text-4xl font-light tracking-tight text-white tabular-nums">
                     {item.value}
                   </div>
-                  <div className="text-[12.5px] font-medium">{item.label}</div>
-                  <div className="text-muted-foreground/80 mt-0.5 text-[10.5px]">
+                  <div className="cine-label mt-3 text-[10px] text-gray-300">{item.label}</div>
+                  <div className="mt-1 text-[11px] font-light text-gray-500">
                     {notes[item.label] ?? ''}
                   </div>
                 </div>
@@ -111,7 +117,7 @@ export default async function HomePage() {
         {/* ------------------------------ platform ----------------------------- */}
         <section
           id="platform"
-          className="mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-16 sm:px-8 lg:py-20"
+          className="mx-auto w-full max-w-6xl scroll-mt-32 px-6 py-20 sm:px-8 lg:py-28"
         >
           <div className="flex flex-wrap items-end justify-between gap-6">
             <SectionHeading
@@ -119,7 +125,7 @@ export default async function HomePage() {
               title="Everything the exam needs, in one place"
               description="Six surfaces, one session and one typed contract behind them. Hover a card: the light follows your cursor, and every number on it was a SQL count a moment ago."
             />
-            <p className="text-muted-foreground/80 max-w-[15rem] text-[11px] leading-relaxed">
+            <p className="max-w-[16rem] text-[11px] leading-relaxed font-light text-gray-500">
               Spotlight, lit border, drifting stars and a few degrees of tilt. Nothing moves on
               touch, or if your system asks for reduced motion.
             </p>
@@ -131,8 +137,8 @@ export default async function HomePage() {
         </section>
 
         {/* -------------------------------- tour ------------------------------- */}
-        <section id="tour" className="border-border/60 bg-card/20 scroll-mt-28 border-y">
-          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 lg:py-20">
+        <section id="tour" className="scroll-mt-32 border-y border-white/8 bg-white/[0.015]">
+          <div className="mx-auto w-full max-w-6xl px-6 py-20 sm:px-8 lg:py-28">
             <SectionHeading
               eyebrow="The tour"
               title="Three screens, start to finish"

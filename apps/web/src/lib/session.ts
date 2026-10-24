@@ -3,6 +3,7 @@ import type { AuthSession } from '@quiz/shared/auth';
 import { SESSION_COOKIE } from '@quiz/shared/auth';
 import { hc } from 'hono/client';
 import { cookies } from 'next/headers';
+import { cache } from 'react';
 
 /**
  * Server-side session lookup.
@@ -13,7 +14,13 @@ import { cookies } from 'next/headers';
  */
 const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? 'http://localhost:3001';
 
-export async function getSession(): Promise<AuthSession | null> {
+/**
+ * A layout and the page inside it both need to know who is asking. Wrapping the
+ * lookup in `cache` means the request to the API happens once per render rather
+ * than once per component, so seeding the header from the server costs nothing
+ * extra on a page that already checked the session.
+ */
+export const getSession = cache(async (): Promise<AuthSession | null> => {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
 
@@ -36,4 +43,4 @@ export async function getSession(): Promise<AuthSession | null> {
     // rather than crashing the page.
     return null;
   }
-}
+});

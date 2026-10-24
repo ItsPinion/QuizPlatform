@@ -36,6 +36,10 @@ export function contentSecurityPolicy(dev: boolean): string {
     `script-src ${scriptSrc.join(' ')}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
+    // The landing page's background film is same-origin, like everything else.
+    // Stated explicitly rather than inherited from `default-src` so that
+    // tightening the default later cannot silently kill the video.
+    "media-src 'self'",
     "font-src 'self' data:",
     `connect-src ${connectSrc.join(' ')}`,
     "object-src 'none'",

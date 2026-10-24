@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
     "@quiz/api": "workspace:*",
     "@quiz/shared": "workspace:*",
     "class-variance-authority": "^0.7.1",

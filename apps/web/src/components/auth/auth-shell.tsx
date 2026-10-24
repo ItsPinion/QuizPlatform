@@ -6,6 +6,7 @@ import { LibraryScene } from '@/components/landing/library-scene';
 import { LiveStatus } from '@/components/landing/live-status';
 import { SiteFooter } from '@/components/site-footer';
 import { SkipLink } from '@/components/skip-link';
+import type { AuthUser } from '@quiz/shared/auth';
 import { SiteHeader } from '@/components/site-header';
 import { cn } from '@/lib/utils';
 import { authStats } from '@/lib/auth-params';
@@ -80,17 +81,20 @@ const COPY = {
 export function AuthShell({
   payload,
   kind,
+  user,
   children,
 }: {
   payload: LandingPayload | null;
   kind: 'login' | 'register';
+  /** The session the server read, so the header does not flash signed-out. */
+  user?: AuthUser | null;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex min-h-dvh flex-col">
       <SkipLink href="#auth" label="Skip to the form" />
 
-      <SiteHeader version={payload?.service.version} />
+      <SiteHeader version={payload?.service.version} user={user} />
 
       <main id="main" className="relative flex-1 overflow-hidden">
         <Atmosphere className="opacity-70" />

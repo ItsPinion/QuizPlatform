@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { LoginForm } from '@/components/login-form';
 import { fetchLanding } from '@/lib/landing';
+import { getSession } from '@/lib/session';
 import { safeNextPath } from '@/lib/redirect';
 
 export const dynamic = 'force-dynamic';
@@ -24,12 +25,12 @@ export default async function LoginPage({
 
   // The demo accounts are the ones this deployment actually has — read from the
   // database, not typed into the page. `DEMO_ACCOUNTS=0` turns them off.
-  const payload = await fetchLanding();
+  const [payload, session] = await Promise.all([fetchLanding(), getSession()]);
   const demo = payload?.demo.enabled ? payload.demo.accounts : [];
   const continuing = next !== '/';
 
   return (
-    <AuthShell payload={payload} kind="login">
+    <AuthShell payload={payload} kind="login" user={session?.user ?? null}>
       <div className="glow-frame border-border/70 bg-card/70 card-sheen relative rounded-2xl border p-6 shadow-[0_40px_120px_-70px] shadow-black sm:p-8">
         <h1
           id="sign-in-heading"

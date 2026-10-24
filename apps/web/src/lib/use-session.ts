@@ -52,19 +52,47 @@ async function fetchSession(force = false): Promise<void> {
   return inFlight;
 }
 
-export function useSession(): SessionState {
-  const [state, setState] = useState<SessionState>(snapshot);
+/** A server-read session, as the same shape the client produces. */
+function fromSeed(seed: AuthUser | null): SessionState {
+  return seed ? { status: 'authenticated', user: seed } : { status: 'guest' };
+}
+
+/**
+ * `seed` is the session the *server* already read for this request.
+ *
+ * It matters because the server is the only place that can know who is asking
+ * before the first paint: without it, a signed-in visitor loads the page and
+ * watches the header flip from "Sign in" to their dashboard a tick later.
+ *
+ * It is a render-time value, never written to the module snapshot during a
+ * server render. That distinction is the whole trick — a `.next` server handles
+ * many requests in one process, so seeding shared state from the first request
+ * would leak that visitor's session into everybody else's HTML.
+ */
+export function useSession(seed?: AuthUser | null): SessionState {
+  const [state, setState] = useState<SessionState>(() =>
+    snapshot.status === 'loading' && seed !== undefined ? fromSeed(seed) : snapshot,
+  );
 
   useEffect(() => {
     listeners.add(setState);
 
-    // React to a change that happened between render and effect, then ask once.
-    setState(snapshot);
-    if (snapshot.status === 'loading') void fetchSession();
+    if (snapshot.status === 'loading') {
+      // Adopt the server's answer for the other callers on this page, then let
+      // the fetch confirm it.
+      if (seed !== undefined) publish(fromSeed(seed));
+      void fetchSession();
+    } else {
+      // A change between render and effect — a sign-out in another tab's worth.
+      setState(snapshot);
+    }
 
     return () => {
       listeners.delete(setState);
     };
+    // The seed is a server answer for one render; re-running on a new one would
+    // overwrite a live client state with a stale one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return state;

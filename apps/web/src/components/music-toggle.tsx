@@ -295,8 +295,8 @@ export function MusicToggle({ className }: { className?: string }) {
       aria-label={playing ? 'Turn off library ambience' : 'Play library ambience'}
       title={playing ? 'Library ambience: on' : 'Library ambience: off'}
       className={cn(
-        'group border-border/70 text-muted-foreground hover:text-foreground hover:border-primary/40 focus-visible:ring-ring/60 inline-flex h-9 items-center gap-2 rounded-full border bg-transparent px-3 text-[12px] transition-colors outline-none focus-visible:ring-[3px]',
-        active && 'border-primary/40 text-primary bg-primary/10',
+        'group inline-flex h-11 items-center gap-2 rounded-full border border-white/25 bg-transparent px-4 text-[10px] tracking-[0.2em] text-gray-300 uppercase transition-colors outline-none hover:border-white/60 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50',
+        active && 'border-white/60 bg-white/8 text-white',
         className,
       )}
     >

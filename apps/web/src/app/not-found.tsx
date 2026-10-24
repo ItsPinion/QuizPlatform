@@ -7,6 +7,7 @@ import { LibraryScene } from '@/components/landing/library-scene';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import { SkipLink } from '@/components/skip-link';
+import { getSession } from '@/lib/session';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -23,11 +24,13 @@ export const metadata: Metadata = {
  * crash. This is the same room as the rest of the site, with the two routes a
  * lost visitor actually wants.
  */
-export default function NotFound() {
+export default async function NotFound() {
+  const session = await getSession();
+
   return (
     <div className="flex min-h-dvh flex-col">
       <SkipLink />
-      <SiteHeader />
+      <SiteHeader user={session?.user ?? null} />
 
       <main id="main" className="relative flex flex-1 items-center overflow-hidden">
         <Atmosphere className="opacity-60" />

@@ -1,12 +1,91 @@
-# UI system — the landing page and the bento surface
+# UI system — the landing page
 
 The landing page was built section by section, each milestone adding its own card
 row: by Day 14 it had sixteen sections, eight card shapes, a file tree and a
 day-by-day log. Honest, and completely unfocused — it read like the README with
 worse typography.
 
-This pass rebuilds it as a product page, and keeps one surface for the product
-itself.
+It is now a **cinematic product page**: one full-screen frame over a film, then
+the argument, then the door. Black and white, two typefaces, and glass for every
+surface that floats above the picture.
+
+---
+
+## 0. The frame
+
+```
+┌───────────────────────────────────────────────────────────┐
+│  ◉ mark      PLATFORM   TOUR   DOCS        [ Sign in ]    │  fixed, transparent
+│                                                           │  until you scroll
+│                                                           │
+│                    Ask better                             │  Clash, 9rem, 200
+│                    questions.       ← italic, gradient     │
+│                                                           │
+│      Write the paper, publish it in a click…              │  Jakarta, 300
+│                                                           │
+│      ( START A QUIZ → )   ( ▷ HOW IT WORKS )              │  magnetic + ghost
+│                                                           │
+│                    ↑ scroll                               │  a thread of light
+│  GITHUB DOCS API ──── Turborepo · Hono · Drizzle ── © 2026│  absolute bottom
+└───────────────────────────────────────────────────────────┘   ← the film
+```
+
+Below the fold the page continues in the same two voices on solid black: the
+counts, the platform, the tour, the call.
+
+## 0a. The material
+
+Four primitives in `globals.css`, all of them plain class names because they are
+paint, not components:
+
+| Class          | What it is                                                                                                                        | Why                                                                                                                                                     |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.cine-glass`  | 3% white film, 1px hairline at white/10, `backdrop-filter: blur(12px) saturate(1.15)`                                             | The badge, the drawer, the account menu. Where `backdrop-filter` is unsupported it becomes an 82% charcoal — a 3% wash over moving video is unreadable. |
+| `.cine-reveal` | `opacity 0 → 1`, `translateY(30px → 0)`, 1.2s `cubic-bezier(0.16, 1, 0.3, 1)`                                                     | The stagger. Each element carries `--reveal-delay`, so the sequence is data in the markup, not sibling-selector arithmetic.                             |
+| `.cine-slide`  | a white pill whose inner `#e5e7eb` fill sits at `translateY(100%)` and rises on hover; the button itself scales to 1.05 over 0.3s | The primary action. The label never moves; only the light does.                                                                                         |
+| `.cine-invert` | a white fill wipes up from the baseline and the label goes black                                                                  | The secondary action and the account pill.                                                                                                              |
+
+Rendered on top of the film, and _only_ there: `.cine-veil-radial` (a vignette
+that darkens the corners so the centre of the frame is the brightest part) and
+`.cine-veil-linear` (dark at the top under the nav, dark at the bottom under the
+footer, clear through the middle where the headline sits).
+
+### The film
+
+`apps/web/public/film/reading-room.{mp4,webm}` — a 12-second loop of two warm
+lights drifting through a dark room, 0.2 MB and 70 kB. It is **generated**, by
+`bun run film` (`scripts/make-film.ts`): `ffmpeg` builds the plate from `geq`
+expressions, blurs it, adds grain at final resolution and vignettes it. Every
+motion term completes an integer number of cycles in the loop, so the last frame
+flows into the first with no seam.
+
+Two things make it safe to ship:
+
+- **The poster is the first frame.** The still and the video are the same image,
+  so the handover is invisible — and visitors with `prefers-reduced-motion`,
+  `Save-Data` or a blocked codec see a composed page rather than a hole.
+- **It is decorative.** `aria-hidden`, no controls, `motion-reduce:hidden`.
+  Nothing in it carries information.
+
+### The type
+
+| Face                                     | Where                                    | Why                                                                                                        |
+| ---------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Clash Grotesk** (`--font-clash`)       | every `h1`–`h4`, and the display numbers | Geometric and wide; it still looks composed at 9rem, where most grotesques look like a default.            |
+| **Plus Jakarta Sans** (`--font-jakarta`) | body, labels, controls                   | Low contrast and legible at 14px; its 300 weight sits under the display type instead of competing with it. |
+
+Both are self-hosted from `apps/web/src/app/fonts` through `next/font/local` —
+no CDN, because the app must render identically with no network, and a font that
+arrives late is worse than no font on a page whose composition depends on its
+metrics. Licences are in that directory.
+
+### Motion, and the way out of it
+
+Everything that moves is listed in §0a and every one of those classes is
+neutralised by the same `prefers-reduced-motion` block: reveals resolve to their
+final state (never invisible), the slide fill stays down, the magnetic wrapper
+stops listening entirely (it reads `matchMedia` live, so changing the OS setting
+mid-session works), and the film is replaced by its poster.
 
 ---
 

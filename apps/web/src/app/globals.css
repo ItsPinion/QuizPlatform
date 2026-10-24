@@ -5,36 +5,48 @@
 /* --------------------------------------------------------------------------
    Design tokens — dark-first (shadcn/ui variable contract, Tailwind v4)
    -------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------
+   Cinematic monochrome.
+
+   Black and white, and nothing else: the video underneath supplies every hue,
+   and any accent colour in the chrome competes with it. So `--primary` IS white
+   — which means every existing `bg-primary` button in the app turns into the
+   spec's primary action (solid white, black label) without touching a
+   component, and `--foreground` is the crisp white the type is set in.
+
+   The semantic colours stay, because a failing attempt still has to look like a
+   failure — they are just desaturated enough to sit in a black-and-white frame.
+   -------------------------------------------------------------------------- */
 :root {
   --radius: 0.875rem;
 
-  --background: oklch(0.155 0.014 285);
-  --foreground: oklch(0.97 0.004 285);
+  --background: #000000;
+  --foreground: #ffffff;
 
-  --card: oklch(0.196 0.018 285);
-  --card-foreground: oklch(0.97 0.004 285);
-  --popover: oklch(0.196 0.018 285);
-  --popover-foreground: oklch(0.97 0.004 285);
+  --card: #0a0a0a;
+  --card-foreground: #ffffff;
+  --popover: #0a0a0a;
+  --popover-foreground: #ffffff;
 
-  --primary: oklch(0.66 0.19 288);
-  --primary-foreground: oklch(0.99 0 0);
+  --primary: #ffffff;
+  --primary-foreground: #000000;
 
-  --secondary: oklch(0.26 0.022 285);
-  --secondary-foreground: oklch(0.95 0.004 285);
+  --secondary: rgba(255, 255, 255, 0.06);
+  --secondary-foreground: #ffffff;
 
-  --muted: oklch(0.245 0.017 285);
-  --muted-foreground: oklch(0.72 0.015 285);
+  --muted: rgba(255, 255, 255, 0.04);
+  --muted-foreground: #9ca3af;
 
-  --accent: oklch(0.28 0.045 288);
-  --accent-foreground: oklch(0.97 0.004 285);
+  --accent: rgba(255, 255, 255, 0.08);
+  --accent-foreground: #ffffff;
 
-  --destructive: oklch(0.62 0.21 22);
-  --success: oklch(0.72 0.16 158);
-  --warning: oklch(0.8 0.15 85);
+  --destructive: oklch(0.68 0.17 25);
+  --success: oklch(0.76 0.13 158);
+  --warning: oklch(0.82 0.12 85);
 
-  --border: oklch(0.3 0.02 285 / 65%);
-  --input: oklch(0.3 0.02 285 / 75%);
-  --ring: oklch(0.66 0.19 288 / 55%);
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.16);
+  --ring: rgba(255, 255, 255, 0.38);
 }
 
 @theme inline {
@@ -59,7 +71,8 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-clash), var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, 'SFMono-Regular', monospace;
 
   --radius-sm: calc(var(--radius) - 4px);
@@ -83,6 +96,23 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+  }
+
+  /* Display type is the voice of the product: every heading in the app is set
+     in Clash Grotesk, tighter than the browser default. Sizes stay where the
+     components put them. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  /* The focus ring is white on black; a tinted one would be the only colour on
+     the page. */
+  :focus-visible {
+    outline-color: var(--ring);
   }
 
   ::selection {
@@ -737,292 +767,6 @@
 }
 
 /* ==========================================================================
-   The bar — a drop of water resting on a table
-   --------------------------------------------------------------------------
-   Not a strip welded to the top of the screen. The bar is inset from every
-   edge and stands on a contact shadow, so it is an object *on* the page rather
-   than the page's edge. It is lit the way water is lit:
-
-     - a bright meniscus along the waterline that fades toward the bottom,
-     - a specular bloom on the shoulder, where the surface bends,
-     - a slow sheen drifting across the surface,
-     - a caustic pooled on the table underneath — light that went *through*
-       the drop and came out focused,
-     - refraction: the page behind is genuinely blurred and oversaturated.
-
-   Every pixel of it is decoration. With both animations stopped, both
-   pseudo-elements off and `backdrop-filter` unsupported, the bar is still a
-   legible opaque pill with all of its controls.
-   ========================================================================== */
-
-.water-drop {
-  --drop-blur: 20px;
-  /* Not a capsule. A puddle on a table is a soft slab whose corners are nearly
-     — but not exactly — the same, which is what stops it reading as a pill
-     component. Four pixels of difference is enough. */
-  --drop-radius: 30px 26px 28px 32px / 27px 30px 26px 29px;
-  position: relative;
-  border-radius: var(--drop-radius);
-  background: color-mix(in oklab, var(--background) 62%, transparent);
-  -webkit-backdrop-filter: blur(var(--drop-blur)) saturate(1.8);
-  backdrop-filter: blur(var(--drop-blur)) saturate(1.8);
-  box-shadow:
-    /* the bright wet line along the crown, and a soft one along the base */
-    inset 0 1px 0 0 rgb(255 255 255 / 55%),
-    inset 0 -1px 0 0 rgb(255 255 255 / 8%),
-    /* the contact shadow — darkest where the drop meets the table */ 0 6px 14px -8px
-      rgb(0 0 0 / 65%),
-    0 18px 36px -20px rgb(0 0 0 / 80%),
-    /* light that passed through and pooled below */ 0 28px 60px -34px
-      color-mix(in oklab, var(--primary) 70%, transparent);
-  transition:
-    background-color 500ms ease,
-    box-shadow 500ms ease,
-    border-radius 700ms cubic-bezier(0.22, 0.61, 0.36, 1);
-}
-
-/* Once the page moves, the drop settles: denser, flatter, tighter to the
-   surface, the way a wet shape spreads under its own weight. */
-.water-drop[data-settled='true'] {
-  --drop-blur: 26px;
-  --drop-radius: 26px 23px 25px 28px / 23px 26px 22px 25px;
-  background: color-mix(in oklab, var(--background) 80%, transparent);
-  box-shadow:
-    inset 0 1px 0 0 rgb(255 255 255 / 60%),
-    inset 0 -1px 0 0 rgb(255 255 255 / 9%),
-    0 4px 10px -6px rgb(0 0 0 / 70%),
-    0 14px 30px -16px rgb(0 0 0 / 88%),
-    0 26px 54px -30px color-mix(in oklab, var(--primary) 60%, transparent);
-}
-
-/* The meniscus: a 1px rim, bright at the waterline, coloured at the base. */
-.water-drop::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklab, white 92%, transparent) 0%,
-    color-mix(in oklab, white 34%, transparent) 18%,
-    color-mix(in oklab, white 12%, transparent) 52%,
-    color-mix(in oklab, var(--primary) 46%, transparent) 100%
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-/* The shoulder: where the surface bends away, it catches the light. */
-.water-drop::after {
-  content: '';
-  position: absolute;
-  inset: 1px;
-  z-index: 0;
-  border-radius: inherit;
-  background: radial-gradient(
-    42% 88% at 14% -26%,
-    color-mix(in oklab, white 20%, transparent),
-    transparent 72%
-  );
-  pointer-events: none;
-}
-
-/* The sheen: a slow drift of light across the wet surface. */
-.water-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 10%;
-  width: 26%;
-  border-radius: inherit;
-  background: radial-gradient(
-    60% 100% at 50% 50%,
-    color-mix(in oklab, white 10%, transparent),
-    transparent 76%
-  );
-  filter: blur(7px);
-  opacity: 0.55;
-  animation: water-sheen 17s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes water-sheen {
-  0%,
-  100% {
-    opacity: 0.35;
-    transform: translate3d(0, 0, 0);
-  }
-  50% {
-    opacity: 0.8;
-    transform: translate3d(230%, 0, 0);
-  }
-}
-
-/* The waterline. It only exists once the page has moved — at rest there is
-   nothing to measure, and a faint rule across the bottom of the drop would
-   read as a border. */
-.water-line {
-  opacity: 0;
-  transition: opacity 400ms ease;
-}
-
-.water-drop[data-settled='true'] .water-line {
-  opacity: 1;
-}
-
-/* The caustic: the focused pool of light on the table under the drop. */
-.water-caustic {
-  position: absolute;
-  right: 7%;
-  bottom: -13px;
-  left: 7%;
-  height: 26px;
-  border-radius: 999px;
-  background:
-    /* the main pool, directly under the drop */
-    radial-gradient(
-      52% 100% at 50% 0%,
-      color-mix(in oklab, var(--primary) 60%, transparent),
-      transparent 74%
-    ),
-    /* two beads the splash threw off, further out and fainter */
-    radial-gradient(
-        7% 40% at 9% 92%,
-        color-mix(in oklab, var(--primary) 60%, transparent),
-        transparent 72%
-      ),
-    radial-gradient(
-      5% 32% at 93% 88%,
-      color-mix(in oklab, var(--primary) 52%, transparent),
-      transparent 72%
-    );
-  filter: blur(11px);
-  animation: water-caustic 11s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes water-caustic {
-  0%,
-  100% {
-    opacity: 0.34;
-    transform: scaleX(1) translateY(0);
-  }
-  50% {
-    opacity: 0.6;
-    transform: scaleX(1.05) translateY(1px);
-  }
-}
-
-/* The gloss: the wet highlight lying across the crown of the drop, a second
-   catch on the right shoulder, and the caustic light it picked up underneath.
-   This is the layer that makes it read as polished rather than painted. */
-.water-gloss {
-  position: absolute;
-  inset: 1px;
-  border-radius: inherit;
-  pointer-events: none;
-  background:
-    radial-gradient(
-      124% 84% at 50% -38%,
-      rgb(255 255 255 / 46%),
-      rgb(255 255 255 / 10%) 42%,
-      transparent 63%
-    ),
-    radial-gradient(36% 60% at 84% -8%, rgb(255 255 255 / 22%), transparent 70%),
-    linear-gradient(to top, color-mix(in oklab, var(--primary) 24%, transparent), transparent 46%);
-}
-
-/* The glint: a hard reflection travelling across the glass. Slow and
-   infrequent on purpose — a sweep on a loop reads as a loading state, one
-   every nine seconds reads as light moving. */
-.water-glint {
-  position: absolute;
-  top: -60%;
-  bottom: -60%;
-  left: 0;
-  width: 16%;
-  background: linear-gradient(
-    100deg,
-    transparent,
-    rgb(255 255 255 / 30%) 42%,
-    rgb(255 255 255 / 46%) 50%,
-    rgb(255 255 255 / 30%) 58%,
-    transparent
-  );
-  filter: blur(5px);
-  opacity: 0;
-  animation: water-glint 9s cubic-bezier(0.45, 0, 0.25, 1) infinite;
-  pointer-events: none;
-}
-
-@keyframes water-glint {
-  0%,
-  58% {
-    opacity: 0;
-    transform: translate3d(-260%, 0, 0) skewX(-14deg);
-  }
-
-  63% {
-    opacity: 0.95;
-  }
-
-  82% {
-    opacity: 0.5;
-  }
-
-  96%,
-  100% {
-    opacity: 0;
-    transform: translate3d(760%, 0, 0) skewX(-14deg);
-  }
-}
-
-/* The drawer, in the same material: a second drop that fell off the first. */
-.water-panel {
-  border-radius: 26px;
-  border: 1px solid color-mix(in oklab, white 11%, transparent);
-  background: color-mix(in oklab, var(--background) 88%, transparent);
-  -webkit-backdrop-filter: blur(28px) saturate(1.7);
-  backdrop-filter: blur(28px) saturate(1.7);
-  box-shadow:
-    0 1px 0 0 color-mix(in oklab, white 14%, transparent) inset,
-    0 30px 70px -32px rgb(0 0 0 / 92%);
-  animation: water-panel-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@keyframes water-panel-in {
-  from {
-    opacity: 0;
-    transform: translate3d(0, -7px, 0) scale(0.986);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* No backdrop-filter (older Safari, some embedded webviews): the drop becomes
-   dense enough to read on its own rather than a see-through smear. */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .water-drop {
-    background: color-mix(in oklab, var(--background) 94%, transparent);
-  }
-
-  .water-panel {
-    background: color-mix(in oklab, var(--background) 97%, transparent);
-  }
-}
-
-/* ==========================================================================
    Reduced motion: nothing floats, nothing drifts, nothing is left invisible.
    The reveals resolve to their final state instead of never running.
    ========================================================================== */
@@ -1039,22 +783,11 @@
   .float-slower,
   .glow-pulse,
   .shine::after,
-  .water-sheen,
-  .water-glint,
-  .water-caustic,
-  .water-panel,
   .pixel-art [class*='animate'] {
     animation: none !important;
   }
 
   .atmos-mote {
-    display: none;
-  }
-
-  /* The drop keeps its rim, its gloss and its contact shadow — it just stops
-     shimmering. Shape is not motion. */
-  .water-sheen,
-  .water-glint {
     display: none;
   }
 
@@ -1117,5 +850,193 @@
 @media (prefers-reduced-motion: reduce) {
   .eq-bar {
     animation: none;
+  }
+}
+
+/* ==========================================================================
+   Cinema — the material vocabulary the landing page is built from
+   --------------------------------------------------------------------------
+   Four things, and every one of them degrades to something plain:
+
+     .cine-glass      glassmorphism: a 3% white film, a 1px hairline, blur
+     .cine-reveal     the stagger: opacity + 30px of lift, 1.2s, on a curve
+                      that decelerates so hard it nearly stops on arrival
+     .cine-magnetic   a button that leans toward the cursor (see the component)
+     .cine-veil       the two overlays that make video legible underneath type
+
+   Motion all of it, so all of it can be turned off: the reduced-motion block
+   at the bottom of this file removes every animation and every transform,
+   and the layout is identical with them gone.
+   ========================================================================== */
+
+/* The glass. Used by the badge, the nav, the cards and the buttons. */
+.cine-glass {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  backdrop-filter: blur(12px) saturate(1.15);
+}
+
+/* Without backdrop-filter the glass would be a 3% wash over video — unreadable.
+   Go to a solid, still translucent, charcoal instead. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .cine-glass {
+    background: rgba(10, 10, 10, 0.82);
+  }
+}
+
+/* The stagger. Every element that reveals owns its own delay through
+   --reveal-delay, so the sequence is data, not markup order. */
+.cine-reveal {
+  opacity: 0;
+  transform: translate3d(0, 30px, 0);
+  animation: cine-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+@keyframes cine-reveal {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The two overlays over the film.
+   Linear: dark at the top for the navigation, dark at the bottom for the
+   footer, clear through the middle where the type sits.
+   Radial: a soft vignette so the centre of the frame is the brightest part. */
+.cine-veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.cine-veil-linear {
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.6) 0%,
+    transparent 40%,
+    rgba(0, 0, 0, 0.8) 100%
+  );
+}
+
+.cine-veil-radial {
+  background: radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.4) 100%);
+}
+
+/* A hairline that fades out at both ends — the separator in the footer, and the
+   rule above any kicker. */
+.cine-rule {
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.22), transparent);
+}
+
+/* The scroll indicator's line: white at the top, gone by the bottom. */
+.cine-thread {
+  width: 1px;
+  background: linear-gradient(to bottom, #ffffff, transparent);
+}
+
+/* A word set in italic with the light coming from above: grey at the ascenders,
+   pure white where the letterforms are densest. */
+.cine-gradient-text {
+  background-image: linear-gradient(178deg, #9ca3af 6%, #ffffff 62%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* The label voice: uppercase, wide, small. Used for eyebrows, nav links and the
+   footer, so they all read as one system. */
+.cine-label {
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+/* The nav's invert-on-hover: white fill wipes up from the baseline, the label
+   goes black. Both properties, so nothing is ever white-on-white mid-way. */
+.cine-invert {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.cine-invert::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: #ffffff;
+  transform: translateY(101%);
+  transition: transform 0.45s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.cine-invert:hover::before,
+.cine-invert:focus-visible::before {
+  transform: translateY(0);
+}
+
+.cine-invert:hover,
+.cine-invert:focus-visible {
+  color: #000000;
+}
+
+/* The primary action: a white pill whose inner shade slides up to meet the
+   cursor. `translate-y-full` at rest, `translate-y-0` on hover — the fill moves,
+   the label does not. */
+.cine-slide {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition: transform 0.3s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.cine-slide__fill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: #e5e7eb;
+  transform: translateY(100%);
+  transition: transform 0.4s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.cine-slide:hover {
+  transform: scale(1.05);
+}
+
+.cine-slide:hover .cine-slide__fill,
+.cine-slide:focus-visible .cine-slide__fill {
+  transform: translateY(0);
+}
+
+.cine-slide:active {
+  transform: scale(0.99);
+}
+
+/* Reduced motion: reveals resolve to their final state, the fills and the
+   scale are switched off, nothing is left invisible. */
+@media (prefers-reduced-motion: reduce) {
+  .cine-reveal {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+
+  .cine-slide,
+  .cine-slide:hover {
+    transform: none;
+  }
+
+  .cine-slide__fill,
+  .cine-invert::before {
+    transition: none;
+  }
+
+  .cine-slide:hover .cine-slide__fill {
+    transform: translateY(100%);
   }
 }

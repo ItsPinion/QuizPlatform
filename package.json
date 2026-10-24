@@ -28,6 +28,7 @@
     "typecheck": "turbo run typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "film": "bun run scripts/make-film.ts",
     "db:generate": "bun run --filter @quiz/db db:generate",
     "db:migrate": "bun run --filter @quiz/db db:migrate",
     "db:push": "bun run --filter @quiz/db db:push",
