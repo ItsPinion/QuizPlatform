@@ -31,6 +31,11 @@ const userSelection = {
   >`max(case when ${attempts.status} in ('PASSED','FAILED','EXPIRED') then ${attempts.percentage} end)`.mapWith(
     Number,
   ),
+  averagePercentage: sql<
+    number | null
+  >`avg(case when ${attempts.status} in ('PASSED','FAILED','EXPIRED') then ${attempts.percentage} end)`.mapWith(
+    Number,
+  ),
   lastAttemptAt: sql<number | null>`max(${attempts.startedAt})`.mapWith(Number),
 } as const;
 
@@ -44,6 +49,7 @@ type RawUserRow = {
   attempts: number;
   completedAttempts: number;
   bestPercentage: number | null;
+  averagePercentage: number | null;
   lastAttemptAt: number | null;
 };
 
@@ -58,6 +64,10 @@ function toAdminUser(row: RawUserRow): AdminUser {
     attempts: Number(row.attempts ?? 0),
     completedAttempts: Number(row.completedAttempts ?? 0),
     bestPercentage: row.bestPercentage === null ? null : Number(row.bestPercentage),
+    // `avg()` returns a float; the directory shows one decimal, so round here
+    // rather than in three components.
+    averagePercentage:
+      row.averagePercentage === null ? null : Math.round(Number(row.averagePercentage) * 10) / 10,
     lastAttemptAt:
       row.lastAttemptAt === null ? null : new Date(Number(row.lastAttemptAt)).toISOString(),
   };

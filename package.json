@@ -35,6 +35,7 @@
     "db:studio": "bun run --filter @quiz/db db:studio",
     "db:seed": "bun run --filter @quiz/db db:seed",
     "test:e2e": "bun run scripts/e2e-smoke.ts",
+    "test:spec": "bun run scripts/spec-audit.ts",
     "deploy:check": "bun run scripts/deploy-check.ts"
   },
   "devDependencies": {

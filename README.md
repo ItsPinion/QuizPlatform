@@ -22,7 +22,7 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 > a redacted system screen an operator can read, a `bun run deploy:check` gate that runs the same
 > rules locally and eight live probes against a real URL, one Dockerfile with two targets, and the
 > runbook for migrate, verify and roll back.
-> **896 automated tests and a 77-check end-to-end smoke run.** Feature complete: all fourteen days shipped.
+> **998 automated tests, a 77-check end-to-end smoke run and a 191-probe spec audit.** Feature complete: all fourteen days shipped.
 
 ---
 
@@ -318,6 +318,7 @@ quizplatform/
 │  └─ testing.md               test inventory, manual QA, security trade-offs
 ├─ scripts/
 │  ├─ e2e-smoke.ts             boots the real API and walks every flow
+│  ├─ spec-audit.ts            the spec, section by section, against a running app
 │  └─ deploy-check.ts          the deployment gate (env rules · live probes)
 ├─ Dockerfile                  deps → build → api / web runtime stages
 ├─ turbo.json                  task graph + caching
@@ -371,6 +372,7 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 | `bun run typecheck`    | root       | TypeScript across every package                      |
 | `bun run test`         | root       | Vitest across shared, db, api and web                |
 | `bun run test:e2e`     | root       | Real HTTP smoke run against a throwaway DB           |
+| `bun run test:spec`    | root       | 191 spec-section probes against a running app        |
 | `bun run deploy:check` | root       | Deployment gate: env rules, or live probes (`--url`) |
 | `bun run lint`         | root       | Alias of typecheck (ESLint is not wired up yet)      |
 | `bun run format`       | root       | Prettier write                                       |
@@ -388,13 +390,14 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 896 tests, all workspaces through Turbo
+bun run test                    # 998 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
 bun run test:e2e                # 77 checks against a live server + throwaway DB
+bun run test:spec               # 191 probes, one per spec promise (needs both servers up)
 bun run deploy:check            # the deployment gate (see docs/deployment.md)
 ```
 
-**896 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
+**998 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
 
 **`@quiz/shared`** (276) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
@@ -1440,7 +1443,7 @@ Day 14 (done): deployment & docs. Eight environment rules in one pure function, 
 places — `bun run deploy:check` before a build, `GET /api/admin/system` from inside the process, and
 `deploy:check --url` over the wire after the deploy — with a verdict of `ready`, `attention` or
 `blocked`; a redacted system screen at `/admin/system`; one `Dockerfile` with `api` and `web` targets;
-and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 896 Vitest tests
+and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 998 Vitest tests
 and a 75-check end-to-end smoke run.
 
 Day 13 (done): testing & security. Rate limiting on the auth routes (a hard per-address block and a

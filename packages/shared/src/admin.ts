@@ -30,6 +30,14 @@ export const adminUserSchema = z.object({
   completedAttempts: z.number(),
   /** Best scored percentage across completed attempts, null when none. */
   bestPercentage: z.number().nullable(),
+  /**
+   * Mean percentage across graded attempts, null when none.
+   *
+   * §6's "Student Information" table asks for both an average and a highest
+   * score, and the directory is where a teacher scans them — so the average is
+   * part of the row, not something you have to open a profile to find.
+   */
+  averagePercentage: z.number().nullable(),
   /** Start time of the most recent attempt, null when the user never tried. */
   lastAttemptAt: z.string().nullable(),
 });

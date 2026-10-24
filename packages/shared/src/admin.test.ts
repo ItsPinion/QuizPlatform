@@ -89,6 +89,7 @@ describe('adminUserSchema', () => {
     attempts: 4,
     completedAttempts: 3,
     bestPercentage: 88.5,
+    averagePercentage: 74.2,
     lastAttemptAt: '2026-01-05T00:00:00.000Z',
   };
 
@@ -102,9 +103,11 @@ describe('adminUserSchema', () => {
       attempts: 0,
       completedAttempts: 0,
       bestPercentage: null,
+      averagePercentage: null,
       lastAttemptAt: null,
     });
     expect(parsed.bestPercentage).toBeNull();
+    expect(parsed.averagePercentage).toBeNull();
   });
 
   it('carries no credential field', () => {

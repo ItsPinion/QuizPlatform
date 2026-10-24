@@ -198,9 +198,9 @@ export function UsersTable({ users, currentUserId }: Props) {
                       </span>
                     </span>
                     <p className="text-muted-foreground text-[11.5px]">
-                      {user.bestPercentage === null
+                      {user.averagePercentage === null || user.bestPercentage === null
                         ? 'no score yet'
-                        : `best ${user.bestPercentage.toFixed(1)}%`}
+                        : `avg ${user.averagePercentage.toFixed(1)}% · best ${user.bestPercentage.toFixed(1)}%`}
                       {user.lastAttemptAt ? ` · ${relativeDay(user.lastAttemptAt)}` : ''}
                     </p>
                   </td>

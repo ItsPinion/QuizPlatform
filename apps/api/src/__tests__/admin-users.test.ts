@@ -148,6 +148,7 @@ describe('GET /api/admin/users', () => {
       attempts: number;
       completedAttempts: number;
       bestPercentage: number | null;
+      averagePercentage: number | null;
       lastAttemptAt: string | null;
       createdAt: string;
     }[];
@@ -172,6 +173,31 @@ describe('GET /api/admin/users', () => {
     expect(body.pagination.page).toBe(1);
     expect(body.pagination.hasPrev).toBe(false);
     expect(body.filters.sort).toBe('newest');
+  });
+
+  it('carries the average and the best score §6 asks for', async () => {
+    const { body } = await getJson<ListBody>('/api/admin/users?pageSize=50', await adminCookie());
+
+    for (const user of body.users) {
+      if (user.completedAttempts === 0) {
+        // Nothing graded yet: both figures are null, not a misleading 0.
+        expect(user.averagePercentage).toBeNull();
+        expect(user.bestPercentage).toBeNull();
+        continue;
+      }
+
+      expect(user.averagePercentage).not.toBeNull();
+      expect(user.bestPercentage).not.toBeNull();
+
+      // An average is bounded by the extremes of the same set, so it can never
+      // exceed the best. A row where it does is a join that multiplied rows.
+      expect(user.averagePercentage!).toBeGreaterThanOrEqual(0);
+      expect(user.averagePercentage!).toBeLessThanOrEqual(100);
+      expect(user.averagePercentage!).toBeLessThanOrEqual(user.bestPercentage! + 0.001);
+    }
+
+    // The seeded students have graded attempts, so the invariant was exercised.
+    expect(body.users.some((user) => user.averagePercentage !== null)).toBe(true);
   });
 
   it('never exposes the password hash', async () => {

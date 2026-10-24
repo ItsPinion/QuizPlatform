@@ -3,7 +3,7 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test         # 997 unit + integration tests across the four workspaces
+bun run test         # 998 unit + integration tests across the four workspaces
 bun run test:e2e     # 77 checks against a real HTTP server (own process, own port)
 bun run deploy:check # the deployment gate (see docs/deployment.md)
 ```
@@ -21,7 +21,7 @@ tests.
 | -------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@quiz/shared` | 338   | auth + content contracts, attempt clocks, the grader, dashboard, analytics, ranking, deployment rules, availability, passwords, certificates, email, CSV import, `.xlsx` reading |
 | `@quiz/db`     | 62    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring                                                                                         |
-| `@quiz/api`    | 338   | health/readiness, auth, guards, content, taking, grading, reviewing, stats, analytics, board, system, account, import, outbox                                                    |
+| `@quiz/api`    | 339   | health/readiness, auth, guards, content, taking, grading, reviewing, stats, analytics, board, system, account, import, outbox                                                    |
 | `@quiz/web`    | 259   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers, theming                                                                            |
 
 Run one workspace at a time when you are iterating:
@@ -486,6 +486,68 @@ sit" — and a test that assumed otherwise would fail for the right reason on th
 
 ---
 
+## Specification audit
+
+`bun run test:spec` (source: `scripts/spec-audit.ts`) reads the specification back to the running product. Every probe is
+tagged with the section it comes from (`§4`, `§6`, `§26`, …), so the output can be read beside the
+document rather than interpreted. It is deliberately _outside_ the test runner: no imports from the
+repo, no fixtures, no mocks — it talks to a deployed API and rendered HTML with `urllib`, which is
+the only way to notice that the tests and the product disagree.
+
+It needs both servers up and a seeded local database:
+
+```bash
+# terminal 1 — API against a disposable file database
+cd packages/db
+TURSO_DATABASE_URL="file:../../.data/smoke.db" bunx drizzle-kit push --force
+bunx tsx src/seed.ts --force
+cd ../..
+TURSO_DATABASE_URL="file:../../.data/smoke.db" JWT_SECRET=dev-secret-dev-secret-dev-secret-1234 \
+  bun run --filter=@quiz/api start
+
+# terminal 2 — the web app, pointed at that API
+API_INTERNAL_URL=http://localhost:3001 bun run --filter=@quiz/web build
+API_INTERNAL_URL=http://localhost:3001 bun run --filter=@quiz/web start
+
+# terminal 3 — the audit
+bun run test:spec
+```
+
+`API_URL`, `WEB_URL` and `SMOKE_DB` override the defaults (`localhost:3001`, `localhost:3000`,
+`.data/smoke.db`); it runs on Bun with `fetch` and `bun:sqlite`, no extra dependency. §20 is the one section read from storage rather than HTTP — whether a documented
+column exists is not observable through the API — and it skips itself when the file is absent.
+
+The run mutates a little, on purpose and repeatably: it registers one throwaway student per run (the
+attempt section plays the paper as that account, so a second run cannot fail for the boring reason
+that the seeded student ran out of tries), creates and then deletes an audit quiz and category, sends
+one password-reset mail, and spends its own rate-limit bucket from a fixed `X-Forwarded-For` address.
+
+**Result on 2026-10-24, against `5c6e6c7` + the average-score fix: `191 passed · 0 failed`.** The
+probes group by section as follows; each line is a count of assertions, not of features.
+
+| §     | What the probes prove                                                                                                                                                                                                                                                                           | Probes |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 3.1   | both roles sign in; the admin console renders; users, quizzes, categories, attempts and one attempt's answers are readable through the API                                                                                                                                                      | 10     |
+| 4     | register, logout, forgot-password for a student **and** an admin, a bad reset token refused, change-password requires the current password                                                                                                                                                      | 8      |
+| 5     | every statistic the dashboard names — students, quizzes, published, drafts, questions, attempts, average, passed, failed — plus a 30-point timeline, popular quizzes and popular categories                                                                                                     | 15     |
+| 6     | name, email, registration date, status, attempts, **average score**, highest score; a student's profile, history and performance; the profile page renders                                                                                                                                      | 13     |
+| 7, 9  | create → edit → publish → unpublish → delete; every create-quiz field including the thumbnail; question text, options, one correct answer, explanation, marks, difficulty                                                                                                                       | 18     |
+| 8     | create, rename, delete a category; the row links to the filtered quiz list                                                                                                                                                                                                                      | 4      |
+| 11–14 | start, resume without spending a try, the server-side clock, answer save, submit, the full result payload, and a review carrying question, selected answer, correct answer, explanation and verdict                                                                                             | 26     |
+| 15–19 | dashboard totals and recents; search by title and by category; category, difficulty, duration and sort filters; details; history; leaderboard across three metrics, three periods and one category                                                                                              | 31     |
+| 20    | every table and column the spec draws exists, and passwords are stored as scrypt hashes                                                                                                                                                                                                         | 8      |
+| 25    | the endpoint list resolves — each canonical route answers rather than 404s                                                                                                                                                                                                                      | 11     |
+| 26    | randomisation, negative marking (setting **and** applied penalty), max attempts, scheduling (a blocked start), certificates plus public verification, the email outbox and its transport, dark mode on both consoles, CSV parse and commit                                                      | 20     |
+| 27    | a tampered session, invalid ids, missing parameters, SQL injection, a foreign origin, rate limiting, secure headers, a CSP on the web app, an error envelope with no stack, unknown routes, no secrets in `/api/health`, stored-XSS escaping, and no answer key or score in the attempt payload | 23     |
+| 28    | every console and the landing page declares a responsive viewport                                                                                                                                                                                                                               | 4      |
+
+Two things the audit cannot prove, both documented elsewhere: question types other than
+multiple-choice (§10 of the spec defers them; the rationale and migration path are in
+`docs/advanced-features.md` §10), and wall-clock behaviour under load. Both remain honest gaps rather
+than silent ones.
+
+---
+
 ## Manual QA checklist
 
 Useful after changing auth, the proxy, or the cookie. Start with `bun dev`, then:
@@ -667,7 +729,9 @@ QUIZ_WOULD_HAVE_NO_QUESTIONS`; unpublish and the delete goes through.
   request rather than at token expiry.
 - Authorization happens on the server: the web guards read the session through the API, so hiding a
   link is never the only protection — the API rejects the request regardless of the UI.
-- CSRF: the cookie is `SameSite=Lax`, requests require JSON bodies, and every state-changing route is
-  POST-only. A double-submit token can be layered on in Day 13 if the deployment needs it.
+- CSRF: the cookie is `SameSite=Lax`, every state-changing request needs a JSON body, and
+  `apps/api/src/middleware/origin.ts` refuses any write carrying a foreign `Origin`
+  (`403 CROSS_ORIGIN_BLOCKED`). Safe methods and requests without an `Origin` (curl, the e2e suite)
+  pass, and logout is exempt so a stale cross-site request cannot pin a victim's session open.
 - `JWT_SECRET` is mandatory in production (the API exits at boot without a 32+ character secret);
   local development falls back to a warned-about secret so `bun dev` works out of the box.
