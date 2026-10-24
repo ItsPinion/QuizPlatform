@@ -144,7 +144,18 @@ function cellAt(row: readonly string[], index: number): string {
  * which line to fix.
  */
 export function parseQuestionImport(text: string): ImportResult {
-  const rows = parseCsv(text);
+  return parseQuestionImportRows(parseCsv(text));
+}
+
+/**
+ * The same rules, from rows rather than text.
+ *
+ * Split out because an `.xlsx` workbook is not text: it is unzipped into cells
+ * (see `xlsx.ts`) and then has to obey exactly the same header, marks, difficulty
+ * and `correct`-column rules as a CSV. One implementation means a spreadsheet and
+ * a `.csv` can never drift apart in what they accept.
+ */
+export function parseQuestionImportRows(rows: string[][]): ImportResult {
   if (rows.length === 0) {
     return { questions: [], issues: [{ line: 0, message: 'The file is empty.' }] };
   }
@@ -258,3 +269,25 @@ export const questionImportResponseSchema = z.object({
   questions: z.array(importQuestionSchema),
 });
 export type QuestionImportResponse = z.infer<typeof questionImportResponseSchema>;
+
+/**
+ * Rows back to CSV text.
+ *
+ * The inverse of `parseCsv`, and the bridge between an `.xlsx` workbook and this
+ * module's single text contract: the browser unzips the spreadsheet, converts it
+ * here, and posts exactly what a `.csv` would have posted — so the API needs no
+ * second input format, and the upload never has to fit the API's body budget
+ * twice.
+ */
+export function toCsv(rows: readonly (readonly string[])[]): string {
+  return rows
+    .map((row) =>
+      row
+        .map((cell) => {
+          const value = cell ?? '';
+          return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+        })
+        .join(','),
+    )
+    .join('\n');
+}

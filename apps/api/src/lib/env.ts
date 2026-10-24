@@ -20,6 +20,17 @@ const envSchema = z.object({
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(0).default(10),
   AUTH_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(1).default(300),
   REGISTER_RATE_LIMIT_MAX: z.coerce.number().int().min(0).default(10),
+  // Mail. The outbox is always written; these decide whether a message also
+  // *leaves* the process, and through what. No SMTP client is bundled: an HTTP
+  // provider (Resend, a relay, an internal webhook) is one `fetch` and works the
+  // same in every runtime this project targets.
+  MAIL_TRANSPORT: z.enum(['log', 'webhook', 'resend']).default('log'),
+  /** Generic relay: receives `{ to, from, subject, text }` as JSON. */
+  MAIL_WEBHOOK_URL: z.string().url().optional(),
+  /** Resend API key; also switches the transport to `resend` when set. */
+  RESEND_API_KEY: z.string().optional(),
+  /** The From: line. Required by a real provider, ignored by the log. */
+  MAIL_FROM: z.string().default('QuizPlatform <no-reply@quiz.local>'),
   /** Largest accepted request body, in bytes. */
   MAX_BODY_BYTES: z.coerce
     .number()

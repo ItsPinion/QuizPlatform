@@ -7,7 +7,9 @@ import {
   IMPORT_HEADER,
   MAX_IMPORT_BYTES,
   parseQuestionImport,
+  parseQuestionImportRows,
 } from '@quiz/shared/import';
+import { isWorkbook, readWorkbook } from '@quiz/shared/xlsx';
 import { CircleAlert, CircleCheck, FileUp, Loader2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 
@@ -24,10 +26,17 @@ import { parseApiFailure, toApiFailure } from '@/lib/api-error';
  * count, the errors and the exact wording of each error are the ones the server
  * would produce. Nothing is sent until the administrator has seen that.
  *
- * "CSV" here includes what Excel exports — the parser handles quoted fields,
- * embedded commas, both line endings and a UTF-8 BOM. `.xlsx` is not a text
- * format; the dialog says so and offers the one-click sheet instead of failing
- * with a browser error.
+ * Both formats the brief asks for are accepted:
+ *
+ *   - **CSV**, including what Excel's "save as CSV" writes (quoted fields,
+ *     embedded commas, CRLF, a UTF-8 BOM);
+ *   - **`.xlsx`**, unzipped *in the browser* by `@quiz/shared/xlsx`, mapped to
+ *     rows and converted to the same CSV text the server already accepts. No
+ *     second endpoint, no upload size limit double-counted, and nothing about
+ *     the workbook is trusted before the preview shows it.
+ *
+ * The legacy binary `.xls` is not a zip and is refused with a one-line
+ * instruction rather than a stack trace.
  */
 export function QuestionImport({
   quizId,
@@ -67,14 +76,44 @@ export function QuestionImport({
       return;
     }
 
-    if (/\.(xlsx|xls)$/i.test(file.name)) {
+    if (/\.xls$/i.test(file.name)) {
       setError(
-        'Excel workbooks are not text. Export the sheet as CSV (File → Save as → CSV) and drop that here — or paste the rows below.',
+        'That is the old Excel format (.xls), which is not a workbook we can read. Re-save it as .xlsx or as CSV and try again.',
       );
       return;
     }
 
-    const content = await file.text();
+    const bytes = new Uint8Array(await file.arrayBuffer());
+
+    // A workbook is a zip whatever it is called, so the bytes decide — a `.csv`
+    // exported by a tool that writes a BOM is still text, and a `.xlsx` renamed
+    // to `.txt` is still a workbook.
+    if (isWorkbook(bytes)) {
+      try {
+        const rows = readWorkbook(bytes);
+        const csv = rows
+          .map((row) =>
+            row
+              .map((cell) => (/[",\r\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell))
+              .join(','),
+          )
+          .join('\n');
+
+        setFileName(`${file.name} → CSV rows`);
+        setText(csv);
+        setPreview(parseQuestionImportRows(rows));
+      } catch (cause) {
+        setError(
+          cause instanceof Error
+            ? `That workbook could not be read: ${cause.message}`
+            : 'That workbook could not be read.',
+        );
+      }
+
+      return;
+    }
+
+    const content = new TextDecoder().decode(bytes);
     setFileName(file.name);
     setText(content);
     setPreview(parseQuestionImport(content));
@@ -144,7 +183,7 @@ export function QuestionImport({
         <div>
           <p className="text-[13.5px] font-medium">Import questions</p>
           <p className="text-muted-foreground mt-0.5 text-[11.5px]">
-            CSV, one question per row. Nothing is saved until you press Import.
+            CSV or Excel (.xlsx), one question per row. Nothing is saved until you press Import.
           </p>
         </div>
         <Button
@@ -166,13 +205,13 @@ export function QuestionImport({
         >
           <Upload aria-hidden className="text-muted-foreground mx-auto size-4" />
           <span className="text-muted-foreground text-[12.5px]">
-            {fileName ?? 'Choose a .csv file, or paste the rows below'}
+            {fileName ?? 'Choose a .csv or .xlsx file, or paste the rows below'}
           </span>
           <input
             ref={inputRef}
             id="import-file"
             type="file"
-            accept=".csv,text/csv,text/plain"
+            accept=".csv,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="sr-only"
             onChange={(event) => void onFile(event.target.files?.[0])}
           />

@@ -15,7 +15,13 @@ import {
   deleteUserResponseSchema,
   studentProfileResponseSchema,
 } from '@quiz/shared/admin-attempts';
-import { emailKindSchema, emailStatusSchema, outboxResponseSchema } from '@quiz/shared/email';
+import {
+  drainOutboxResponseSchema,
+  emailKindSchema,
+  emailStatusSchema,
+  outboxResponseSchema,
+  retryEmailResponseSchema,
+} from '@quiz/shared/email';
 import { PERMISSIONS, type AccessDescriptor } from '@quiz/shared/auth';
 import { systemStatusSchema } from '@quiz/shared/deployment';
 import { Hono } from 'hono';
@@ -25,7 +31,7 @@ import { getSystemStatus } from '../lib/system-status';
 import { buildDashboardStats } from '../lib/admin-stats';
 import { deleteUser, getUserById, listUsers, setUserStatus, updateUser } from '../lib/admin-users';
 import { getAttemptDetail, getStudentProfile, listAttempts } from '../lib/admin-attempts';
-import { listOutbox } from '../lib/emails';
+import { countQueued, drainOutbox, listOutbox, retryEmail } from '../lib/emails';
 import { adminCategoryRoutes } from './admin-categories';
 import { adminQuestionRoutes } from './admin-questions';
 import { adminQuizRoutes } from './admin-quizzes';
@@ -211,6 +217,26 @@ export const adminRoutes = new Hono<AppEnv>()
       ),
       200,
     );
+  })
+
+  /**
+   * Send one message again.
+   *
+   * The outbox is the record, so a retry does not delete the failure — it flips
+   * the row back to `QUEUED`, hands it to the transport once and reports the
+   * state it ended in. `SENT` rows are a no-op rather than a second send.
+   */
+  .post('/emails/:id/retry', async (c) => {
+    const id = c.req.param('id');
+    return c.json(retryEmailResponseSchema.parse(await retryEmail(id)), 200);
+  })
+
+  /** Try everything that is still waiting, once. */
+  .post('/emails/drain', async (c) => {
+    const sent = await drainOutbox();
+    const remaining = await countQueued();
+
+    return c.json(drainOutboxResponseSchema.parse({ sent, remaining }), 200);
   })
 
   /* ------------------------- categories & questions ----------------------- */

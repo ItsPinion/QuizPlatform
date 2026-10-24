@@ -64,10 +64,37 @@ export const outboxResponseSchema = z.object({
     kind: emailKindSchema.nullable(),
     status: emailStatusSchema.nullable(),
   }),
+  /**
+   * Where a message actually goes in this deployment. `log` means the outbox is
+   * the only place a message exists — which the console says out loud, rather
+   * than implying a provider that is not configured.
+   */
+  transport: z.enum(['log', 'webhook', 'resend']),
 });
 export type OutboxResponse = z.infer<typeof outboxResponseSchema>;
 
 export const OUTBOX_PAGE_SIZE = 25;
+
+/**
+ * Re-sending one message.
+ *
+ * A `FAILED` row is kept, not deleted: the attempt, the address and the reason
+ * are the evidence. Retrying flips it back to `QUEUED` and asks the transport
+ * once more, so the outbox is a queue with a history rather than a log.
+ */
+export const retryEmailResponseSchema = z.object({
+  id: z.string(),
+  status: emailStatusSchema,
+  error: z.string().nullable(),
+});
+export type RetryEmailResponse = z.infer<typeof retryEmailResponseSchema>;
+
+/** Draining the queue: how many left, how many are still waiting. */
+export const drainOutboxResponseSchema = z.object({
+  sent: z.number(),
+  remaining: z.number(),
+});
+export type DrainOutboxResponse = z.infer<typeof drainOutboxResponseSchema>;
 
 /* -------------------------------------------------------------------------- */
 /*  Templates                                                                 */

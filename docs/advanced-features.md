@@ -174,9 +174,39 @@ The three triggers §26 names:
 | Attempt graded (manual, deadline or late) | `RESULT`      | the attempt     |
 | A certificate is issued                   | `CERTIFICATE` | the certificate |
 
-`/admin/emails` lists the outbox with the kind, the status, the recipient and the
-body, and the smoke run leaves it at `{queued 1, sent 10, failed 0, total 11}` for
-a fresh seed.
+### The transport
+
+Where a message actually goes is configuration, not code:
+
+| `MAIL_TRANSPORT` | What happens                                                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `log` (default)  | The whole message goes to stdout and the row is marked `SENT`. Development needs no mail server, and a reset link is still readable. |
+| `webhook`        | `POST { to, from, subject, text }` to `MAIL_WEBHOOK_URL`. Any relay or in-house mailer works.                                        |
+| `resend`         | The Resend HTTP API, used automatically when `RESEND_API_KEY` is set.                                                                |
+
+`MAIL_FROM` sets the `From:` line. There is deliberately no SMTP client: an SMTP
+socket and its timeout behaviour is a dependency to get wrong, and every provider
+that matters offers an HTTPS endpoint that `fetch` already reaches. A transport
+failure throws, and `deliver()` records the reason against the row — a transport
+problem never looks like a successful send.
+
+### The console
+
+`/admin/emails` lists the outbox with kind, status, recipient and the full body
+(inside a native `<details>`, so it can be selected and copied), states which
+transport the process is using, and offers both actions a queue needs:
+
+- **Send queued** — `POST /api/admin/emails/drain`, which tries every `QUEUED`
+  row once and reports how many left and how many are still waiting.
+- **Retry / Resend** — `POST /api/admin/emails/:id/retry`, which flips the row
+  back to `QUEUED`, hands it to the transport and reports the state it ended in.
+  A `SENT` row is a no-op rather than a second send, and an unknown id is a clean
+  `404 EMAIL_NOT_FOUND`.
+
+Both call the same transport the original send used, so what an administrator
+triggers from the console is exactly what a request would have done.
+
+A fresh seed leaves the outbox at `{queued 1, sent 4, failed 0, total 5}`.
 
 **Tests:** `packages/shared/src/email.test.ts` (the templates),
 `apps/api/src/__tests__/submissions.test.ts` (a graded paper queues exactly one
@@ -247,14 +277,34 @@ The dialog (`components/question-import.tsx`) accepts a dropped file, a chosen
 per-line issues — before anything is written. `dryRun: true` returns the same
 preview from the API without inserting.
 
-**On Excel:** a `.xlsx` file is a zip of XML, not text, and teaching the server to
-parse it would mean a spreadsheet dependency and a second parser to keep correct.
-The dialog says so plainly — _"Export the sheet as CSV (File → Save as → CSV) and
-drop that here — or paste the rows below"_ — and then does exactly what the
-exported file needs. This is a deliberate, stated trade, not an omission.
+**On Excel:** `.xlsx` is accepted directly. A workbook is a ZIP of XML, so the
+browser unzips it (`fflate`, 8 kB), reads the first sheet's cell values
+(`packages/shared/src/xlsx.ts`) and converts the rows to the _same CSV text_ the
+endpoint already takes (`toCsv`, `parseQuestionImportRows`). Three consequences
+worth stating:
+
+- **There is one server contract, not two.** The API never sees a zip; a
+  spreadsheet and a `.csv` travel the identical path, so they cannot drift in
+  what they accept.
+- **The file is parsed where the preview is.** Dropping a workbook shows the same
+  per-row issues and accepted count a `.csv` does, before anything is sent.
+- **The detection is by content, not extension.** `isWorkbook()` checks the ZIP
+  magic, so a `.xlsx` renamed to `.txt` still works and a `.csv` with a BOM is
+  still read as text. The legacy binary `.xls` is not a zip and is refused with a
+  one-line instruction ("re-save it as .xlsx or CSV") rather than a stack trace.
+
+What the reader deliberately does not do: formulas (it reads the cached value,
+which is what the sheet shows), styling, merged cells, or any sheet but the
+first. None of those carry meaning for a question import.
+
+`packages/shared/src/xlsx.test.ts` builds real workbooks with `zipSync` —
+shared-string cells, inline strings, gapped columns, a missing rels part, a zip
+with no worksheet — and asserts that the round trip through `toCsv` produces
+questions identical to the CSV path.
 
 **Tests:** `packages/shared/src/import.test.ts` (quoting, BOM, CRLF, blank lines,
-header detection, bad rows, caps),
+header detection, bad rows, caps), `packages/shared/src/xlsx.test.ts` (real
+workbooks, gapped cells, missing parts, round trip),
 `apps/api/src/__tests__/admin-questions.test.ts` (dry run writes nothing, the real
 run writes everything, an unauthorised caller is refused).
 
@@ -266,35 +316,35 @@ The specification's list, the route this build serves, and the honest difference
 Everything under `/api` is the Hono app; the branches are mounted in
 `apps/api/src/app.ts`.
 
-| §25 endpoint                     | Served as                                                                       | Notes                                                                                                                                                                                   |
-| -------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/auth/register`        | `POST /api/auth/register`                                                       | Always creates a `STUDENT`; the role is never client-chosen.                                                                                                                            |
-| `POST /api/auth/login`           | `POST /api/auth/login`                                                          | Sets the httpOnly `quiz_session` cookie.                                                                                                                                                |
-| `POST /api/auth/logout`          | `POST /api/auth/logout`                                                         | Idempotent.                                                                                                                                                                             |
-| `GET /api/auth/me`               | `GET /api/auth/me`                                                              | The session the web app renders from.                                                                                                                                                   |
-| `POST /api/auth/forgot-password` | `POST /api/auth/forgot-password`                                                | Always `202`, identical body for known and unknown addresses.                                                                                                                           |
-| `POST /api/auth/reset-password`  | `POST /api/auth/reset-password`                                                 | Single-use token, 60 minutes, SHA-256 stored.                                                                                                                                           |
-| — (not in §25)                   | `POST /api/auth/change-password`                                                | Added: change from inside a session, requires the current password, kills outstanding reset links.                                                                                      |
-| `GET /api/quizzes`               | `GET /api/student/quizzes`                                                      | Student-scoped: published _and_ inside their availability window. The admin list is `GET /api/admin/quizzes`.                                                                           |
-| `GET /api/quizzes/:id`           | `GET /api/student/quizzes/:id`                                                  | Includes the caller's attempt state for that quiz.                                                                                                                                      |
-| `POST /api/quizzes/:id/start`    | `POST /api/student/quizzes/:id/start`                                           | Deals the randomisation, freezes `negativeMarks`, enforces the window and the attempt cap.                                                                                              |
-| `GET /api/attempts/:id`          | `GET /api/student/attempts/:id`                                                 | The paper, with the timer and the dealt order replayed.                                                                                                                                 |
-| `POST /api/attempts/:id/answers` | `PUT /api/student/attempts/:id/answers/:questionId`                             | **Method and path differ.** One answer per call, keyed by question — it is an idempotent upsert, which `PUT` states correctly; `POST` on a collection would imply an append.            |
-| `POST /api/attempts/:id/submit`  | `POST /api/student/attempts/:id/submit`                                         | No body: the server decides manual vs deadline from `expiresAt`. Repeat calls replay the same result.                                                                                   |
-| `GET /api/attempts/:id/result`   | `GET /api/student/attempts/:id/review`                                          | **Path differs**: the review is the result plus the answer key (correct option, chosen option, explanation), which is what the screen actually needs. Submit already returns the score. |
-| `GET /api/attempts`              | `GET /api/student/attempts`                                                     | Attempt history, filterable and sortable. Admin view: `GET /api/admin/attempts`.                                                                                                        |
-| `GET /api/leaderboard`           | `GET /api/leaderboard`                                                          | `?metric=highest\|average\|completed`, `?period=all\|weekly\|monthly`, `?categoryId=`.                                                                                                  |
-| `GET /api/categories`            | `GET /api/categories` (public) + `GET /api/admin/categories`                    | The student catalogue reads categories from the database at runtime, never a hardcoded list.                                                                                            |
-| `GET /api/admin/users`           | `GET /api/admin/users`                                                          |                                                                                                                                                                                         |
-| `PATCH /api/users/:id/status`    | `PATCH /api/admin/users/:id/status`                                             | **Prefixed with `/admin`**, like every admin route, so the authorization middleware has one boundary to guard.                                                                          |
-| `DELETE /api/users/:id`          | `DELETE /api/admin/users/:id`                                                   | Cascades attempts, answers, certificates and reset links; returns how many attempts went with the account.                                                                              |
-| — (not in §25)                   | `GET /api/admin/users/:id/profile`                                              | Added for §6's "student profile/history/performance" view; the same builder serves the student's own `GET /api/student/profile`.                                                        |
-| — (not in §25)                   | `GET /api/admin/attempts`, `GET /api/admin/attempts/:id`                        | Added: §6's attempt oversight, filtered by quiz, student and status.                                                                                                                    |
-| — (not in §25)                   | `GET /api/admin/emails`                                                         | Added: the outbox from §26's email requirement, inspectable.                                                                                                                            |
-| — (not in §25)                   | `GET /api/student/certificates`                                                 | Added: the student's own certificates.                                                                                                                                                  |
-| — (not in §25)                   | `GET /api/certificates/verify/:code`                                            | Added and public: the third party's check, which is the point of a certificate.                                                                                                         |
-| — (not in §25)                   | `POST /api/admin/quizzes/:quizId/questions/import`                              | Added: §26's import.                                                                                                                                                                    |
-| — (not in §25)                   | `GET /api/landing`, `GET /api/meta`, `GET /api/health`, `GET /api/admin/system` | Added for the landing page's live data, the version stamp, and the deployment gate.                                                                                                     |
+| §25 endpoint                     | Served as                                                                                   | Notes                                                                                                                                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/auth/register`        | `POST /api/auth/register`                                                                   | Always creates a `STUDENT`; the role is never client-chosen.                                                                                                                            |
+| `POST /api/auth/login`           | `POST /api/auth/login`                                                                      | Sets the httpOnly `quiz_session` cookie.                                                                                                                                                |
+| `POST /api/auth/logout`          | `POST /api/auth/logout`                                                                     | Idempotent.                                                                                                                                                                             |
+| `GET /api/auth/me`               | `GET /api/auth/me`                                                                          | The session the web app renders from.                                                                                                                                                   |
+| `POST /api/auth/forgot-password` | `POST /api/auth/forgot-password`                                                            | Always `202`, identical body for known and unknown addresses.                                                                                                                           |
+| `POST /api/auth/reset-password`  | `POST /api/auth/reset-password`                                                             | Single-use token, 60 minutes, SHA-256 stored.                                                                                                                                           |
+| — (not in §25)                   | `POST /api/auth/change-password`                                                            | Added: change from inside a session, requires the current password, kills outstanding reset links.                                                                                      |
+| `GET /api/quizzes`               | `GET /api/student/quizzes`                                                                  | Student-scoped: published _and_ inside their availability window. The admin list is `GET /api/admin/quizzes`.                                                                           |
+| `GET /api/quizzes/:id`           | `GET /api/student/quizzes/:id`                                                              | Includes the caller's attempt state for that quiz.                                                                                                                                      |
+| `POST /api/quizzes/:id/start`    | `POST /api/student/quizzes/:id/start`                                                       | Deals the randomisation, freezes `negativeMarks`, enforces the window and the attempt cap.                                                                                              |
+| `GET /api/attempts/:id`          | `GET /api/student/attempts/:id`                                                             | The paper, with the timer and the dealt order replayed.                                                                                                                                 |
+| `POST /api/attempts/:id/answers` | `PUT /api/student/attempts/:id/answers/:questionId`                                         | **Method and path differ.** One answer per call, keyed by question — it is an idempotent upsert, which `PUT` states correctly; `POST` on a collection would imply an append.            |
+| `POST /api/attempts/:id/submit`  | `POST /api/student/attempts/:id/submit`                                                     | No body: the server decides manual vs deadline from `expiresAt`. Repeat calls replay the same result.                                                                                   |
+| `GET /api/attempts/:id/result`   | `GET /api/student/attempts/:id/review`                                                      | **Path differs**: the review is the result plus the answer key (correct option, chosen option, explanation), which is what the screen actually needs. Submit already returns the score. |
+| `GET /api/attempts`              | `GET /api/student/attempts`                                                                 | Attempt history, filterable and sortable. Admin view: `GET /api/admin/attempts`.                                                                                                        |
+| `GET /api/leaderboard`           | `GET /api/leaderboard`                                                                      | `?metric=highest\|average\|completed`, `?period=all\|weekly\|monthly`, `?categoryId=`.                                                                                                  |
+| `GET /api/categories`            | `GET /api/categories` (public) + `GET /api/admin/categories`                                | The student catalogue reads categories from the database at runtime, never a hardcoded list.                                                                                            |
+| `GET /api/admin/users`           | `GET /api/admin/users`                                                                      |                                                                                                                                                                                         |
+| `PATCH /api/users/:id/status`    | `PATCH /api/admin/users/:id/status`                                                         | **Prefixed with `/admin`**, like every admin route, so the authorization middleware has one boundary to guard.                                                                          |
+| `DELETE /api/users/:id`          | `DELETE /api/admin/users/:id`                                                               | Cascades attempts, answers, certificates and reset links; returns how many attempts went with the account.                                                                              |
+| — (not in §25)                   | `GET /api/admin/users/:id/profile`                                                          | Added for §6's "student profile/history/performance" view; the same builder serves the student's own `GET /api/student/profile`.                                                        |
+| — (not in §25)                   | `GET /api/admin/attempts`, `GET /api/admin/attempts/:id`                                    | Added: §6's attempt oversight, filtered by quiz, student and status.                                                                                                                    |
+| — (not in §25)                   | `GET /api/admin/emails`, `POST /api/admin/emails/drain`, `POST /api/admin/emails/:id/retry` | Added: the outbox from §26's email requirement — inspectable, drainable, and retryable per message.                                                                                     |
+| — (not in §25)                   | `GET /api/student/certificates`                                                             | Added: the student's own certificates.                                                                                                                                                  |
+| — (not in §25)                   | `GET /api/certificates/verify/:code`                                                        | Added and public: the third party's check, which is the point of a certificate.                                                                                                         |
+| — (not in §25)                   | `POST /api/admin/quizzes/:quizId/questions/import`                                          | Added: §26's import.                                                                                                                                                                    |
+| — (not in §25)                   | `GET /api/landing`, `GET /api/meta`, `GET /api/health`, `GET /api/admin/system`             | Added for the landing page's live data, the version stamp, and the deployment gate.                                                                                                     |
 
 Two conventions behind the table:
 

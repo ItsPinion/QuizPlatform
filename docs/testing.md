@@ -3,8 +3,8 @@
 Two layers, both runnable from the repo root:
 
 ```bash
-bun run test         # 844 unit + integration tests across the four workspaces
-bun run test:e2e     # 75 checks against a real HTTP server (own process, own port)
+bun run test         # 997 unit + integration tests across the four workspaces
+bun run test:e2e     # 77 checks against a real HTTP server (own process, own port)
 bun run deploy:check # the deployment gate (see docs/deployment.md)
 ```
 
@@ -17,12 +17,12 @@ tests.
 
 ## What runs where
 
-| Workspace      | Tests | Focus                                                                                                 |
-| -------------- | ----- | ----------------------------------------------------------------------------------------------------- |
-| `@quiz/shared` | 262   | auth + content contracts, attempt clocks, the grader, dashboard, analytics, ranking, deployment rules |
-| `@quiz/db`     | 62    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring              |
-| `@quiz/api`    | 320   | health/readiness, auth, guards, content, taking, grading, reviewing, stats, analytics, board, system  |
-| `@quiz/web`    | 200   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers          |
+| Workspace      | Tests | Focus                                                                                                                                                                            |
+| -------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@quiz/shared` | 338   | auth + content contracts, attempt clocks, the grader, dashboard, analytics, ranking, deployment rules, availability, passwords, certificates, email, CSV import, `.xlsx` reading |
+| `@quiz/db`     | 62    | migrations replayed from scratch, schema constraints, seed integrity, Drizzle Kit wiring                                                                                         |
+| `@quiz/api`    | 338   | health/readiness, auth, guards, content, taking, grading, reviewing, stats, analytics, board, system, account, import, outbox                                                    |
+| `@quiz/web`    | 259   | error envelopes, page guards, directory/quiz/student/review/dashboard/analytics/rank helpers, theming                                                                            |
 
 Run one workspace at a time when you are iterating:
 
@@ -474,7 +474,15 @@ then asserts:
     in the raw body
 75. the same endpoint for a student → `403`, and anonymously → `401`
 
+The numbering above follows the flow a reader cares about; the script runs 77 checks in total,
+including the appearance and availability assertions that grew out of §26.
+
 It prints a pass/fail table, exits non-zero on failure, and removes the database afterwards.
+
+One consequence of scheduling worth knowing when reading the script: it chooses a quiz whose
+`availability` is `OPEN` before it starts an attempt. The seed includes a paper scheduled for later
+in the week, so "the first quiz in the catalogue" is no longer the same thing as "a quiz you can
+sit" — and a test that assumed otherwise would fail for the right reason on the wrong day.
 
 ---
 

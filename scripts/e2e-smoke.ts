@@ -1027,7 +1027,13 @@ try {
     expectStatus(res, 200);
 
     const body = (await res.json()) as {
-      quizzes: { id: string; title: string; questionCount: number; attemptsUsed: number }[];
+      quizzes: {
+        id: string;
+        title: string;
+        questionCount: number;
+        attemptsUsed: number;
+        availability: 'OPEN' | 'SCHEDULED' | 'CLOSED';
+      }[];
       pagination: { total: number };
     };
 
@@ -1039,7 +1045,11 @@ try {
       throw new Error('a DRAFT quiz must never reach a student');
     }
 
-    studentQuizId = body.quizzes[0]?.id ?? '';
+    // The seeded catalogue includes a quiz that is scheduled for later in the
+    // week, which is listed (with its `SCHEDULED` state) but cannot be started.
+    // Every attempt in this run needs a paper that is actually open now.
+    studentQuizId =
+      (body.quizzes.find((quiz) => quiz.availability === 'OPEN') ?? body.quizzes[0])?.id ?? '';
 
     return `200 · ${body.pagination.total} published`;
   });
@@ -1463,9 +1473,17 @@ try {
       await fetch(`${baseUrl}/api/student/quizzes?pageSize=24`, {
         headers: { cookie: studentCookie },
       })
-    ).json()) as { quizzes: { id: string; attemptsRemaining: number }[] };
+    ).json()) as {
+      quizzes: {
+        id: string;
+        attemptsRemaining: number;
+        availability: 'OPEN' | 'SCHEDULED' | 'CLOSED';
+      }[];
+    };
 
-    const open = quizzes.quizzes.find((quiz) => quiz.attemptsRemaining > 0);
+    const open = quizzes.quizzes.find(
+      (quiz) => quiz.availability === 'OPEN' && quiz.attemptsRemaining > 0,
+    );
     if (!open) throw new Error('expected a quiz with attempts left');
 
     const fresh = await fetch(`${baseUrl}/api/student/quizzes/${open.id}/start`, {

@@ -374,6 +374,32 @@ alone is safe unless the schema changed; the readiness probe will say so.
 
 ---
 
+## 10a. Mail
+
+The API writes every notification to `email_outbox` before it tries to send, so a
+request never depends on a mail server. What happens next is one variable:
+
+| `MAIL_TRANSPORT` | Behaviour                                                              | When to use it                    |
+| ---------------- | ---------------------------------------------------------------------- | --------------------------------- |
+| `log` (default)  | The whole message goes to the process log and the row is marked `SENT` | Local development, CI, a demo     |
+| `webhook`        | `POST { to, from, subject, text }` to `MAIL_WEBHOOK_URL`               | A relay or in-house mailer        |
+| `resend`         | Resend's HTTP API (`RESEND_API_KEY`)                                   | A hosted deployment with no relay |
+
+`MAIL_FROM` sets the `From:` line and matters as soon as the transport is real.
+
+Two operational notes:
+
+- **A failed send is visible, not silent.** The row becomes `FAILED` with the
+  provider's answer in `error`, and `/admin/emails` shows it next to a **Retry**
+  button. Nothing throws into the request that triggered the mail.
+- **Delivery is not a deployment gate.** `deploy:check` does not require a
+  transport: on `log` the messages are inspectable at `/admin/emails`, which is a
+  working (if quiet) configuration rather than a broken one. Set a real transport
+  before inviting users who expect email.
+
+The outbox is also the queue: `POST /api/admin/emails/drain` retries everything
+still `QUEUED`, bounded per call, and is safe to call from a cron.
+
 ## 11. Operational limits (stated, not hidden)
 
 - **Rate limits are in-memory and per process.** Two API instances mean two independent budgets. That

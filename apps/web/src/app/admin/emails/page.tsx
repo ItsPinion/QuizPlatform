@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { PageHeader } from '@/components/cinema/page-header';
+import { DrainOutboxButton, RetryEmailButton } from '@/components/outbox-actions';
 import { StatCard } from '@/components/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -141,6 +142,17 @@ export default async function AdminEmailsPage({
         </div>
       ) : null}
 
+      {data ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <DrainOutboxButton queued={data.counts.queued} />
+          <p className="text-muted-foreground text-[11.5px]">
+            {data.transport === 'log'
+              ? 'Transport: log — messages are written here and to stdout, nothing leaves this machine.'
+              : `Transport: ${data.transport} — a retry calls the provider again.`}
+          </p>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-2">
         <FilterChips
           label="Kind"
@@ -203,11 +215,16 @@ export default async function AdminEmailsPage({
                       {email.body}
                     </pre>
 
-                    {email.relatedId ? (
-                      <p className="text-muted-foreground mt-2 font-mono text-[10.5px]">
-                        related: {email.relatedId}
-                      </p>
-                    ) : null}
+                    <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3">
+                      {email.relatedId ? (
+                        <p className="text-muted-foreground font-mono text-[10.5px]">
+                          related: {email.relatedId}
+                        </p>
+                      ) : (
+                        <span />
+                      )}
+                      <RetryEmailButton id={email.id} status={email.status} />
+                    </div>
                   </details>
                 </li>
               ))}
