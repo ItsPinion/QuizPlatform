@@ -15,6 +15,29 @@ import { client } from '@/lib/api';
 import { parseApiFailure, toApiFailure } from '@/lib/api-error';
 import { cn } from '@/lib/utils';
 
+/**
+ * `datetime-local` and the API do not speak the same dialect.
+ *
+ * The control types a wall-clock time with no zone; the API stores an instant.
+ * Converting through `Date` means the browser's timezone is the one that counts,
+ * which is the only interpretation that matches "the quiz opens at 9 in the
+ * morning" for the person who typed 09:00.
+ */
+function toLocalInput(iso: string | null): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function fromLocalInput(value: string): string | null {
+  if (value.trim() === '') return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 interface Props {
   categories: CategoryOption[];
   /** Present when editing; absent when creating. */
@@ -42,6 +65,14 @@ export function QuizForm({ categories, quiz }: Props) {
     passingScore: String(quiz?.passingScore ?? 60),
     maxAttempts: String(quiz?.maxAttempts ?? 2),
     thumbnailUrl: quiz?.thumbnailUrl ?? '',
+    // `datetime-local` wants `YYYY-MM-DDTHH:mm`, which is the first 16 chars of
+    // the stored ISO string read against the browser's own clock.
+    availableFrom: toLocalInput(quiz?.availableFrom ?? null),
+    availableUntil: toLocalInput(quiz?.availableUntil ?? null),
+    shuffleQuestions: quiz?.shuffleQuestions ?? false,
+    shuffleOptions: quiz?.shuffleOptions ?? false,
+    negativeMarks: String(quiz?.negativeMarks ?? 0),
+    certificateEnabled: quiz?.certificateEnabled ?? true,
   });
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +96,13 @@ export function QuizForm({ categories, quiz }: Props) {
       passingScore: Number(form.passingScore),
       maxAttempts: Number(form.maxAttempts),
       thumbnailUrl: form.thumbnailUrl.trim() === '' ? null : form.thumbnailUrl,
+      // A blank schedule bound is `null`, which is how a bound is removed.
+      availableFrom: fromLocalInput(form.availableFrom),
+      availableUntil: fromLocalInput(form.availableUntil),
+      shuffleQuestions: form.shuffleQuestions,
+      shuffleOptions: form.shuffleOptions,
+      negativeMarks: Number(form.negativeMarks),
+      certificateEnabled: form.certificateEnabled,
     };
 
     try {
@@ -201,7 +239,7 @@ export function QuizForm({ categories, quiz }: Props) {
           />
         </div>
 
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 sm:col-span-2">
           <Label htmlFor="thumbnailUrl">Thumbnail URL (optional)</Label>
           <Input
             id="thumbnailUrl"
@@ -212,6 +250,114 @@ export function QuizForm({ categories, quiz }: Props) {
           />
         </div>
       </div>
+
+      {/* ------------------------------------------------------------------ */}
+      {/*  How the paper is sat                                              */}
+      {/* ------------------------------------------------------------------ */}
+      <fieldset className="border-border/60 space-y-4 rounded-xl border p-4">
+        <legend className="cine-label px-1.5 text-[9px] text-gray-400">Paper rules</legend>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="negativeMarks">Penalty per wrong answer</Label>
+            <Input
+              id="negativeMarks"
+              type="number"
+              min={0}
+              max={10}
+              step="0.25"
+              value={form.negativeMarks}
+              onChange={(event) => update('negativeMarks', event.target.value)}
+            />
+            <p className="text-muted-foreground text-[11px] leading-relaxed">
+              Marks deducted for each incorrect answer. Unanswered questions are never penalised. 0
+              turns the penalty off.
+            </p>
+          </div>
+
+          <div className="space-y-3 pt-1">
+            <label className="flex items-start gap-2.5 text-[12.5px]">
+              <input
+                type="checkbox"
+                checked={form.shuffleQuestions}
+                onChange={(event) => update('shuffleQuestions', event.target.checked)}
+                className="accent-foreground mt-0.5 size-4"
+              />
+              <span>
+                Shuffle questions
+                <span className="text-muted-foreground block text-[11px]">
+                  Each attempt gets its own order, frozen when the paper starts.
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-2.5 text-[12.5px]">
+              <input
+                type="checkbox"
+                checked={form.shuffleOptions}
+                onChange={(event) => update('shuffleOptions', event.target.checked)}
+                className="accent-foreground mt-0.5 size-4"
+              />
+              <span>
+                Shuffle options
+                <span className="text-muted-foreground block text-[11px]">
+                  Answers stop being in the same position on everyone&apos;s screen.
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-2.5 text-[12.5px]">
+              <input
+                type="checkbox"
+                checked={form.certificateEnabled}
+                onChange={(event) => update('certificateEnabled', event.target.checked)}
+                className="accent-foreground mt-0.5 size-4"
+              />
+              <span>
+                Issue certificates
+                <span className="text-muted-foreground block text-[11px]">
+                  A pass earns a verifiable certificate and an email.
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+      </fieldset>
+
+      {/* ------------------------------------------------------------------ */}
+      {/*  When it can be sat                                                */}
+      {/* ------------------------------------------------------------------ */}
+      <fieldset className="border-border/60 space-y-4 rounded-xl border p-4">
+        <legend className="cine-label px-1.5 text-[9px] text-gray-400">Availability</legend>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="availableFrom">Opens</Label>
+            <Input
+              id="availableFrom"
+              type="datetime-local"
+              value={form.availableFrom}
+              onChange={(event) => update('availableFrom', event.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="availableUntil">Closes</Label>
+            <Input
+              id="availableUntil"
+              type="datetime-local"
+              value={form.availableUntil}
+              onChange={(event) => update('availableUntil', event.target.value)}
+            />
+          </div>
+        </div>
+
+        <p className="text-muted-foreground text-[11.5px] leading-relaxed">
+          Both are optional and mean the quiz&apos;s own timezone — leave them empty for a quiz that
+          is always open. Students see the window on the quiz card, and the API refuses a start
+          outside it. An attempt that began while the quiz was open can still be finished.
+        </p>
+      </fieldset>
 
       {error ? (
         <div

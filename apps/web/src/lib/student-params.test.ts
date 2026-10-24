@@ -40,6 +40,13 @@ const QUIZ: StudentQuiz = {
   questionCount: 4,
   totalMarks: 4,
   thumbnailUrl: null,
+  availableFrom: null,
+  availableUntil: null,
+  availability: 'OPEN',
+  negativeMarks: 0,
+  certificateEnabled: true,
+  shuffleQuestions: false,
+  shuffleOptions: false,
   attemptsUsed: 0,
   attemptsRemaining: 3,
   bestPercentage: null,
@@ -53,6 +60,7 @@ describe('parseStudentFilters', () => {
       search: '',
       categoryId: '',
       difficulty: '',
+      duration: 'ANY',
       sort: 'newest',
       page: 1,
     });
@@ -66,18 +74,34 @@ describe('parseStudentFilters', () => {
         sort: 'title',
         page: '2',
       }),
-    ).toEqual({ search: 'css', categoryId: '', difficulty: 'EASY', sort: 'title', page: 2 });
+    ).toEqual({
+      search: 'css',
+      categoryId: '',
+      difficulty: 'EASY',
+      duration: 'ANY',
+      sort: 'title',
+      page: 2,
+    });
+  });
+
+  it('accepts the popularity sort and the duration buckets', () => {
+    const parsed = parseStudentFilters({ sort: 'popular', duration: 'short' });
+
+    expect(parsed.sort).toBe('popular');
+    expect(parsed.duration).toBe('SHORT');
   });
 
   it('falls back for hand-edited URLs', () => {
     const parsed = parseStudentFilters({
       difficulty: 'impossible',
-      sort: 'popular',
+      sort: 'sideways',
+      duration: 'forever',
       page: '-4',
       categoryId: 'nope',
     });
 
     expect(parsed.difficulty).toBe('');
+    expect(parsed.duration).toBe('ANY');
     expect(parsed.sort).toBe('newest');
     expect(parsed.page).toBe(1);
     expect(parsed.categoryId).toBe('');
@@ -220,6 +244,9 @@ describe('result presentation', () => {
     startedAt: '2026-01-01T12:00:00.000Z',
     completedAt: '2026-01-01T12:14:21.000Z',
     autoSubmitted: false,
+    penalty: 0,
+    negativeMarks: 0,
+    certificateCode: null,
   };
 
   it('formats a percentage without trailing zeros', () => {

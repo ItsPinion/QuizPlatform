@@ -164,6 +164,44 @@ const maxAttemptsField = z.coerce
 const descriptionField = optionalText(2000, 'Description must be at most 2000 characters');
 
 /**
+ * A scheduling bound: an ISO timestamp, or blank for "no bound".
+ *
+ * Empty string is a cleared `<input type="datetime-local">`, which means the
+ * bound does not exist — not that the quiz opens at the epoch.
+ */
+const optionalMoment = z
+  .union([z.literal(''), z.string().trim().max(40)], { error: 'Enter a valid date and time' })
+  .nullish()
+  .transform((value) => (value == null || value === '' ? null : value))
+  .refine(
+    (value) => value === null || !Number.isNaN(new Date(value).getTime()),
+    'Enter a valid date and time',
+  )
+  // The form converts its local pick to an ISO instant before sending; anything
+  // the server can parse is stored as UTC.
+  .transform((value) => (value === null ? null : new Date(value).toISOString()));
+
+/**
+ * A checkbox.
+ *
+ * `z.coerce.boolean()` is the wrong tool here: it would read the string
+ * `"false"` as `true`. A form sends `on` when checked and omits the key when
+ * not; JSON sends a real boolean. Both mean what they say.
+ */
+const flagField = z
+  .union([z.boolean(), z.string()])
+  .transform((value) => value === true || value === 'true' || value === 'on' || value === '1');
+
+const negativeMarksInput = z.coerce
+  .number()
+  .min(0, 'A penalty cannot be negative')
+  .max(10, 'A penalty of at most 10 marks')
+  .refine((value) => Math.round(value * 100) === value * 100, 'Use at most two decimals');
+
+/** Create applies the default; update must not invent a penalty. */
+const negativeMarksField = negativeMarksInput.default(0);
+
+/**
  * A quiz belongs to exactly one category, named one of two ways:
  *
  * - `categoryId` — the caller picked an existing category;
@@ -182,6 +220,12 @@ export const quizContentSchema = z
     passingScore: passingScoreField.default(60),
     maxAttempts: maxAttemptsField.default(2),
     thumbnailUrl: optionalThumbnail,
+    availableFrom: optionalMoment,
+    availableUntil: optionalMoment,
+    shuffleQuestions: flagField.default(false),
+    shuffleOptions: flagField.default(false),
+    negativeMarks: negativeMarksField,
+    certificateEnabled: flagField.default(true),
   })
   .refine((value) => !(value.categoryId && value.categoryName), {
     message: 'Send either categoryId or categoryName, not both',
@@ -190,7 +234,14 @@ export const quizContentSchema = z
   .refine((value) => Boolean(value.categoryId ?? value.categoryName), {
     message: 'Choose a category or type a new one',
     path: ['categoryName'],
-  });
+  })
+  .refine(
+    (value) =>
+      value.availableFrom == null ||
+      value.availableUntil == null ||
+      new Date(value.availableFrom).getTime() < new Date(value.availableUntil).getTime(),
+    { message: 'The closing date must be after the opening date', path: ['availableUntil'] },
+  );
 
 export const createQuizSchema = quizContentSchema;
 /** Output type — what the API hands to the query layer. */
@@ -217,6 +268,12 @@ export const updateQuizSchema = z
     passingScore: passingScoreField.optional(),
     maxAttempts: maxAttemptsField.optional(),
     thumbnailUrl: optionalThumbnail.optional(),
+    availableFrom: optionalMoment.optional(),
+    availableUntil: optionalMoment.optional(),
+    shuffleQuestions: flagField.optional(),
+    shuffleOptions: flagField.optional(),
+    negativeMarks: negativeMarksInput.optional(),
+    certificateEnabled: flagField.optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: 'Provide at least one field to update',
@@ -228,7 +285,7 @@ export const updateQuizSchema = z
 export type UpdateQuizInput = z.infer<typeof updateQuizSchema>;
 export type UpdateQuizFormValues = z.input<typeof updateQuizSchema>;
 
-export const QUIZ_SORTS = ['newest', 'oldest', 'title', 'questions'] as const;
+export const QUIZ_SORTS = ['newest', 'oldest', 'title', 'questions', 'popular'] as const;
 export const quizSortSchema = z.enum(QUIZ_SORTS);
 export type QuizSort = z.infer<typeof quizSortSchema>;
 
@@ -261,6 +318,12 @@ export const adminQuizSchema = z.object({
   maxAttempts: z.number(),
   status: quizStatusSchema,
   thumbnailUrl: z.string().nullable(),
+  availableFrom: z.string().nullable(),
+  availableUntil: z.string().nullable(),
+  shuffleQuestions: z.boolean(),
+  shuffleOptions: z.boolean(),
+  negativeMarks: z.number(),
+  certificateEnabled: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
   questionCount: z.number(),

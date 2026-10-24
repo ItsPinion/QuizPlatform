@@ -797,6 +797,66 @@ lift, and the reduced-motion block in `globals.css` already switches that off.
 
 ---
 
+## 11a. The room behind the console
+
+The consoles are the landing page's room with the lights down, not a different
+product. `components/cinema/ambience.tsx` is that room, and it is five layers:
+
+| Layer     | What it is                                         | Why                                                                                     |
+| --------- | -------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| The still | the film's first frame, `reading-room.jpg`, at 20% | texture, at the cost of an image the landing page already fetches                       |
+| The dust  | the same GIF, `mix-blend-screen`                   | the room breathes; `motion-reduce:hidden`, because a GIF cannot be paused               |
+| The light | two soft white blooms and the token-driven grid    | the top of the page is lit, the rest falls away                                         |
+| The veil  | black gradient, darkest at the bottom              | a table of numbers has to be readable over a photograph                                 |
+| The field | `CanvasField`                                      | the pointer is a lamp, a press sends a ring out — identical physics to the landing page |
+
+The _film_ is deliberately not here: a six-second loop under a table of numbers
+is noise and battery drain on a screen people keep open for an hour. A held
+frame and a field you can touch are the same atmosphere at a fraction of the
+cost, and both stop when the tab is hidden or the system asks for reduced motion.
+
+Ordering matters and is asserted by `/tmp/dashboards.py`:
+
+- the layer is `fixed inset-0 -z-10` and `aria-hidden`, so it is inert for a
+  screen reader and never intercepts a click;
+- the shell opens a stacking context (`relative isolate`), because a negative
+  `z-index` outside one would paint _behind_ the page's own background and
+  disappear;
+- the canvas sits above the veil, so the dust you disturb is not dimmed by the
+  gradient that exists for the photograph's sake.
+
+## 11b. Appearance — the light theme
+
+The consoles can be read on paper as well as in the dark. The control sits under
+the section rail on every console page (`components/theme-toggle.tsx`): two
+labelled buttons in a `role="group"`, each with `aria-pressed`, because "which of
+these two is on" is a question a screen reader can answer and "toggle button" is
+not.
+
+Four things make it work without a flash or a fight with the design:
+
+1. **The attribute is on the console shell, never on `<html>`.** The landing page
+   is a film of a dark room; the auth screens are part of that film. Only the
+   working surfaces opt in, by spreading `{...await themeAttribute()}` onto their
+   root element.
+2. **The cookie is read on the server** (`lib/theme-server.ts`). The first frame
+   is already the right colour. The usual inline `<script>` runs after parse and
+   always shows one frame of the wrong theme.
+3. **The CSS has two halves.** `[data-theme='light']` redefines the tokens —
+   background, foreground, card, muted, border, ring, primary — so every component
+   that speaks in `bg-card` / `text-foreground` / `border-border` re-colours for
+   free. Then it remaps the raw utilities the components use directly
+   (`text-white`, `bg-white/6`, `border-white/12`, `ring-white/15`, the
+   `bg-black/55` header scrim, `.cine-glass`, `.card-sheen`). A token cannot reach
+   a class that says `text-white`.
+4. **The room is re-lit, not left black.** The film still is inverted, washed out
+   and dropped to 10%; the dust GIF is hidden (it is an additive dark layer); the
+   veil becomes a paper gradient; the select popup gets a white plate. A black
+   photograph behind a white page reads as a rendering bug.
+
+The toggle writes the cookie _and_ flips the attribute on every themed node at
+once, so the change is instant and the next request already agrees with it.
+
 ## 12. Next
 
 - The sign-in form is the app's first `<form>` with this much behaviour, and its

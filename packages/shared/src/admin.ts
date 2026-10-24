@@ -92,6 +92,16 @@ export const updateUserSchema = z
   });
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 
+/**
+ * Body of `PATCH /api/admin/users/:id/status`.
+ *
+ * A one-field route for the switch in the users table: activate / deactivate.
+ * Same effect as the `PATCH` above, but its narrower shape means the client
+ * cannot accidentally change a role while flipping a switch.
+ */
+export const userStatusPatchSchema = z.object({ status: userStatusSchema });
+export type UserStatusPatch = z.infer<typeof userStatusPatchSchema>;
+
 export const userDetailResponseSchema = z.object({ user: adminUserSchema });
 export type UserDetailResponse = z.infer<typeof userDetailResponseSchema>;
 

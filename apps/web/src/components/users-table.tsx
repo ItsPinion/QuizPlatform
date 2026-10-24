@@ -1,7 +1,8 @@
 'use client';
 
 import type { AdminUser } from '@quiz/shared/admin';
-import { Loader2, ShieldCheck, ShieldOff, UserCheck, UserX } from 'lucide-react';
+import { Loader2, ShieldCheck, ShieldOff, Trash2, UserCheck, UserX } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
@@ -29,7 +30,60 @@ type PatchBody = { role?: 'ADMIN' | 'STUDENT'; status?: 'ACTIVE' | 'INACTIVE' };
 export function UsersTable({ users, currentUserId }: Props) {
   const router = useRouter();
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Deleting a person.
+   *
+   * Two clicks, and the second one says what it will take with it. There is no
+   * undo, so the confirmation names the number of attempts that go too — an
+   * administrator should not have to guess what "delete" cascades to.
+   */
+  async function remove(id: string) {
+    setPendingId(id);
+    setError(null);
+
+    try {
+      const res = await client.api.admin.users[':id'].$delete({ param: { id } });
+
+      if (!res.ok) {
+        setError(parseApiFailure(await res.json()).message);
+        return;
+      }
+
+      router.refresh();
+    } catch (cause) {
+      setError(toApiFailure(cause).message);
+    } finally {
+      setPendingId(null);
+      setConfirmingId(null);
+    }
+  }
+
+  /** The switch uses its own endpoint: one field, so a role cannot change by accident. */
+  async function status(id: string, next: 'ACTIVE' | 'INACTIVE') {
+    setPendingId(id);
+    setError(null);
+
+    try {
+      const res = await client.api.admin.users[':id'].status.$patch({
+        param: { id },
+        json: { status: next },
+      });
+
+      if (!res.ok) {
+        setError(parseApiFailure(await res.json()).message);
+        return;
+      }
+
+      router.refresh();
+    } catch (cause) {
+      setError(toApiFailure(cause).message);
+    } finally {
+      setPendingId(null);
+    }
+  }
 
   async function patch(id: string, body: PatchBody) {
     setPendingId(id);
@@ -104,7 +158,12 @@ export function UsersTable({ users, currentUserId }: Props) {
                       </span>
                       <div className="min-w-0">
                         <p className="flex items-center gap-1.5 truncate font-medium">
-                          {user.name}
+                          <Link
+                            href={`/admin/users/${user.id}`}
+                            className="underline-offset-4 hover:underline"
+                          >
+                            {user.name}
+                          </Link>
                           {self ? (
                             <Badge variant="outline" className="text-[10px]">
                               you
@@ -180,13 +239,46 @@ export function UsersTable({ users, currentUserId }: Props) {
                             ? 'You cannot deactivate your own account'
                             : `${nextStatus === 'ACTIVE' ? 'Reactivate' : 'Deactivate'} this account`
                         }
-                        onClick={() => patch(user.id, { status: nextStatus })}
+                        onClick={() => status(user.id, nextStatus)}
                       >
                         {user.status === 'ACTIVE' ? <UserX /> : <UserCheck />}
                         <span className="hidden sm:inline">
                           {user.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}
                         </span>
                       </Button>
+
+                      {confirmingId === user.id ? (
+                        <>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={busy}
+                            title={`Delete ${user.name} and their ${user.attempts} attempts`}
+                            onClick={() => remove(user.id)}
+                          >
+                            {busy ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                            <span className="hidden sm:inline">Confirm</span>
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setConfirmingId(null)}>
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={busy || self}
+                          title={
+                            self
+                              ? 'You cannot delete your own account'
+                              : 'Delete this account and its attempts'
+                          }
+                          onClick={() => setConfirmingId(user.id)}
+                        >
+                          <Trash2 />
+                          <span className="sr-only sm:not-sr-only">Delete</span>
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -196,9 +288,11 @@ export function UsersTable({ users, currentUserId }: Props) {
         </table>
       </div>
 
-      <p className="text-muted-foreground text-[11.5px]">
+      <p className="text-muted-foreground text-[11.5px] leading-relaxed">
         Deactivation takes effect on the next request: the API re-reads the account on every guarded
-        call, so an existing session stops working immediately.
+        call, so an existing session stops working immediately. Deleting is permanent — the
+        attempts, answers and certificates cascade with the account, which is why the API refuses to
+        let you delete yourself.
       </p>
     </div>
   );

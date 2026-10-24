@@ -270,8 +270,9 @@ export function RegisterForm() {
 
       <Button
         type="submit"
-        size="xl"
-        className="reveal shine w-full"
+        variant="cta"
+        size="cta"
+        className="reveal w-full"
         style={{ '--reveal-delay': '370ms' } as React.CSSProperties}
         disabled={pending}
         aria-busy={pending}

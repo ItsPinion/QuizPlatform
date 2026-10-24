@@ -1,5 +1,14 @@
 import type { AttemptResult } from '@quiz/shared/submission';
-import { CircleCheck, CircleX, Clock, ListChecks, Timer, Trophy } from 'lucide-react';
+import {
+  Award,
+  CircleCheck,
+  CircleX,
+  Clock,
+  ListChecks,
+  MinusCircle,
+  Timer,
+  Trophy,
+} from 'lucide-react';
 import Link from 'next/link';
 
 import { Badge } from '@/components/ui/badge';
@@ -98,6 +107,17 @@ export function AttemptResultCard({ result, quizTitle, reviewHref = null }: Prop
             ))}
           </div>
 
+          {result.penalty > 0 ? (
+            <p className="border-destructive/30 bg-destructive/10 text-destructive flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px]">
+              <MinusCircle aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+              <span>
+                {result.penalty} mark{result.penalty === 1 ? '' : 's'} deducted:{' '}
+                {result.incorrectAnswers} wrong answer{result.incorrectAnswers === 1 ? '' : 's'} at{' '}
+                {result.negativeMarks} each. Unanswered questions were not penalised.
+              </span>
+            </p>
+          ) : null}
+
           {note ? (
             <p className="border-warning/40 bg-warning/10 text-warning flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px]">
               <Clock className="mt-0.5 size-3.5 shrink-0" />
@@ -110,6 +130,16 @@ export function AttemptResultCard({ result, quizTitle, reviewHref = null }: Prop
               <Trophy />
               Take another quiz
             </Link>
+
+            {result.certificateCode ? (
+              <Link
+                href={`/student/certificates/${result.certificateCode}`}
+                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+              >
+                <Award />
+                View certificate
+              </Link>
+            ) : null}
 
             {reviewHref ? (
               <Link

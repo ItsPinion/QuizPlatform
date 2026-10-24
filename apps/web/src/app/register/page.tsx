@@ -20,14 +20,14 @@ export default async function RegisterPage() {
 
   return (
     <AuthShell payload={payload} kind="register" user={session?.user ?? null}>
-      <div className="glow-frame border-border/70 bg-card/70 card-sheen relative rounded-2xl border p-6 shadow-[0_40px_120px_-70px] shadow-black sm:p-8">
+      <div className="cine-glass card-sheen relative overflow-hidden rounded-3xl p-6 shadow-[0_50px_140px_-60px_rgba(0,0,0,0.9)] sm:p-9">
         <h1
           id="register-heading"
-          className="text-[2.1rem] leading-[1.05] font-semibold tracking-tight sm:text-[2.6rem]"
+          className="font-display text-[clamp(2.3rem,5vw,3.15rem)] leading-[0.95] font-extralight tracking-tight"
         >
           Create your account
         </h1>
-        <p className="text-muted-foreground mt-2.5 text-[15px] leading-relaxed">
+        <p className="mt-3 text-[15px] leading-relaxed font-light text-gray-400">
           {quizzes > 0
             ? `Free, instant, and ${quizzes} quizzes are open right now.`
             : 'Free, instant, and no confirmation email.'}

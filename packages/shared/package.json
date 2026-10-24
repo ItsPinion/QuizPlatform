@@ -17,7 +17,13 @@
     "./analytics": "./src/analytics.ts",
     "./leaderboard": "./src/leaderboard.ts",
     "./deployment": "./src/deployment.ts",
-    "./landing": "./src/landing.ts"
+    "./landing": "./src/landing.ts",
+    "./password": "./src/password.ts",
+    "./availability": "./src/availability.ts",
+    "./email": "./src/email.ts",
+    "./certificate": "./src/certificate.ts",
+    "./import": "./src/import.ts",
+    "./admin-attempts": "./src/admin-attempts.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

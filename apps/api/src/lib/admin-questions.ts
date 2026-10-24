@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
 
 import type { AdminQuestion, QuestionInput, QuestionListResponse } from '@quiz/shared/question';
+import type { ImportQuestion } from '@quiz/shared/import';
 import { db, schema } from '@quiz/db';
 
 import { ApiError } from './errors';
@@ -349,4 +350,38 @@ export async function countAnsweredQuestions(quizId: string): Promise<number> {
     .where(and(eq(questions.quizId, quizId)));
 
   return Number(row?.value ?? 0);
+}
+
+/**
+ * Append a batch of questions parsed from a CSV file.
+ *
+ * Reuses `createQuestion` rather than inserting in bulk so imported questions go
+ * through exactly the same path as typed ones: position appended, options
+ * written with the right flags, and the same validation already applied by
+ * `parseQuestionImport`. A 200-row file is 200 small writes — slower than one
+ * multi-row insert, and far more important that an import cannot bypass a rule
+ * the form enforces.
+ */
+export async function importQuestions(
+  quizId: string,
+  rows: readonly ImportQuestion[],
+): Promise<{ created: string[] }> {
+  await requireQuiz(quizId);
+
+  const created: string[] = [];
+
+  for (const row of rows) {
+    const question = await createQuestion(quizId, {
+      questionText: row.questionText,
+      explanation: row.explanation,
+      marks: row.marks,
+      difficulty: row.difficulty,
+      options: row.options.map((text) => ({ text })),
+      correctIndex: row.correctIndex,
+    });
+
+    created.push(question.id);
+  }
+
+  return { created };
 }

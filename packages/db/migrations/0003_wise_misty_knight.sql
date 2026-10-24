@@ -1,0 +1,1 @@
+ALTER TABLE `attempts` ADD `penalty` real DEFAULT 0 NOT NULL;

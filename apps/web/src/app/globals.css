@@ -1060,3 +1060,326 @@
     transform: translateY(100%);
   }
 }
+
+/* ==========================================================================
+   Light theme — scoped to the consoles and the auth screens
+   --------------------------------------------------------------------------
+   `[data-theme='light']` sits on a console shell (see `lib/theme.ts`), never on
+   `<html>`: the landing page is a film of a dark room, and paper would erase the
+   one thing it is built around. Everything below is therefore a *descendant*
+   rule — opening the console in light mode changes nothing about `/`.
+
+   Two halves:
+
+   1. **The tokens.** Every component that speaks in `bg-card`, `text-foreground`,
+      `border-border`, `text-muted-foreground` or `ring-ring` re-colours for free,
+      because those utilities resolve the variables at the element.
+   2. **The raw utilities.** A handful of components say `text-white` or
+      `bg-white/6` directly — on a white page those are invisible. Each one that
+      the console actually uses is remapped here, in one place, rather than
+      touching forty files and hoping.
+   ========================================================================== */
+
+[data-theme='light'] {
+  color-scheme: light;
+
+  --background: #f5f5f2;
+  --foreground: #0b0b0c;
+
+  --card: #ffffff;
+  --card-foreground: #0b0b0c;
+  --popover: #ffffff;
+  --popover-foreground: #0b0b0c;
+
+  /* The primary action inverts: ink on paper. */
+  --primary: #0b0b0c;
+  --primary-foreground: #ffffff;
+
+  --secondary: rgba(11, 11, 12, 0.05);
+  --secondary-foreground: #0b0b0c;
+
+  --muted: rgba(11, 11, 12, 0.045);
+  --muted-foreground: #5b6169;
+
+  --accent: rgba(11, 11, 12, 0.06);
+  --accent-foreground: #0b0b0c;
+
+  --destructive: oklch(0.52 0.19 25);
+  --success: oklch(0.48 0.13 158);
+  --warning: oklch(0.55 0.13 75);
+
+  --border: rgba(11, 11, 12, 0.12);
+  --input: rgba(11, 11, 12, 0.18);
+  --ring: rgba(11, 11, 12, 0.45);
+
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/* --- the raw utilities the console uses ---------------------------------- */
+
+[data-theme='light'] .text-white,
+[data-theme='light'] .text-white\/90 {
+  color: #0b0b0c;
+}
+
+[data-theme='light'] .text-white\/80,
+[data-theme='light'] .text-white\/70 {
+  color: rgba(11, 11, 12, 0.78);
+}
+
+[data-theme='light'] .text-white\/45,
+[data-theme='light'] .text-white\/40 {
+  color: rgba(11, 11, 12, 0.45);
+}
+
+/* The primary button: white-on-black becomes black-on-white. */
+[data-theme='light'] .bg-white.text-black,
+[data-theme='light'] .text-black {
+  color: #ffffff;
+}
+
+[data-theme='light'] .bg-white {
+  background-color: #0b0b0c;
+}
+
+[data-theme='light'] .text-gray-300 {
+  color: #3f4650;
+}
+
+[data-theme='light'] .text-gray-400 {
+  color: #5b6169;
+}
+
+[data-theme='light'] .text-gray-500 {
+  color: #6b7280;
+}
+
+[data-theme='light'] .bg-white\/8,
+[data-theme='light'] .bg-white\/10 {
+  background-color: rgba(11, 11, 12, 0.07);
+}
+
+[data-theme='light'] .bg-white\/6 {
+  background-color: rgba(11, 11, 12, 0.05);
+}
+
+[data-theme='light'] .bg-white\/4,
+[data-theme='light'] .bg-white\/5 {
+  background-color: rgba(11, 11, 12, 0.04);
+}
+
+[data-theme='light'] .bg-white\/25 {
+  background-color: rgba(11, 11, 12, 0.16);
+}
+
+[data-theme='light'] .bg-white\/\[0\.015\],
+[data-theme='light'] .bg-white\/\[0\.02\] {
+  background-color: rgba(11, 11, 12, 0.02);
+}
+
+[data-theme='light'] .bg-white\/\[0\.03\],
+[data-theme='light'] .bg-white\/\[0\.04\],
+[data-theme='light'] .bg-white\/\[0\.06\] {
+  background-color: rgba(11, 11, 12, 0.05);
+}
+
+[data-theme='light'] .border-white\/8,
+[data-theme='light'] .border-white\/10,
+[data-theme='light'] .border-white\/12,
+[data-theme='light'] .border-white\/15 {
+  border-color: rgba(11, 11, 12, 0.1);
+}
+
+[data-theme='light'] .border-white\/20,
+[data-theme='light'] .border-white\/25,
+[data-theme='light'] .border-white\/30 {
+  border-color: rgba(11, 11, 12, 0.18);
+}
+
+[data-theme='light'] .border-white\/35,
+[data-theme='light'] .border-white\/45,
+[data-theme='light'] .border-white\/60 {
+  border-color: rgba(11, 11, 12, 0.3);
+}
+
+[data-theme='light'] .ring-white\/15,
+[data-theme='light'] .ring-white\/40,
+[data-theme='light'] .ring-white\/50 {
+  --tw-ring-color: rgba(11, 11, 12, 0.35);
+}
+
+[data-theme='light'] .hover\:text-white:hover {
+  color: #0b0b0c;
+}
+
+[data-theme='light'] .hover\:bg-white\/6:hover {
+  background-color: rgba(11, 11, 12, 0.05);
+}
+
+/* --- glass and light ------------------------------------------------------ */
+
+[data-theme='light'] .cine-glass {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(11, 11, 12, 0.1);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  [data-theme='light'] .cine-glass {
+    background: rgba(255, 255, 255, 0.94);
+  }
+}
+
+[data-theme='light'] .card-sheen {
+  background-image: linear-gradient(160deg, rgba(11, 11, 12, 0.03) 0%, transparent 42%);
+}
+
+[data-theme='light'] .cine-gradient-text {
+  background-image: linear-gradient(180deg, #0b0b0c 35%, rgba(11, 11, 12, 0.55) 100%);
+}
+
+[data-theme='light'] .glow-frame::before {
+  opacity: 0.25;
+}
+
+/* The room, in daylight: the same photograph, inverted and washed out, because
+   a black still behind a white page reads as a rendering bug. */
+[data-theme='light'] .screen-backdrop {
+  background: #efeeea;
+}
+
+[data-theme='light'] .screen-backdrop .backdrop-photo {
+  opacity: 0.1;
+  filter: invert(1) grayscale(1) contrast(0.85);
+}
+
+[data-theme='light'] .screen-backdrop .backdrop-dust,
+[data-theme='light'] .screen-backdrop .backdrop-canvas {
+  display: none;
+}
+
+[data-theme='light'] .screen-backdrop .backdrop-veil {
+  background: linear-gradient(
+    to bottom,
+    rgba(245, 245, 242, 0.55),
+    rgba(245, 245, 242, 0.82) 60%,
+    #f5f5f2
+  );
+}
+
+[data-theme='light'] .screen-backdrop .backdrop-bloom {
+  background: radial-gradient(closest-side, rgba(11, 11, 12, 0.05), transparent);
+}
+
+/* The select's popup is ours (see `ui/select.tsx`), so it needs the light
+   surface too — it is the one floating panel in the app. */
+[data-theme='light'] .select-popup {
+  background-color: #ffffff;
+  border-color: rgba(11, 11, 12, 0.12);
+  box-shadow: 0 24px 48px -24px rgba(11, 11, 12, 0.35);
+}
+
+/* The nav's own surfaces: a black scrim at 55% when scrolled, a near-opaque
+   plate for the menus. In daylight both have to be paper, or the text on them
+   disappears into the ink they were drawn on. */
+[data-theme='light'] .bg-black\/55 {
+  background-color: rgba(245, 245, 242, 0.78);
+}
+
+[data-theme='light'] .bg-black\/80,
+[data-theme='light'] .bg-black\/90 {
+  background-color: rgba(255, 255, 255, 0.96);
+}
+
+[data-theme='light'] .hover\:bg-white\/90:hover {
+  background-color: #2a2a2e;
+}
+
+[data-theme='light'] .hover\:text-black:hover {
+  color: #ffffff;
+}
+
+[data-theme='light'] .shadow-white\/40 {
+  --tw-shadow-color: rgba(11, 11, 12, 0.25);
+}
+
+/* Scrolled navigation in light mode wants a hairline, not a shadowless float:
+   a white bar over a white page is otherwise invisible. */
+[data-theme='light'] header[data-scrolled='true'] {
+  box-shadow: 0 1px 0 rgba(11, 11, 12, 0.08);
+}
+
+/* The certificate is a printed artefact; its light theme is the print theme,
+   which the page already defines. Keep the card white on paper stock rather
+   than turning the ink black on a black card. */
+[data-theme='light'] .certificate-sheet {
+  background-color: #ffffff;
+  color: #0b0b0c;
+}
+
+/* ==========================================================================
+   Forced colours
+   --------------------------------------------------------------------------
+   A browser in Windows High Contrast (or any `forced-colors: active`) throws
+   away the palette and paints with system colours. Everything this product is
+   made of — a black page, 3%-white glass, white hairlines — collapses: the
+   page becomes white, the glass panels become white on white, and a control
+   drawn as a custom button can lose its only affordance, its border.
+
+   That is not a theme, so nothing here is a theme either. The decorative
+   layers are removed (a photograph and a canvas under system colours are
+   noise), and what remains is made legible with *system* colour keywords so the
+   visitor's own contrast settings win:
+
+   - panels get a real border, so a card is still a card;
+   - gradients that carry text (`cine-gradient-text`) become plain text;
+   - the select popup keeps its border, so it is still obviously a popup.
+
+   `forced-color-adjust: none` is deliberately NOT used anywhere — overriding
+   the user's choice is the one thing this block must not do.
+   ========================================================================== */
+@media (forced-colors: active) {
+  .screen-backdrop,
+  .backdrop-photo,
+  .backdrop-dust,
+  .backdrop-canvas,
+  .backdrop-bloom,
+  .backdrop-veil,
+  .bg-grid,
+  [data-canvas-field] {
+    display: none !important;
+  }
+
+  .cine-glass,
+  .card-sheen,
+  .select-popup,
+  [data-slot='card'],
+  input,
+  select,
+  textarea {
+    background-image: none !important;
+    border: 1px solid CanvasText !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .cine-gradient-text {
+    background-image: none !important;
+    color: CanvasText !important;
+    -webkit-text-fill-color: CanvasText !important;
+  }
+
+  /* The white pill inverts in a normal theme; here it must stay a button. */
+  button,
+  [role='combobox'],
+  a[class*='rounded-full'] {
+    border: 1px solid ButtonText;
+  }
+
+  /* Decoration that only exists to glow. */
+  .glow-frame::before,
+  .card-sheen::after {
+    display: none !important;
+  }
+}

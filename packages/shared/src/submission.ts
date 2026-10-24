@@ -37,6 +37,7 @@ export interface GradeBreakdown {
   correctAnswers: number;
   incorrectAnswers: number;
   unanswered: number;
+  /** Marks obtained after the penalty: never below zero. */
   score: number;
   totalMarks: number;
   /** 0–100, rounded to two decimals. */
@@ -44,6 +45,10 @@ export interface GradeBreakdown {
   passingScore: number;
   passed: boolean;
   status: 'PASSED' | 'FAILED';
+  /** Marks deducted for wrong answers on this attempt. */
+  penalty: number;
+  /** The per-wrong-answer penalty the paper was graded with. */
+  negativeMarks: number;
 }
 
 /**
@@ -64,7 +69,14 @@ export function gradeAttempt(input: {
   questions: readonly GradableQuestion[];
   answers: readonly GradableAnswer[];
   passingScore: number;
+  /**
+   * Marks removed for the *consequence* of a wrong answer. A skipped question
+   * is never penalised: the penalty is for answering and being wrong, which is
+   * what makes guessing a decision rather than a free roll.
+   */
+  negativeMarks?: number;
 }): GradeBreakdown {
+  const negativeMarks = Math.max(0, input.negativeMarks ?? 0);
   // Last write wins: the unique index makes duplicates impossible, but a caller
   // building the array by hand should not be able to double-count.
   const byQuestion = new Map<string, string | null>();
@@ -73,7 +85,7 @@ export function gradeAttempt(input: {
   let correctAnswers = 0;
   let incorrectAnswers = 0;
   let unanswered = 0;
-  let score = 0;
+  let earned = 0;
   let totalMarks = 0;
 
   for (const question of input.questions) {
@@ -88,11 +100,16 @@ export function gradeAttempt(input: {
       unanswered += 1;
     } else if (selected.isCorrect) {
       correctAnswers += 1;
-      score += question.marks;
+      earned += question.marks;
     } else {
       incorrectAnswers += 1;
     }
   }
+
+  // The penalty is charged per wrong answer, not per mark at stake, and the
+  // floor is zero: a paper cannot score below nothing.
+  const penalty = Math.round(negativeMarks * incorrectAnswers * 100) / 100;
+  const score = Math.round(Math.max(0, earned - penalty) * 100) / 100;
 
   const percentage = totalMarks > 0 ? Math.round((score / totalMarks) * 10_000) / 100 : 0;
 
@@ -109,6 +126,8 @@ export function gradeAttempt(input: {
     passingScore: input.passingScore,
     passed,
     status: passed ? 'PASSED' : 'FAILED',
+    penalty,
+    negativeMarks,
   };
 }
 
@@ -171,6 +190,18 @@ export const attemptResultSchema = z.object({
   completedAt: z.string(),
   /** `true` when the deadline finished the attempt, not the student. */
   autoSubmitted: z.boolean(),
+  /** Marks taken off for wrong answers (0 on a quiz without a penalty). */
+  penalty: z.number().default(0),
+  /** The per-wrong-answer penalty that was applied. */
+  negativeMarks: z.number().default(0),
+  /**
+   * The certificate this attempt earned, if it earned one.
+   *
+   * On the result rather than fetched separately: "you passed" and "here is the
+   * proof" are the same moment, and a second request that could fail would leave
+   * the screen telling half the story.
+   */
+  certificateCode: z.string().nullable().default(null),
 });
 export type AttemptResult = z.infer<typeof attemptResultSchema>;
 

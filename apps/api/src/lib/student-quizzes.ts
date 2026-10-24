@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { and, asc, count, desc, eq, gt, inArray, like, max, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, gte, inArray, like, lt, max, or, sql } from 'drizzle-orm';
 
 import type {
   AttemptSession,
@@ -11,7 +11,15 @@ import type {
   StudentQuizListQuery,
   StudentQuizListResponse,
 } from '@quiz/shared/attempt';
-import { secondsRemaining, startDecision } from '@quiz/shared/attempt';
+import {
+  DURATION_BUCKETS,
+  orderedBy,
+  parseIdOrder,
+  questionOrderFor,
+  secondsRemaining,
+  startDecision,
+} from '@quiz/shared/attempt';
+import { availabilityOf } from '@quiz/shared/availability';
 import type { CategoryOption } from '@quiz/shared/quiz';
 import { db, schema } from '@quiz/db';
 
@@ -45,6 +53,12 @@ async function decorate(
     passingScore: number;
     maxAttempts: number;
     thumbnailUrl: string | null;
+    availableFrom: Date | null;
+    availableUntil: Date | null;
+    shuffleQuestions: boolean;
+    shuffleOptions: boolean;
+    negativeMarks: number;
+    certificateEnabled: boolean;
   }[],
   userId: string,
 ): Promise<StudentQuiz[]> {
@@ -117,6 +131,16 @@ async function decorate(
       bestPercentage: attemptStats?.best == null ? null : Number(attemptStats.best),
       lastAttemptAt: attemptStats?.last ? new Date(attemptStats.last).toISOString() : null,
       inProgressAttemptId: liveByQuiz.get(row.id) ?? null,
+      availableFrom: row.availableFrom ? row.availableFrom.toISOString() : null,
+      availableUntil: row.availableUntil ? row.availableUntil.toISOString() : null,
+      availability: availabilityOf({
+        availableFrom: row.availableFrom,
+        availableUntil: row.availableUntil,
+      }).state,
+      negativeMarks: Number(row.negativeMarks ?? 0),
+      certificateEnabled: Boolean(row.certificateEnabled),
+      shuffleQuestions: Boolean(row.shuffleQuestions),
+      shuffleOptions: Boolean(row.shuffleOptions),
     };
   });
 }
@@ -133,24 +157,58 @@ const quizColumns = {
   passingScore: quizzes.passingScore,
   maxAttempts: quizzes.maxAttempts,
   thumbnailUrl: quizzes.thumbnailUrl,
+  availableFrom: quizzes.availableFrom,
+  availableUntil: quizzes.availableUntil,
+  shuffleQuestions: quizzes.shuffleQuestions,
+  shuffleOptions: quizzes.shuffleOptions,
+  negativeMarks: quizzes.negativeMarks,
+  certificateEnabled: quizzes.certificateEnabled,
 } as const;
 
 function filtersFor(query: StudentQuizListQuery) {
   const clauses = [PUBLISHED];
 
-  if (query.search) clauses.push(like(quizzes.title, `%${query.search}%`));
+  if (query.search) {
+    // Title *or* category: the spec asks for both, and a student who types
+    // "react" should find the React quiz by either route.
+    const pattern = `%${query.search}%`;
+    const match = or(like(quizzes.title, pattern), like(categories.name, pattern));
+    if (match) clauses.push(match);
+  }
+
   if (query.categoryId) clauses.push(eq(quizzes.categoryId, query.categoryId));
   if (query.difficulty) clauses.push(eq(quizzes.difficulty, query.difficulty));
+
+  // Duration buckets are inclusive at the floor and exclusive at the ceiling, so
+  // the three ranges partition the catalogue with no quiz counted twice.
+  if (query.duration !== 'ANY') {
+    const bucket = DURATION_BUCKETS[query.duration];
+    clauses.push(gte(quizzes.durationMinutes, bucket.min));
+    if (bucket.max !== null) clauses.push(lt(quizzes.durationMinutes, bucket.max));
+  }
 
   return and(...clauses);
 }
 
+/**
+ * Order the catalogue.
+ *
+ * `popular` counts attempts across everyone, which is the only measure that
+ * means anything to a visitor with no history of their own. Ties fall back to
+ * newest so the order is stable rather than arbitrary.
+ */
 function orderFor(sort: StudentQuizListQuery['sort']) {
   switch (sort) {
     case 'title':
       return asc(quizzes.title);
     case 'duration':
       return asc(quizzes.durationMinutes);
+    case 'popular':
+      // A correlated count rather than a join: joining attempts would multiply
+      // the quiz rows and break LIMIT. The subquery costs one index hit per row.
+      return desc(
+        sql<number>`(select count(*) from attempts where attempts.quiz_id = ${quizzes.id})`,
+      );
     default:
       return desc(quizzes.createdAt);
   }
@@ -175,7 +233,11 @@ export async function listStudentQuizzes(
       .orderBy(orderFor(query.sort))
       .limit(query.pageSize)
       .offset((query.page - 1) * query.pageSize),
-    db.select({ value: count() }).from(quizzes).where(where),
+    db
+      .select({ value: count() })
+      .from(quizzes)
+      .innerJoin(categories, eq(categories.id, quizzes.categoryId))
+      .where(where),
   ]);
 
   const total = Number(totals?.value ?? 0);
@@ -195,6 +257,7 @@ export async function listStudentQuizzes(
       search: query.search ?? null,
       categoryId: query.categoryId ?? null,
       difficulty: query.difficulty ?? null,
+      duration: query.duration,
       sort: query.sort,
     },
   };
@@ -213,7 +276,12 @@ async function loadQuiz(quizId: string, userId: string): Promise<StudentQuizDeta
   const [quiz] = await decorate([row], userId);
   if (!quiz) return null;
 
-  const decision = startDecision({ status: 'PUBLISHED', ...quiz });
+  const decision = startDecision({
+    status: 'PUBLISHED',
+    ...quiz,
+    availableFrom: quiz.availableFrom,
+    availableUntil: quiz.availableUntil,
+  });
 
   return {
     quiz,
@@ -310,7 +378,12 @@ export async function startAttempt(quizId: string, userId: string): Promise<Star
     }
   }
 
-  const decision = startDecision({ status: 'PUBLISHED', ...quiz });
+  const decision = startDecision({
+    status: 'PUBLISHED',
+    ...quiz,
+    availableFrom: quiz.availableFrom,
+    availableUntil: quiz.availableUntil,
+  });
 
   if (!decision.allowed) {
     throw new ApiError(
@@ -319,6 +392,31 @@ export async function startAttempt(quizId: string, userId: string): Promise<Star
       decision.message ?? 'Cannot start.',
     );
   }
+
+  // Deal the paper once, here, and keep it. Everything the student later sees
+  // reads this snapshot, so a refresh cannot reshuffle the questions under them.
+  const [questionIds, optionIds] = await Promise.all([
+    db
+      .select({ id: questions.id })
+      .from(questions)
+      .where(eq(questions.quizId, quiz.id))
+      .orderBy(asc(questions.position), asc(questions.createdAt)),
+    db
+      .select({ id: options.id })
+      .from(options)
+      .innerJoin(questions, eq(questions.id, options.questionId))
+      .where(eq(questions.quizId, quiz.id))
+      .orderBy(asc(options.position), asc(options.optionText)),
+  ]);
+
+  const questionOrder = questionOrderFor(
+    questionIds.map((row) => row.id),
+    quiz.shuffleQuestions,
+  );
+  const optionOrder = questionOrderFor(
+    optionIds.map((row) => row.id),
+    quiz.shuffleOptions,
+  );
 
   const now = new Date();
   const expiresAt = new Date(now.getTime() + quiz.durationMinutes * 60_000);
@@ -333,6 +431,9 @@ export async function startAttempt(quizId: string, userId: string): Promise<Star
     startedAt: now,
     expiresAt,
     status: 'IN_PROGRESS',
+    questionOrder: questionOrder ? JSON.stringify(questionOrder) : null,
+    optionOrder: optionOrder ? JSON.stringify(optionOrder) : null,
+    negativeMarks: quiz.negativeMarks,
   });
 
   return {
@@ -356,6 +457,8 @@ async function loadAttempt(attemptId: string, userId: string) {
       startedAt: attempts.startedAt,
       expiresAt: attempts.expiresAt,
       totalMarks: attempts.totalMarks,
+      questionOrder: attempts.questionOrder,
+      optionOrder: attempts.optionOrder,
     })
     .from(attempts)
     .where(and(eq(attempts.id, attemptId), eq(attempts.userId, userId)))
@@ -435,6 +538,15 @@ export async function getAttemptSession(
       .where(eq(answers.attemptId, attemptId)),
   ]);
 
+  // A shuffled paper is presented in the order frozen when it was dealt. A
+  // question added after the start still appears — at the end, so the student's
+  // place on the questions they already saw does not move.
+  const questionOrder = parseIdOrder(attempt.questionOrder);
+  const optionOrder = parseIdOrder(attempt.optionOrder);
+
+  const presentedQuestions = orderedBy(questionRows, questionOrder);
+  const presentedOptions = orderedBy(optionRows, optionOrder);
+
   const now = new Date();
   const finished = attempt.status !== 'IN_PROGRESS';
   const remaining = finished ? 0 : secondsRemaining(attempt.expiresAt, now.getTime());
@@ -459,16 +571,16 @@ export async function getAttemptSession(
       description: quizRow.description,
       durationMinutes: quizRow.durationMinutes,
       passingScore: quizRow.passingScore,
-      questionCount: questionRows.length,
+      questionCount: presentedQuestions.length,
       totalMarks: Number(attempt.totalMarks),
     },
-    questions: questionRows.map((question) => ({
+    questions: presentedQuestions.map((question) => ({
       id: question.id,
       position: question.position,
       questionText: question.questionText,
       marks: question.marks,
       difficulty: question.difficulty,
-      options: optionRows
+      options: presentedOptions
         .filter((option) => option.questionId === question.id)
         .map((option) => ({ id: option.id, text: option.text, position: option.position })),
     })),

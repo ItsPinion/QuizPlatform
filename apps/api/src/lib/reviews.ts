@@ -15,7 +15,7 @@ import { db, schema } from '@quiz/db';
 import { ApiError } from './errors';
 import { expireStaleAttempts } from './submissions';
 
-const { answers, attempts, categories, options, questions, quizzes } = schema;
+const { answers, attempts, categories, certificates, options, questions, quizzes } = schema;
 
 /**
  * The review of one finished attempt.
@@ -45,6 +45,8 @@ export async function getAttemptReview(attemptId: string, userId: string): Promi
       incorrectAnswers: attempts.incorrectAnswers,
       unanswered: attempts.unanswered,
       timeTakenSeconds: attempts.timeTakenSeconds,
+      penalty: attempts.penalty,
+      negativeMarks: attempts.negativeMarks,
     })
     .from(attempts)
     .where(and(eq(attempts.id, attemptId), eq(attempts.userId, userId)))
@@ -156,6 +158,12 @@ export async function getAttemptReview(attemptId: string, userId: string): Promi
 
   const completedAt = attempt.completedAt ?? attempt.expiresAt;
 
+  const [certificate] = await db
+    .select({ code: certificates.code })
+    .from(certificates)
+    .where(eq(certificates.attemptId, attemptId))
+    .limit(1);
+
   const result: AttemptResult = {
     score: attempt.score,
     totalMarks: attempt.totalMarks,
@@ -170,6 +178,9 @@ export async function getAttemptReview(attemptId: string, userId: string): Promi
     startedAt: attempt.startedAt.toISOString(),
     completedAt: completedAt.toISOString(),
     autoSubmitted: wasAutoSubmitted(completedAt, attempt.expiresAt),
+    penalty: Number(attempt.penalty ?? 0),
+    negativeMarks: Number(attempt.negativeMarks ?? 0),
+    certificateCode: certificate?.code ?? null,
   };
 
   return {

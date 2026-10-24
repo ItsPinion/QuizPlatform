@@ -31,14 +31,14 @@ export default async function LoginPage({
 
   return (
     <AuthShell payload={payload} kind="login" user={session?.user ?? null}>
-      <div className="glow-frame border-border/70 bg-card/70 card-sheen relative rounded-2xl border p-6 shadow-[0_40px_120px_-70px] shadow-black sm:p-8">
+      <div className="cine-glass card-sheen relative overflow-hidden rounded-3xl p-6 shadow-[0_50px_140px_-60px_rgba(0,0,0,0.9)] sm:p-9">
         <h1
           id="sign-in-heading"
-          className="text-[2.1rem] leading-[1.05] font-semibold tracking-tight sm:text-[2.6rem]"
+          className="font-display text-[clamp(2.3rem,5vw,3.15rem)] leading-[0.95] font-extralight tracking-tight"
         >
           Sign in
         </h1>
-        <p className="text-muted-foreground mt-2.5 text-[15px] leading-relaxed">
+        <p className="mt-3 text-[15px] leading-relaxed font-light text-gray-400">
           {continuing
             ? 'Sign in to carry on where you were headed.'
             : 'Your attempts, results and rank are waiting.'}
@@ -47,6 +47,15 @@ export default async function LoginPage({
         <div className="mt-7">
           <LoginForm next={next} demo={demo} />
         </div>
+
+        <p className="mt-6 text-[13px]">
+          <Link
+            href="/forgot-password"
+            className="text-muted-foreground hover:text-foreground underline underline-offset-4"
+          >
+            Forgot your password?
+          </Link>
+        </p>
 
         <p className="border-border/60 text-muted-foreground mt-7 border-t pt-5 text-[13.5px]">
           New here?{' '}

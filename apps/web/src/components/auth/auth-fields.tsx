@@ -20,11 +20,21 @@ import { cn } from '@/lib/utils';
  *   - the reveal button is `aria-pressed` and 44px, not a 14px eye icon.
  */
 
+/**
+ * The field, in the landing page's material rather than the console's.
+ *
+ * `rgba(255,255,255,0.03)` glass with a 1px `white/12` hairline is the same film
+ * the hero's badge wears, so an input on a photograph reads as part of the page
+ * instead of a black rectangle dropped on it. The focus ring is white for the
+ * same reason the rest of the product's is: it is the only colour the design
+ * allows on a dark surface.
+ */
 const FIELD_BASE =
-  'border-input bg-background/70 h-14 w-full rounded-xl border text-base transition-colors outline-none ' +
-  'placeholder:text-muted-foreground/60 ' +
-  'focus-visible:border-primary/70 focus-visible:ring-ring/45 focus-visible:ring-[3px] ' +
-  'aria-invalid:border-destructive/70 aria-invalid:ring-destructive/25 aria-invalid:ring-[3px] ' +
+  'h-14 w-full rounded-xl border border-white/12 bg-white/[0.04] text-base text-white transition-colors outline-none ' +
+  'backdrop-blur-md placeholder:text-gray-500 ' +
+  'hover:border-white/20 ' +
+  'focus-visible:border-white/35 focus-visible:ring-2 focus-visible:ring-white/15 ' +
+  'aria-invalid:border-destructive/70 aria-invalid:ring-destructive/25 aria-invalid:ring-2 ' +
   'disabled:pointer-events-none disabled:opacity-60';
 
 function FieldChrome({

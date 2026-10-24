@@ -12,6 +12,7 @@ import { requireSameOrigin } from './middleware/origin';
 import type { AppEnv } from './lib/types';
 import { adminRoutes } from './routes/admin';
 import { authRoutes } from './routes/auth';
+import { certificateRoutes } from './routes/certificates';
 import { healthRoutes } from './routes/health';
 import { landingRoutes } from './routes/landing';
 import { leaderboardRoutes } from './routes/leaderboard';
@@ -28,6 +29,7 @@ const apiRoutes = new Hono<AppEnv>()
   .route('/health', healthRoutes)
   .route('/meta', metaRoutes)
   .route('/auth', authRoutes)
+  .route('/certificates', certificateRoutes)
   .route('/leaderboard', leaderboardRoutes)
   .route('/landing', landingRoutes)
   .route('/admin', adminRoutes)

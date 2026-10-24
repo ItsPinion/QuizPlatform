@@ -83,6 +83,23 @@ export const quizzes = sqliteTable(
     maxAttempts: integer('max_attempts').notNull().default(2),
     status: text('status', { enum: QUIZ_STATUSES }).notNull().default('DRAFT'),
     thumbnailUrl: text('thumbnail_url'),
+    /**
+     * Scheduling. Null on either side means "no bound": a quiz with neither
+     * date is available for as long as it is published.
+     */
+    availableFrom: integer('available_from', { mode: 'timestamp_ms' }),
+    availableUntil: integer('available_until', { mode: 'timestamp_ms' }),
+    /** Draw the questions in a fresh order for every attempt. */
+    shuffleQuestions: integer('shuffle_questions', { mode: 'boolean' }).notNull().default(false),
+    /** Draw each question's options in a fresh order for every attempt. */
+    shuffleOptions: integer('shuffle_options', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * Marks removed for a wrong answer (never for a skipped one), e.g. `0.25`
+     * against a 1-mark question. The score can floor at zero, never negative.
+     */
+    negativeMarks: real('negative_marks').notNull().default(0),
+    /** Whether a pass hands the student a certificate. */
+    certificateEnabled: integer('certificate_enabled', { mode: 'boolean' }).notNull().default(true),
     createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -149,8 +166,11 @@ export const attempts = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    /** Server-calculated score: obtained marks. */
-    score: integer('score').notNull().default(0),
+    /**
+     * Server-calculated score: obtained marks. Real, not integer, because a
+     * quiz may deduct a fraction (0.25) for a wrong answer.
+     */
+    score: real('score').notNull().default(0),
     totalMarks: integer('total_marks').notNull().default(0),
     /** 0–100, rounded to 2 decimals. */
     percentage: real('percentage').notNull().default(0),
@@ -159,6 +179,19 @@ export const attempts = sqliteTable(
     unanswered: integer('unanswered').notNull().default(0),
     timeTakenSeconds: integer('time_taken_seconds').notNull().default(0),
     status: text('status', { enum: ATTEMPT_STATUSES }).notNull().default('IN_PROGRESS'),
+    /**
+     * The paper as this student received it: a JSON array of question ids in
+     * display order, and a JSON map of question id → option ids, also in
+     * display order. Frozen at the start so a refresh mid-attempt shows the same
+     * order, and so changing a quiz's shuffle setting cannot reshuffle a paper
+     * someone is already sitting.
+     */
+    questionOrder: text('question_order'),
+    optionOrder: text('option_order'),
+    /** The quiz's penalty at the moment the attempt began. */
+    negativeMarks: real('negative_marks').notNull().default(0),
+    /** Marks actually deducted for wrong answers on this attempt. */
+    penalty: real('penalty').notNull().default(0),
     startedAt: integer('started_at', { mode: 'timestamp_ms' }).notNull(),
     /** Server-enforced deadline: startedAt + quiz duration. */
     expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
@@ -190,6 +223,109 @@ export const answers = sqliteTable(
   (table) => [
     uniqueIndex('answers_attempt_question_unique').on(table.attemptId, table.questionId),
     index('answers_attempt_idx').on(table.attemptId),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
+/*  password resets                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One row per "forgot password" request.
+ *
+ * Only the **hash** of the token is stored, exactly like a password: a leaked
+ * table must not be a set of working reset links. A token is single-use
+ * (`usedAt`) and short-lived (`expiresAt`, an hour) by default.
+ */
+export const passwordResetTokens = sqliteTable(
+  'password_reset_tokens',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+    usedAt: integer('used_at', { mode: 'timestamp_ms' }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('password_reset_token_unique').on(table.tokenHash),
+    index('password_reset_user_idx').on(table.userId),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
+/*  certificates                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A pass, printed.
+ *
+ * One per attempt (`unique`), with a short public `code` so a certificate can
+ * be verified from a link without an account — the only page in the app that
+ * answers without a session, and it says nothing a certificate does not
+ * already say out loud.
+ */
+export const certificates = sqliteTable(
+  'certificates',
+  {
+    id: text('id').primaryKey(),
+    attemptId: text('attempt_id')
+      .notNull()
+      .references(() => attempts.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    quizId: text('quiz_id')
+      .notNull()
+      .references(() => quizzes.id, { onDelete: 'cascade' }),
+    code: text('code').notNull(),
+    issuedAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('certificates_attempt_unique').on(table.attemptId),
+    uniqueIndex('certificates_code_unique').on(table.code),
+    index('certificates_user_idx').on(table.userId),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
+/*  email outbox                                                              */
+/* -------------------------------------------------------------------------- */
+
+export const EMAIL_KINDS = ['WELCOME', 'PASSWORD_RESET', 'RESULT', 'CERTIFICATE'] as const;
+export type EmailKind = (typeof EMAIL_KINDS)[number];
+
+export const EMAIL_STATUSES = ['QUEUED', 'SENT', 'FAILED'] as const;
+export type EmailStatus = (typeof EMAIL_STATUSES)[number];
+
+/**
+ * Transactional mail, written down before it is sent.
+ *
+ * The app never blocks a request on a mail server: it renders the message into
+ * this table and a sender picks it up. With no SMTP configured the sender is the
+ * development transport, which logs the message and marks it sent — so the flow
+ * is complete and testable, and swapping in a real provider is one function.
+ */
+export const emailOutbox = sqliteTable(
+  'email_outbox',
+  {
+    id: text('id').primaryKey(),
+    kind: text('kind', { enum: EMAIL_KINDS }).notNull(),
+    toEmail: text('to_email').notNull(),
+    subject: text('subject').notNull(),
+    body: text('body').notNull(),
+    status: text('status', { enum: EMAIL_STATUSES }).notNull().default('QUEUED'),
+    /** The row this message is about: an attempt, a user, a certificate. */
+    relatedId: text('related_id'),
+    error: text('error'),
+    sentAt: integer('sent_at', { mode: 'timestamp_ms' }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('email_outbox_status_idx').on(table.status),
+    index('email_outbox_user_idx').on(table.toEmail),
   ],
 );
 
@@ -235,6 +371,12 @@ export const answersRelations = relations(answers, ({ one }) => ({
   selectedOption: one(options, { fields: [answers.selectedOptionId], references: [options.id] }),
 }));
 
+export const certificateRelations = relations(certificates, ({ one }) => ({
+  attempt: one(attempts, { fields: [certificates.attemptId], references: [attempts.id] }),
+  user: one(users, { fields: [certificates.userId], references: [users.id] }),
+  quiz: one(quizzes, { fields: [certificates.quizId], references: [quizzes.id] }),
+}));
+
 /* -------------------------------------------------------------------------- */
 /*  Inferred types                                                            */
 /* -------------------------------------------------------------------------- */
@@ -253,3 +395,9 @@ export type Attempt = typeof attempts.$inferSelect;
 export type NewAttempt = typeof attempts.$inferInsert;
 export type Answer = typeof answers.$inferSelect;
 export type NewAnswer = typeof answers.$inferInsert;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+export type NewPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+export type Certificate = typeof certificates.$inferSelect;
+export type NewCertificate = typeof certificates.$inferInsert;
+export type EmailOutboxRow = typeof emailOutbox.$inferSelect;
+export type NewEmailOutboxRow = typeof emailOutbox.$inferInsert;

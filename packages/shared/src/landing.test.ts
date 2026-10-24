@@ -188,6 +188,32 @@ describe('the payload contract', () => {
     }
   });
 
+  it('accepts a fractional score, because negative marking produces one', () => {
+    // One right and five wrong at 0.25 each is 0.75 — a real value the seed used
+    // to hand this schema, which said `int` and therefore emptied the whole
+    // payload on the landing page.
+    const parsed = landingPayloadSchema.parse(
+      payload({
+        sampleResult: {
+          quizTitle: 'JavaScript Fundamentals',
+          category: 'JavaScript',
+          percentage: 10.71,
+          marks: 0.75,
+          totalMarks: 7,
+          passed: false,
+          passingScore: 60,
+          correct: 1,
+          incorrect: 5,
+          unanswered: 0,
+          timeTakenSeconds: 300,
+        },
+      }),
+    );
+
+    expect(parsed.sampleResult?.marks).toBe(0.75);
+    expect(parsed.sampleResult?.totalMarks).toBe(7);
+  });
+
   it('carries marks but no student on the sample result', () => {
     const parsed = landingPayloadSchema.parse(payload());
 

@@ -34,6 +34,12 @@ const quizSelection = {
   maxAttempts: quizzes.maxAttempts,
   status: quizzes.status,
   thumbnailUrl: quizzes.thumbnailUrl,
+  availableFrom: quizzes.availableFrom,
+  availableUntil: quizzes.availableUntil,
+  shuffleQuestions: quizzes.shuffleQuestions,
+  shuffleOptions: quizzes.shuffleOptions,
+  negativeMarks: quizzes.negativeMarks,
+  certificateEnabled: quizzes.certificateEnabled,
   createdAt: quizzes.createdAt,
   updatedAt: quizzes.updatedAt,
   questionCount: sql<number>`count(distinct ${questions.id})`.mapWith(Number),
@@ -53,6 +59,12 @@ type RawQuizRow = {
   maxAttempts: number;
   status: 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED';
   thumbnailUrl: string | null;
+  availableFrom: Date | null;
+  availableUntil: Date | null;
+  shuffleQuestions: boolean;
+  shuffleOptions: boolean;
+  negativeMarks: number;
+  certificateEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
   questionCount: number;
@@ -73,6 +85,12 @@ function toAdminQuiz(row: RawQuizRow): AdminQuiz {
     maxAttempts: row.maxAttempts,
     status: row.status,
     thumbnailUrl: row.thumbnailUrl,
+    availableFrom: row.availableFrom ? row.availableFrom.toISOString() : null,
+    availableUntil: row.availableUntil ? row.availableUntil.toISOString() : null,
+    shuffleQuestions: Boolean(row.shuffleQuestions),
+    shuffleOptions: Boolean(row.shuffleOptions),
+    negativeMarks: Number(row.negativeMarks ?? 0),
+    certificateEnabled: Boolean(row.certificateEnabled),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     questionCount: Number(row.questionCount ?? 0),
@@ -187,6 +205,12 @@ export async function createQuiz(input: CreateQuizInput): Promise<AdminQuiz> {
     // New quizzes always start as a draft; publishing is its own guarded action.
     status: 'DRAFT',
     thumbnailUrl: input.thumbnailUrl ?? null,
+    availableFrom: input.availableFrom ? new Date(input.availableFrom) : null,
+    availableUntil: input.availableUntil ? new Date(input.availableUntil) : null,
+    shuffleQuestions: input.shuffleQuestions,
+    shuffleOptions: input.shuffleOptions,
+    negativeMarks: input.negativeMarks,
+    certificateEnabled: input.certificateEnabled,
     createdBy: null,
   });
 
@@ -211,8 +235,21 @@ export async function updateQuiz(id: string, input: UpdateQuizInput): Promise<Ad
     'passingScore',
     'maxAttempts',
     'thumbnailUrl',
+    'shuffleQuestions',
+    'shuffleOptions',
+    'negativeMarks',
+    'certificateEnabled',
   ] as const) {
     if (input[key] !== undefined) patch[key] = input[key];
+  }
+
+  // A cleared schedule sends `null` (`` in the form), which is a value, not an
+  // omission: it is how a bound is removed.
+  if (input.availableFrom !== undefined) {
+    patch.availableFrom = input.availableFrom ? new Date(input.availableFrom) : null;
+  }
+  if (input.availableUntil !== undefined) {
+    patch.availableUntil = input.availableUntil ? new Date(input.availableUntil) : null;
   }
 
   // The slug is intentionally stable: renaming a quiz must not break links that

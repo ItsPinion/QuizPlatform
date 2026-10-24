@@ -63,6 +63,13 @@ export const RATE_RULES = {
   },
   /** New accounts from one address. */
   register: { max: env.REGISTER_RATE_LIMIT_MAX, windowMs: 60 * 60_000 },
+  /**
+   * Password-reset requests, per address *and* address target.
+   *
+   * Tight on purpose: this endpoint sends mail, so an unlimited version is a way
+   * to use the platform to spam a stranger's inbox.
+   */
+  forgot: { max: 5, windowMs: 15 * 60_000 },
 } satisfies Record<string, RateRule>;
 
 /**

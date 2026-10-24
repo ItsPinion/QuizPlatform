@@ -13,6 +13,7 @@
  */
 import { z } from 'zod';
 
+import { availabilityOf } from './availability';
 import { difficultySchema, quizStatusSchema } from './index';
 import { attemptResultSchema } from './submission';
 
@@ -49,6 +50,88 @@ export function formatClock(seconds: number): string {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Randomised papers                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Shuffle, without mutating the input.
+ *
+ * Fisher–Yates over a copy. `random` is injectable so a test can prove the
+ * permutation is a permutation rather than asserting on luck, and so a seeded
+ * generator could reproduce a paper during a dispute.
+ */
+export function shuffle<T>(items: readonly T[], random: () => number = Math.random): T[] {
+  const copy = [...items];
+
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(random() * (index + 1));
+    const value = copy[index]!;
+    copy[index] = copy[swap]!;
+    copy[swap] = value;
+  }
+
+  return copy;
+}
+
+/**
+ * Freeze the order of a paper, or `null` when it should stay as authored.
+ *
+ * The snapshot is an array of ids, stored on the attempt. That is the whole
+ * point: shuffling per request would let a refresh deal a different paper (and
+ * lose the student's place), and storing only "shuffled:true" would leave the
+ * order to be re-rolled when the attempt is read back.
+ */
+export function questionOrderFor(
+  ids: readonly string[],
+  shouldShuffle: boolean,
+  random: () => number = Math.random,
+): string[] | null {
+  if (!shouldShuffle || ids.length < 2) return null;
+  return shuffle(ids, random);
+}
+
+/** Decode a stored snapshot. Malformed JSON is treated as "no snapshot". */
+export function parseIdOrder(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((entry): entry is string => typeof entry === 'string');
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Apply a snapshot to rows.
+ *
+ * Rows named by the snapshot come in that order; anything the snapshot does not
+ * mention (a question added to the quiz mid-attempt) follows in its original
+ * place rather than vanishing. That combination means a snapshot can never lose
+ * a row — only reorder it.
+ */
+export function orderedBy<T extends { id: string }>(
+  items: readonly T[],
+  order: readonly string[],
+): T[] {
+  if (order.length === 0) return [...items];
+
+  const rank = new Map(order.map((id, index) => [id, index]));
+  const known: T[] = [];
+  const rest: T[] = [];
+
+  for (const item of items) {
+    if (rank.has(item.id)) known.push(item);
+    else rest.push(item);
+  }
+
+  known.sort((left, right) => rank.get(left.id)! - rank.get(right.id)!);
+
+  return [...known, ...rest];
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Quizzes a student may take                                                */
 /* -------------------------------------------------------------------------- */
 
@@ -66,6 +149,18 @@ export const studentQuizSchema = z.object({
   questionCount: z.number(),
   totalMarks: z.number(),
   thumbnailUrl: z.string().nullable(),
+  /** When the quiz opens and closes, null when it is unbounded. */
+  availableFrom: z.string().nullable(),
+  availableUntil: z.string().nullable(),
+  /** `OPEN` / `SCHEDULED` / `CLOSED`, decided by the server. */
+  availability: z.enum(['OPEN', 'SCHEDULED', 'CLOSED']),
+  /** Marks removed per wrong answer (0 when there is no penalty). */
+  negativeMarks: z.number(),
+  /** Whether a pass earns a certificate. */
+  certificateEnabled: z.boolean(),
+  /** How many questions the paper draws, for the details list. */
+  shuffleQuestions: z.boolean(),
+  shuffleOptions: z.boolean(),
   /** Every attempt this student has started, finished or not. */
   attemptsUsed: z.number(),
   attemptsRemaining: z.number(),
@@ -77,14 +172,40 @@ export const studentQuizSchema = z.object({
 });
 export type StudentQuiz = z.infer<typeof studentQuizSchema>;
 
-export const STUDENT_QUIZ_SORTS = ['newest', 'title', 'duration'] as const;
+/**
+ * `newest` is "recently added"; `popular` counts attempts across the whole
+ * platform, which is the only signal that means the same thing to a visitor
+ * who has never taken anything.
+ */
+export const STUDENT_QUIZ_SORTS = ['newest', 'title', 'duration', 'popular'] as const;
 export const studentQuizSortSchema = z.enum(STUDENT_QUIZ_SORTS);
 export type StudentQuizSort = z.infer<typeof studentQuizSortSchema>;
+
+/**
+ * Duration buckets.
+ *
+ * Ranges, not a number: "under 10 minutes" is a decision a student makes
+ * ("have I got time for this?"), while "duration ≥ 11" is a query builder.
+ */
+export const STUDENT_DURATION_FILTERS = ['ANY', 'SHORT', 'MEDIUM', 'LONG'] as const;
+export const studentDurationFilterSchema = z.enum(STUDENT_DURATION_FILTERS);
+export type StudentDurationFilter = z.infer<typeof studentDurationFilterSchema>;
+
+/** What each bucket means, in one place, so the label and the query agree. */
+export const DURATION_BUCKETS: Record<
+  Exclude<StudentDurationFilter, 'ANY'>,
+  { min: number; max: number | null; label: string }
+> = {
+  SHORT: { min: 0, max: 10, label: 'Under 10 min' },
+  MEDIUM: { min: 10, max: 30, label: '10–30 min' },
+  LONG: { min: 30, max: null, label: 'Over 30 min' },
+};
 
 export const studentQuizListQuerySchema = z.object({
   search: z.string().trim().max(120, 'Search is too long').optional(),
   categoryId: z.string().uuid('Invalid category id').optional(),
   difficulty: difficultySchema.optional(),
+  duration: studentDurationFilterSchema.default('ANY'),
   sort: studentQuizSortSchema.default('newest'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(24).default(9),
@@ -105,6 +226,7 @@ export const studentQuizListResponseSchema = z.object({
     search: z.string().nullable(),
     categoryId: z.string().nullable(),
     difficulty: z.string().nullable(),
+    duration: studentDurationFilterSchema,
     sort: studentQuizSortSchema,
   }),
 });
@@ -126,7 +248,11 @@ export type StudentQuizDetailResponse = z.infer<typeof studentQuizDetailResponse
 /* -------------------------------------------------------------------------- */
 
 export type StartBlockerCode =
-  'QUIZ_NOT_PUBLISHED' | 'QUIZ_HAS_NO_QUESTIONS' | 'ATTEMPTS_EXHAUSTED';
+  | 'QUIZ_NOT_PUBLISHED'
+  | 'QUIZ_HAS_NO_QUESTIONS'
+  | 'ATTEMPTS_EXHAUSTED'
+  | 'QUIZ_NOT_OPEN_YET'
+  | 'QUIZ_CLOSED';
 
 export interface StartDecision {
   allowed: boolean;
@@ -141,13 +267,19 @@ export interface StartDecision {
  * it is allowed even when every attempt has been used. Anything that would take
  * marks away from the student is refused with a reason the UI prints verbatim.
  */
-export function startDecision(quiz: {
-  status: 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED';
-  questionCount: number;
-  maxAttempts: number;
-  attemptsUsed: number;
-  inProgressAttemptId: string | null;
-}): StartDecision {
+export function startDecision(
+  quiz: {
+    status: 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED';
+    questionCount: number;
+    maxAttempts: number;
+    attemptsUsed: number;
+    inProgressAttemptId: string | null;
+    /** When it opens and closes; omitted means "always open". */
+    availableFrom?: string | null;
+    availableUntil?: string | null;
+  },
+  now: number = Date.now(),
+): StartDecision {
   if (quiz.status !== 'PUBLISHED') {
     return {
       allowed: false,
@@ -164,7 +296,30 @@ export function startDecision(quiz: {
     };
   }
 
+  // A live attempt outranks the window: a paper that was started while the quiz
+  // was open must be finishable even if it closes mid-attempt.
   if (quiz.inProgressAttemptId) return { allowed: true, code: null, message: null };
+
+  const availability = availabilityOf(
+    { availableFrom: quiz.availableFrom ?? null, availableUntil: quiz.availableUntil ?? null },
+    now,
+  );
+
+  if (availability.state === 'SCHEDULED') {
+    return {
+      allowed: false,
+      code: 'QUIZ_NOT_OPEN_YET',
+      message: 'This quiz has not opened yet.',
+    };
+  }
+
+  if (availability.state === 'CLOSED') {
+    return {
+      allowed: false,
+      code: 'QUIZ_CLOSED',
+      message: 'This quiz is closed.',
+    };
+  }
 
   if (quiz.attemptsUsed >= quiz.maxAttempts) {
     return {

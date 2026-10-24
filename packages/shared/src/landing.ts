@@ -84,8 +84,15 @@ export const landingResultSchema = z.object({
   quizTitle: z.string(),
   category: z.string(),
   percentage: z.number(),
-  marks: z.number().int(),
-  totalMarks: z.number().int(),
+  /**
+   * Not an integer: negative marking makes a score fractional (`0.75` after one
+   * right and five wrong at 0.25 each). The first version of this schema said
+   * `int`, and the day the landing page picked a penalised attempt to feature it
+   * started answering `200` with every count at zero, because one failed parse
+   * trips the whole payload's empty-state fallback.
+   */
+  marks: z.number(),
+  totalMarks: z.number(),
   passed: z.boolean(),
   passingScore: z.number().int(),
   correct: z.number().int(),

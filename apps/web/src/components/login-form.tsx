@@ -190,8 +190,9 @@ export function LoginForm({ next = '/', demo = [] }: LoginFormProps) {
       <Button
         ref={submitRef}
         type="submit"
-        size="xl"
-        className="reveal shine w-full"
+        variant="cta"
+        size="cta"
+        className="reveal w-full"
         style={{ '--reveal-delay': '280ms' } as React.CSSProperties}
         disabled={pending}
         aria-busy={pending}
@@ -214,7 +215,7 @@ export function LoginForm({ next = '/', demo = [] }: LoginFormProps) {
       </p>
 
       {demo.length > 0 ? (
-        <section aria-labelledby="demo-accounts-heading" className="border-border/60 border-t pt-5">
+        <section aria-labelledby="demo-accounts-heading" className="border-t border-white/10 pt-5">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 id="demo-accounts-heading" className="text-[13px] font-medium">
               Or try a demo account
@@ -234,7 +235,7 @@ export function LoginForm({ next = '/', demo = [] }: LoginFormProps) {
                     type="button"
                     onClick={() => fillDemo(account)}
                     className={cn(
-                      'border-border/70 bg-background/50 hover:border-primary/50 hover:bg-accent/60',
+                      'border-white/10 bg-white/[0.03] backdrop-blur-md hover:border-white/30 hover:bg-white/[0.06]',
                       'focus-visible:ring-ring/60 group flex min-h-14 w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors outline-none focus-visible:ring-[3px]',
                     )}
                   >

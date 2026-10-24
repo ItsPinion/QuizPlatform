@@ -6,7 +6,16 @@ import {
   userDetailResponseSchema,
   userListQuerySchema,
   userListResponseSchema,
+  userStatusPatchSchema,
 } from '@quiz/shared/admin';
+import {
+  adminAttemptDetailResponseSchema,
+  adminAttemptListResponseSchema,
+  adminAttemptQuerySchema,
+  deleteUserResponseSchema,
+  studentProfileResponseSchema,
+} from '@quiz/shared/admin-attempts';
+import { emailKindSchema, emailStatusSchema, outboxResponseSchema } from '@quiz/shared/email';
 import { PERMISSIONS, type AccessDescriptor } from '@quiz/shared/auth';
 import { systemStatusSchema } from '@quiz/shared/deployment';
 import { Hono } from 'hono';
@@ -14,7 +23,9 @@ import { Hono } from 'hono';
 import { buildAdminAnalytics } from '../lib/admin-analytics';
 import { getSystemStatus } from '../lib/system-status';
 import { buildDashboardStats } from '../lib/admin-stats';
-import { getUserById, listUsers, updateUser } from '../lib/admin-users';
+import { deleteUser, getUserById, listUsers, setUserStatus, updateUser } from '../lib/admin-users';
+import { getAttemptDetail, getStudentProfile, listAttempts } from '../lib/admin-attempts';
+import { listOutbox } from '../lib/emails';
 import { adminCategoryRoutes } from './admin-categories';
 import { adminQuestionRoutes } from './admin-questions';
 import { adminQuizRoutes } from './admin-quizzes';
@@ -123,6 +134,83 @@ export const adminRoutes = new Hono<AppEnv>()
     const user = await updateUser(id, input, actor.id);
 
     return c.json(userDetailResponseSchema.parse({ user }), 200);
+  })
+
+  /**
+   * Activate / deactivate.
+   *
+   * The switch in the users table calls this rather than the general patch, so
+   * a mis-wired form cannot change a role while flipping a status. Same rule
+   * underneath: you cannot deactivate yourself.
+   */
+  .patch('/users/:id/status', jsonBody(userStatusPatchSchema), async (c) => {
+    const id = idSchema.parse(c.req.param('id'));
+    const actor = c.get('user');
+    const user = await setUserStatus(id, c.req.valid('json').status, actor.id);
+
+    return c.json(userDetailResponseSchema.parse({ user }), 200);
+  })
+
+  /** Delete an account and everything that cascades from it. */
+  .delete('/users/:id', async (c) => {
+    const id = idSchema.parse(c.req.param('id'));
+    const actor = c.get('user');
+    const result = await deleteUser(id, actor.id);
+
+    return c.json(deleteUserResponseSchema.parse(result), 200);
+  })
+
+  /** One student's record: stats, category breakdown, full history. */
+  .get('/users/:id/profile', async (c) => {
+    const id = idSchema.parse(c.req.param('id'));
+    return c.json(
+      studentProfileResponseSchema.parse({ profile: await getStudentProfile(id) }),
+      200,
+    );
+  })
+
+  /* ------------------------------- attempts ------------------------------- */
+  /**
+   * Every attempt on the platform, filterable by quiz, student, status and free
+   * text. This is the "view individual student results" and "view quiz
+   * performance" screen — the same rows, read from either end.
+   */
+  .get('/attempts', async (c) => {
+    const query = adminAttemptQuerySchema.parse(queryObject(c.req.url));
+    const result = await listAttempts(query);
+
+    return c.json(adminAttemptListResponseSchema.parse(result), 200);
+  })
+
+  .get('/attempts/:id', async (c) => {
+    const id = idSchema.parse(c.req.param('id'));
+    return c.json(adminAttemptDetailResponseSchema.parse(await getAttemptDetail(id)), 200);
+  })
+
+  /* -------------------------------- email --------------------------------- */
+  /**
+   * The outbox.
+   *
+   * Dev builds deliver to the process log, which is invisible in a browser. This
+   * endpoint is the window onto it: what was queued, to whom, and whether it
+   * went. `?kind=` and `?status=` filter; both are validated enums.
+   */
+  .get('/emails', async (c) => {
+    const raw = new URL(c.req.url).searchParams;
+    const kind = raw.get('kind')?.trim() ?? '';
+    const status = raw.get('status')?.trim() ?? '';
+    const page = Number(raw.get('page') ?? '1');
+
+    return c.json(
+      outboxResponseSchema.parse(
+        await listOutbox({
+          kind: kind === '' ? null : emailKindSchema.parse(kind),
+          status: status === '' ? null : emailStatusSchema.parse(status),
+          page: Number.isFinite(page) && page > 0 ? Math.floor(page) : 1,
+        }),
+      ),
+      200,
+    );
   })
 
   /* ------------------------- categories & questions ----------------------- */

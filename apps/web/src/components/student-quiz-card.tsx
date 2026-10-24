@@ -1,11 +1,27 @@
 import type { StudentQuiz } from '@quiz/shared/attempt';
-import { ArrowRight, Clock, HelpCircle, Play, RotateCcw, Target, Trophy } from 'lucide-react';
+import {
+  ArrowRight,
+  Award,
+  CalendarClock,
+  Clock,
+  HelpCircle,
+  Play,
+  RotateCcw,
+  Target,
+  Trophy,
+} from 'lucide-react';
 import Link from 'next/link';
 
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { attemptsLabel, bestScoreLabel, startLabel, startState } from '@/lib/student-params';
+import {
+  attemptsLabel,
+  bestScoreLabel,
+  paperNote,
+  startLabel,
+  startState,
+} from '@/lib/student-params';
 import { difficultyTone, formatDuration } from '@/lib/quiz-params';
 import { cn } from '@/lib/utils';
 
@@ -13,6 +29,8 @@ import { cn } from '@/lib/utils';
 export function StudentQuizCard({ quiz }: { quiz: StudentQuiz }) {
   const state = startState(quiz);
   const resumable = state === 'resume';
+  const blocked = state === 'scheduled' || state === 'closed' || state === 'exhausted';
+  const note = paperNote(quiz);
 
   return (
     <Card className="flex h-full flex-col">
@@ -27,6 +45,23 @@ export function StudentQuizCard({ quiz }: { quiz: StudentQuiz }) {
           {resumable ? (
             <Badge variant="warning" className="text-[9.5px]">
               in progress
+            </Badge>
+          ) : null}
+          {quiz.availability === 'SCHEDULED' ? (
+            <Badge variant="outline" className="gap-1 text-[9.5px]">
+              <CalendarClock aria-hidden className="size-2.5" />
+              scheduled
+            </Badge>
+          ) : null}
+          {quiz.availability === 'CLOSED' ? (
+            <Badge variant="destructive" className="text-[9.5px]">
+              closed
+            </Badge>
+          ) : null}
+          {quiz.certificateEnabled ? (
+            <Badge variant="outline" className="gap-1 text-[9.5px]">
+              <Award aria-hidden className="size-2.5" />
+              certificate
             </Badge>
           ) : null}
         </div>
@@ -61,6 +96,8 @@ export function StudentQuizCard({ quiz }: { quiz: StudentQuiz }) {
           </div>
         </dl>
 
+        {note ? <p className="text-muted-foreground text-[11px] leading-relaxed">{note}</p> : null}
+
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground text-[11px]">{attemptsLabel(quiz)}</span>
 
@@ -70,6 +107,7 @@ export function StudentQuizCard({ quiz }: { quiz: StudentQuiz }) {
               buttonVariants({
                 variant: state === 'start' || resumable ? 'default' : 'outline',
                 size: 'sm',
+                className: blocked ? 'text-muted-foreground' : undefined,
               }),
             )}
           >

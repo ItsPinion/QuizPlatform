@@ -9,9 +9,16 @@ import {
 import { Hono } from 'hono';
 
 import {
+  MAX_IMPORT_BYTES,
+  parseQuestionImport,
+  questionImportRequestSchema,
+} from '@quiz/shared/import';
+
+import {
   createQuestion,
   deleteQuestion,
   getQuestion,
+  importQuestions,
   listQuestions,
   replaceQuestion,
   reorderQuestions,
@@ -44,6 +51,58 @@ export const adminQuizQuestionRoutes = new Hono<AppEnv>()
     const questions = await reorderQuestions(quizId, c.req.valid('json').ids);
 
     return c.json({ questions }, 200);
+  })
+
+  /**
+   * Import from CSV.
+   *
+   * `text` is the file's contents, parsed by the same function the web preview
+   * uses — so what the dialog counted matches exactly what lands in the quiz.
+   * `dryRun: true` answers with the parse result and writes nothing, which is how
+   * the preview shows plain-English row errors before anyone commits.
+   */
+  .post('/import', jsonBody(questionImportRequestSchema), async (c) => {
+    const quizId = idSchema.parse(c.req.param('quizId'));
+    const { text, dryRun } = c.req.valid('json');
+
+    if (text.trim() === '') {
+      throw new ApiError(422, 'IMPORT_EMPTY', 'That file is empty.');
+    }
+
+    if (Buffer.byteLength(text, 'utf8') > MAX_IMPORT_BYTES) {
+      throw new ApiError(
+        422,
+        'IMPORT_TOO_LARGE',
+        `Import files up to ${Math.round(MAX_IMPORT_BYTES / 1000)} kB.`,
+      );
+    }
+
+    const parsed = parseQuestionImport(text);
+
+    // Nothing valid and something wrong is a failed import, not a successful one
+    // with an empty list — the client should not have to compare two arrays to
+    // know whether to tell the user it worked.
+    if (!dryRun && parsed.questions.length === 0) {
+      throw new ApiError(
+        422,
+        'IMPORT_NO_ROWS',
+        parsed.issues[0]?.message ?? 'No valid rows were found in that file.',
+      );
+    }
+
+    const created = dryRun ? [] : (await importQuestions(quizId, parsed.questions)).created;
+
+    return c.json(
+      {
+        dryRun,
+        created,
+        accepted: parsed.questions.length,
+        skipped: parsed.issues.length,
+        issues: parsed.issues,
+        questions: parsed.questions,
+      },
+      200,
+    );
   })
 
   .all('*', (c) => {

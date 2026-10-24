@@ -215,6 +215,9 @@ describe('result wire shape', () => {
     startedAt: '2026-01-01T12:00:00.000Z',
     completedAt: '2026-01-01T12:14:21.000Z',
     autoSubmitted: false,
+    penalty: 0,
+    negativeMarks: 0,
+    certificateCode: null,
   };
 
   it('parses a graded result', () => {
@@ -242,5 +245,106 @@ describe('result wire shape', () => {
     expect(isFinishedAttempt('EXPIRED')).toBe(true);
     expect(isFinishedAttempt('IN_PROGRESS')).toBe(false);
     expect(isFinishedAttempt('nope')).toBe(false);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Negative marking                                                          */
+/* -------------------------------------------------------------------------- */
+
+describe('gradeAttempt with a penalty', () => {
+  const questions = [
+    {
+      id: 'q1',
+      marks: 1,
+      options: [
+        { id: 'q1a', isCorrect: true },
+        { id: 'q1b', isCorrect: false },
+      ],
+    },
+    {
+      id: 'q2',
+      marks: 1,
+      options: [
+        { id: 'q2a', isCorrect: true },
+        { id: 'q2b', isCorrect: false },
+      ],
+    },
+    {
+      id: 'q3',
+      marks: 1,
+      options: [
+        { id: 'q3a', isCorrect: true },
+        { id: 'q3b', isCorrect: false },
+      ],
+    },
+  ];
+
+  it('takes the penalty per wrong answer, never per skip', () => {
+    const result = gradeAttempt({
+      questions,
+      answers: [
+        { questionId: 'q1', selectedOptionId: 'q1a' },
+        { questionId: 'q2', selectedOptionId: 'q2b' },
+        { questionId: 'q3', selectedOptionId: null },
+      ],
+      passingScore: 50,
+      negativeMarks: 0.25,
+    });
+
+    expect(result.correctAnswers).toBe(1);
+    expect(result.incorrectAnswers).toBe(1);
+    expect(result.unanswered).toBe(1);
+    expect(result.penalty).toBe(0.25);
+    expect(result.score).toBe(0.75);
+    expect(result.percentage).toBe(25);
+    expect(result.negativeMarks).toBe(0.25);
+  });
+
+  it('floors the score at zero instead of going negative', () => {
+    const result = gradeAttempt({
+      questions,
+      answers: [
+        { questionId: 'q1', selectedOptionId: 'q1b' },
+        { questionId: 'q2', selectedOptionId: 'q2b' },
+        { questionId: 'q3', selectedOptionId: 'q3b' },
+      ],
+      passingScore: 60,
+      negativeMarks: 2,
+    });
+
+    expect(result.score).toBe(0);
+    expect(result.percentage).toBe(0);
+    expect(result.passed).toBe(false);
+    expect(result.penalty).toBe(6);
+  });
+
+  it('is exactly the old behaviour when the penalty is zero', () => {
+    const result = gradeAttempt({
+      questions,
+      answers: [{ questionId: 'q1', selectedOptionId: 'q1a' }],
+      passingScore: 30,
+    });
+
+    expect(result.score).toBe(1);
+    expect(result.penalty).toBe(0);
+    expect(result.negativeMarks).toBe(0);
+    expect(result.percentage).toBe(33.33);
+  });
+
+  it('cannot be passed by guessing when the penalty outweighs a mark', () => {
+    const result = gradeAttempt({
+      questions,
+      answers: [
+        { questionId: 'q1', selectedOptionId: 'q1b' },
+        { questionId: 'q2', selectedOptionId: 'q2a' },
+      ],
+      passingScore: 1,
+      negativeMarks: 1,
+    });
+
+    // One right (+1), one wrong (-1) → 0.
+    expect(result.score).toBe(0);
+    expect(result.passed).toBe(false);
   });
 });

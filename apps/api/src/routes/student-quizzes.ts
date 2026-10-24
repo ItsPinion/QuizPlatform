@@ -15,8 +15,12 @@ import {
   attemptReviewSchema,
 } from '@quiz/shared/review';
 import { submitAttemptResponseSchema } from '@quiz/shared/submission';
+import { certificateListResponseSchema } from '@quiz/shared/certificate';
+import { studentProfileResponseSchema } from '@quiz/shared/admin-attempts';
 import { Hono } from 'hono';
 
+import { listCertificates } from '../lib/certificates';
+import { getStudentProfile } from '../lib/admin-attempts';
 import { ApiError, jsonBody } from '../lib/errors';
 import { categoryListResponseSchema } from '@quiz/shared/quiz';
 
@@ -156,6 +160,33 @@ export const studentQuizRoutes = new Hono<AppEnv>()
     const id = idSchema.parse(c.req.param('id'));
 
     return c.json(submitAttemptResponseSchema.parse(await submitAttempt(id, user.id)), 200);
+  })
+
+  /**
+   * The student's own certificates.
+   *
+   * Owner-scoped: the query is `userId = session`. There is no `/certificates/:id`
+   * here on purpose — the public verification route already reads a certificate
+   * by code, and this one answers "mine", which is the only list a student needs.
+   */
+  .get('/certificates', async (c) => {
+    const user = c.get('user');
+    return c.json(certificateListResponseSchema.parse(await listCertificates(user.id)), 200);
+  })
+
+  /**
+   * The student's own performance, aggregated.
+   *
+   * The same builder the admin profile screen uses, with the id taken from the
+   * session instead of the URL. One implementation means a student and a teacher
+   * can never read two different versions of the same record.
+   */
+  .get('/profile', async (c) => {
+    const user = c.get('user');
+    return c.json(
+      studentProfileResponseSchema.parse({ profile: await getStudentProfile(user.id) }),
+      200,
+    );
   })
 
   .all('*', (c) => {

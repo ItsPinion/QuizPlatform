@@ -3,10 +3,13 @@ import type { StudentQuizDetailResponse } from '@quiz/shared/attempt';
 import { PageHeader } from '@/components/cinema/page-header';
 import {
   ArrowLeft,
+  Award,
+  CalendarClock,
   CircleAlert,
   Clock,
   HelpCircle,
   ListChecks,
+  MinusCircle,
   ShieldCheck,
   Target,
   Trophy,
@@ -159,6 +162,58 @@ export default async function StudentQuizDetailPage({ params }: PageProps) {
                 <p className="text-muted-foreground text-[11.5px]">{attemptsLabel(quiz)}</p>
               </div>
             </div>
+
+            <div className="border-border/60 flex items-start gap-2.5 rounded-lg border p-3">
+              <MinusCircle className="text-primary mt-0.5 size-4 shrink-0" />
+              <div>
+                <p className="font-medium">
+                  {quiz.negativeMarks > 0
+                    ? `−${quiz.negativeMarks} per wrong answer`
+                    : 'No penalty for wrong answers'}
+                </p>
+                <p className="text-muted-foreground text-[11.5px]">
+                  {quiz.negativeMarks > 0
+                    ? 'unanswered questions cost nothing'
+                    : 'a wrong guess costs nothing extra'}
+                </p>
+              </div>
+            </div>
+
+            {quiz.availableFrom || quiz.availableUntil ? (
+              <div className="border-border/60 flex items-start gap-2.5 rounded-lg border p-3">
+                <CalendarClock className="text-primary mt-0.5 size-4 shrink-0" />
+                <div>
+                  <p className="font-medium">
+                    {quiz.availability === 'SCHEDULED'
+                      ? 'Not open yet'
+                      : quiz.availability === 'CLOSED'
+                        ? 'Closed'
+                        : 'Open now'}
+                  </p>
+                  <p className="text-muted-foreground text-[11.5px]">
+                    {quiz.availableFrom
+                      ? `opens ${new Date(quiz.availableFrom).toLocaleString()}`
+                      : 'no opening date'}
+                    {' · '}
+                    {quiz.availableUntil
+                      ? `closes ${new Date(quiz.availableUntil).toLocaleString()}`
+                      : 'no closing date'}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            {quiz.certificateEnabled ? (
+              <div className="border-border/60 flex items-start gap-2.5 rounded-lg border p-3">
+                <Award className="text-primary mt-0.5 size-4 shrink-0" />
+                <div>
+                  <p className="font-medium">Certificate on a pass</p>
+                  <p className="text-muted-foreground text-[11.5px]">
+                    with a public code anyone can verify
+                  </p>
+                </div>
+              </div>
+            ) : null}
 
             <p className="text-muted-foreground border-border/60 rounded-lg border border-dashed p-3 text-[11.5px] sm:col-span-2">
               <ShieldCheck className="text-success mr-1 inline size-3.5" />

@@ -25,6 +25,9 @@ const result = {
   startedAt: '2026-01-01T12:00:00.000Z',
   completedAt: '2026-01-01T12:05:00.000Z',
   autoSubmitted: false,
+  penalty: 0,
+  negativeMarks: 0,
+  certificateCode: null,
 };
 
 const question = {

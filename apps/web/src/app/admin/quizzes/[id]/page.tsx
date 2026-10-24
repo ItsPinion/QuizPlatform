@@ -108,6 +108,37 @@ export default async function AdminQuizPage({ params }: PageProps) {
           <span>
             {quiz.attemptCount} attempt{quiz.attemptCount === 1 ? '' : 's'}
           </span>
+          {quiz.negativeMarks > 0 ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>−{quiz.negativeMarks} per wrong</span>
+            </>
+          ) : null}
+          {quiz.shuffleQuestions ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>questions shuffled</span>
+            </>
+          ) : null}
+          {quiz.shuffleOptions ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>options shuffled</span>
+            </>
+          ) : null}
+          {quiz.availableFrom || quiz.availableUntil ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>
+                {quiz.availableFrom
+                  ? `opens ${new Date(quiz.availableFrom).toLocaleDateString()}`
+                  : 'always open'}
+                {quiz.availableUntil
+                  ? ` until ${new Date(quiz.availableUntil).toLocaleDateString()}`
+                  : ''}
+              </span>
+            </>
+          ) : null}
         </p>
       </div>
 

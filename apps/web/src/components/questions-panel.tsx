@@ -18,6 +18,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { QuestionForm } from '@/components/question-form';
+import { QuestionImport } from '@/components/question-import';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { client } from '@/lib/api';
@@ -154,14 +155,25 @@ export function QuestionsPanel({ quizId, quizStatus, initialQuestions }: Props) 
           ) : null}
         </div>
 
-        <Button
-          size="sm"
-          onClick={() => setMode(mode?.kind === 'new' ? null : { kind: 'new' })}
-          disabled={mode?.kind === 'edit'}
-        >
-          <Plus />
-          Add question
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <QuestionImport
+            quizId={quizId}
+            onImported={(questions) => {
+              setQuestions(questions);
+              setError(null);
+              router.refresh();
+            }}
+          />
+
+          <Button
+            size="sm"
+            onClick={() => setMode(mode?.kind === 'new' ? null : { kind: 'new' })}
+            disabled={mode?.kind === 'edit'}
+          >
+            <Plus />
+            Add question
+          </Button>
+        </div>
       </div>
 
       {error ? (

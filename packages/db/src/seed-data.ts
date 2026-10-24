@@ -20,6 +20,17 @@ export interface QuizSeed {
   passingScore: number;
   maxAttempts: number;
   status: QuizStatus;
+  /** Marks removed per wrong answer. Omitted means no penalty. */
+  negativeMarks?: number;
+  /** Deal the questions in a fresh order for every attempt. */
+  shuffleQuestions?: boolean;
+  /** Deal each question's options in a fresh order. */
+  shuffleOptions?: boolean;
+  /** Whether a pass hands out a certificate. Omitted means yes. */
+  certificateEnabled?: boolean;
+  /** Relative to seed time, in days: negative is in the past. */
+  availableFromInDays?: number;
+  availableUntilInDays?: number;
   questions: QuestionSeed[];
 }
 
@@ -66,6 +77,7 @@ export const quizSeeds: QuizSeed[] = [
     passingScore: 60,
     maxAttempts: 3,
     status: 'PUBLISHED',
+    shuffleOptions: true,
     questions: [
       {
         text: 'What does HTML stand for?',
@@ -168,6 +180,9 @@ export const quizSeeds: QuizSeed[] = [
     passingScore: 60,
     maxAttempts: 2,
     status: 'PUBLISHED',
+    // The one paper that punishes guessing, and the one that reshuffles.
+    negativeMarks: 0.25,
+    shuffleQuestions: true,
     questions: [
       {
         text: 'Which keyword declares a block-scoped constant?',
@@ -417,6 +432,11 @@ export const quizSeeds: QuizSeed[] = [
     passingScore: 70,
     maxAttempts: 1,
     status: 'PUBLISHED',
+    // Published, but not open yet: the catalogue shows the door rather than
+    // hiding the room, and the API refuses to start it.
+    availableFromInDays: 3,
+    // A hard paper that punishes guessing.
+    negativeMarks: 0.5,
     questions: [
       {
         text: 'Which attack injects malicious SQL through unsanitised user input?',

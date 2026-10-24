@@ -175,6 +175,9 @@ export function NavBar({ version, user }: { version?: string; user?: AuthUser | 
     /* A real banner landmark, not a styled div: it is the page's header on every
        route, and assistive tech — and the deployment check — look for it. */
     <header
+      /* `data-scrolled` exists for the light theme, which needs a hairline once
+         the bar turns opaque — a white plate on a white page is not a bar. */
+      data-scrolled={scrolled ? 'true' : 'false'}
       className={cn(
         'fixed inset-x-0 top-0 z-[80] transition-colors duration-500',
         scrolled ? 'bg-black/55 backdrop-blur-xl' : 'bg-transparent',

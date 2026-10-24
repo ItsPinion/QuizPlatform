@@ -6,16 +6,24 @@ import { diagnoseDatabaseError, fetchRawResponse, formatDiagnosis } from './diag
 import { db } from './index';
 import { loadEnvFiles } from './load-env';
 import { resolveDatabaseConfig } from './env';
+import { certificateCode, normalizeCertificateCode } from '@quiz/shared/certificate';
+import { certificateEmail, resultEmail, welcomeEmail } from '@quiz/shared/email';
+
 import {
   answers,
   attempts,
   categories,
+  certificates,
+  emailOutbox,
   options,
+  passwordResetTokens,
   questions,
   quizzes,
   users,
   type NewAnswer,
   type NewAttempt,
+  type NewCertificate,
+  type NewEmailOutboxRow,
   type NewOption,
   type NewQuestion,
   type NewQuiz,
@@ -93,6 +101,9 @@ const studentPlans: StudentPlan[] = [
 
 async function resetData() {
   console.log('▸ Resetting existing data (--force)');
+  await db.delete(emailOutbox);
+  await db.delete(certificates);
+  await db.delete(passwordResetTokens);
   await db.delete(answers);
   await db.delete(attempts);
   await db.delete(options);
@@ -193,6 +204,20 @@ async function main() {
       createdBy: admin.id,
       createdAt,
       updatedAt: createdAt,
+      // Scheduling is seeded relative to now so the demo states stay honest
+      // whenever the database is rebuilt.
+      availableFrom:
+        seed.availableFromInDays == null
+          ? null
+          : new Date(now + seed.availableFromInDays * 24 * 60 * 60 * 1000),
+      availableUntil:
+        seed.availableUntilInDays == null
+          ? null
+          : new Date(now + seed.availableUntilInDays * 24 * 60 * 60 * 1000),
+      shuffleQuestions: seed.shuffleQuestions ?? false,
+      shuffleOptions: seed.shuffleOptions ?? false,
+      negativeMarks: seed.negativeMarks ?? 0,
+      certificateEnabled: seed.certificateEnabled ?? true,
     };
 
     const questionRows: NewQuestion[] = [];
@@ -318,14 +343,18 @@ async function main() {
           });
         });
 
-        const percentage = Math.round((obtained / totalMarks) * 10000) / 100;
+        // The paper's penalty, applied the same way the API applies it.
+        const negativeMarks = quiz.negativeMarks ?? 0;
+        const penalty = Math.round(negativeMarks * incorrectCount * 100) / 100;
+        const score = Math.round(Math.max(0, obtained - penalty) * 100) / 100;
+        const percentage = Math.round((score / totalMarks) * 10000) / 100;
         const status = percentage >= quiz.passingScore ? 'PASSED' : 'FAILED';
 
         attemptRows.push({
           id: attemptId,
           quizId,
           userId,
-          score: obtained,
+          score,
           totalMarks,
           percentage,
           correctAnswers: correctCount,
@@ -333,6 +362,8 @@ async function main() {
           unanswered: unansweredCount,
           timeTakenSeconds,
           status,
+          negativeMarks,
+          penalty,
           startedAt,
           expiresAt: new Date(startedAt.getTime() + durationMs),
           completedAt: new Date(startedAt.getTime() + timeTakenSeconds * 1000),
@@ -346,6 +377,113 @@ async function main() {
   if (attemptRows.length > 0) await db.insert(attempts).values(attemptRows);
   if (answerRows.length > 0) await db.insert(answers).values(answerRows);
 
+  /* ----------------------------- certificates ----------------------------- */
+  // A pass on a quiz that allows them. Seeded so the certificate screen and its
+  // public verification page have something real to show on a fresh install.
+  const certificateRows: NewCertificate[] = [];
+  const outboxRows: NewEmailOutboxRow[] = [];
+  const usedCodes = new Set<string>();
+
+  for (const attempt of attemptRows) {
+    if (attempt.status !== 'PASSED') continue;
+
+    const quiz = quizById.get(attempt.quizId);
+    if (!quiz || quiz.certificateEnabled === false) continue;
+
+    let code = certificateCode();
+    while (usedCodes.has(normalizeCertificateCode(code))) code = certificateCode();
+    usedCodes.add(normalizeCertificateCode(code));
+
+    certificateRows.push({
+      id: randomUUID(),
+      attemptId: attempt.id,
+      userId: attempt.userId,
+      quizId: attempt.quizId,
+      code: normalizeCertificateCode(code),
+    });
+  }
+
+  if (certificateRows.length > 0) await db.insert(certificates).values(certificateRows);
+
+  /* ------------------------------- outbox -------------------------------- */
+  // A few messages so the console's notification log is not empty: a welcome per
+  // student, plus the result and certificate of the newest pass.
+  for (const [index, student] of studentPlans.entries()) {
+    const row = studentRows[index];
+    if (!row) continue;
+
+    const welcome = welcomeEmail({ name: student.name, email: student.email });
+    outboxRows.push({
+      id: randomUUID(),
+      kind: welcome.kind,
+      toEmail: welcome.to,
+      subject: welcome.subject,
+      body: welcome.body,
+      status: 'SENT',
+      sentAt: new Date(now - 30 * 24 * 60 * 60 * 1000),
+      createdAt: new Date(now - 30 * 24 * 60 * 60 * 1000),
+    });
+  }
+
+  const newestPass = [...certificateRows].sort((a, b) => (a.code < b.code ? -1 : 1)).at(-1);
+
+  if (newestPass) {
+    const attempt = attemptRows.find((row) => row.id === newestPass.attemptId);
+    const quiz = attempt ? quizById.get(attempt.quizId) : undefined;
+    const student = attempt
+      ? studentPlans.find((_, index) => studentRows[index]?.id === attempt.userId)
+      : undefined;
+
+    if (attempt && quiz && student) {
+      const result = resultEmail({
+        name: student.name,
+        email: student.email,
+        quizTitle: quiz.title,
+        attemptId: attempt.id,
+        percentage: attempt.percentage ?? 0,
+        score: Number(attempt.score ?? 0),
+        totalMarks: Number(attempt.totalMarks ?? 0),
+        passed: true,
+        passingScore: quiz.passingScore,
+      });
+
+      outboxRows.push({
+        id: randomUUID(),
+        kind: result.kind,
+        toEmail: result.to,
+        subject: result.subject,
+        body: result.body,
+        status: 'SENT',
+        relatedId: attempt.id,
+        sentAt: new Date(attempt.completedAt ?? now),
+        createdAt: new Date(attempt.completedAt ?? now),
+      });
+
+      const certificate = certificateEmail({
+        name: student.name,
+        email: student.email,
+        quizTitle: quiz.title,
+        code: newestPass.code,
+        attemptId: attempt.id,
+        percentage: attempt.percentage ?? 0,
+        baseUrl: 'http://localhost:3000',
+      });
+
+      outboxRows.push({
+        id: randomUUID(),
+        kind: certificate.kind,
+        toEmail: certificate.to,
+        subject: certificate.subject,
+        body: certificate.body,
+        status: 'QUEUED',
+        relatedId: attempt.id,
+        createdAt: new Date(now - 60_000),
+      });
+    }
+  }
+
+  if (outboxRows.length > 0) await db.insert(emailOutbox).values(outboxRows);
+
   console.log('');
   console.log('✔ Seed complete');
   console.log(`  categories: ${categoryRows.length}`);
@@ -354,6 +492,8 @@ async function main() {
     `  quizzes:    ${quizSeeds.length} (${quizSeeds.filter((q) => q.status === 'PUBLISHED').length} published)`,
   );
   console.log(`  attempts:   ${attemptRows.length}`);
+  console.log(`  certificates: ${certificateRows.length}`);
+  console.log(`  emails:     ${outboxRows.length}`);
   console.log('');
   console.log('  Demo accounts');
   console.log('  ┌──────────────┬───────────────────┬───────────────┐');

@@ -1,19 +1,25 @@
 'use client';
 
 import {
+  Award,
   BarChart3,
+  ClipboardList,
   FolderTree,
   Gauge,
   LayoutDashboard,
   ListChecks,
+  Mail,
   Server,
   Trophy,
+  UserRound,
   Users,
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import { ThemeToggle } from '@/components/theme-toggle';
+import type { Theme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 
 /**
@@ -32,6 +38,10 @@ const ICONS = {
   system: Server,
   results: Gauge,
   leaderboard: Trophy,
+  certificates: Award,
+  attempts: ClipboardList,
+  email: Mail,
+  profile: UserRound,
 } satisfies Record<string, LucideIcon>;
 
 export type SectionIcon = keyof typeof ICONS;
@@ -62,10 +72,13 @@ export interface SectionNavItem {
 export function SectionNav({
   label,
   items,
+  theme,
 }: {
   /** The nav's accessible name — "Admin sections", "Student sections". */
   label: string;
   items: readonly SectionNavItem[];
+  /** The appearance the shell rendered in, so the control starts on the truth. */
+  theme: Theme;
 }) {
   const pathname = usePathname();
 
@@ -110,6 +123,14 @@ export function SectionNav({
           );
         })}
       </ul>
+
+      {/* Appearance belongs to the surface, not to the account: it sits under
+          the rail on a wide screen and at the end of the pill scroller on a
+          phone, where it is still one tap from the content. */}
+      <div className="mt-5 flex items-center justify-between gap-3 border-t border-white/10 pt-4 lg:flex-col lg:items-start lg:gap-2.5">
+        <span className="cine-label text-[9px] text-gray-500">Appearance</span>
+        <ThemeToggle initial={theme} />
+      </div>
     </nav>
   );
 }

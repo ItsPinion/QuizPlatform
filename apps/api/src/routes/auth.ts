@@ -8,7 +8,7 @@ import {
 } from '@quiz/shared/auth';
 import { hashPassword, verifyPassword } from '@quiz/shared/crypto';
 import { db, schema } from '@quiz/db';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import {
@@ -27,6 +27,17 @@ import {
   hitRateLimit,
   ruleFor,
 } from '../lib/rate-limit';
+import { queueEmail } from '../lib/emails';
+import { requestPasswordReset, resetPassword } from '../lib/password-reset';
+import { welcomeEmail } from '@quiz/shared/email';
+import {
+  changePasswordResponseSchema,
+  changePasswordSchema,
+  forgotPasswordResponseSchema,
+  forgotPasswordSchema,
+  resetPasswordResponseSchema,
+  resetPasswordSchema,
+} from '@quiz/shared/password';
 import type { AppEnv } from '../lib/types';
 import { requireAuth } from '../middleware/auth';
 
@@ -100,7 +111,42 @@ export const authRoutes = new Hono<AppEnv>()
     const { token, expiresAt } = await createSession(user);
     setSessionCookie(c, token);
 
+    // Queued, not awaited on a mail server: registration succeeds even when
+    // mail does not, and the console can show what was sent.
+    await queueEmail(welcomeEmail({ name: user.name, email: user.email }));
+
     return c.json<AuthSession>(toAuthSession(user, expiresAt), 201);
+  })
+
+  /**
+   * Ask for a reset link.
+   *
+   * Always `202`, always the same body — whether or not the address exists. The
+   * rate limit is per address so this cannot be used to spray a mailbox either.
+   */
+  .post('/forgot-password', jsonBody(forgotPasswordSchema), async (c) => {
+    const { email } = c.req.valid('json');
+    const key = `forgot:ip:${clientIp(c)}:${email}`;
+
+    enforceRateLimit(c, key, ruleFor('forgot'));
+
+    const result = await requestPasswordReset(email);
+    hitRateLimit(key, ruleFor('forgot'));
+
+    return c.json(forgotPasswordResponseSchema.parse(result), 202);
+  })
+
+  /** Spend the token from the mail and set a new password. */
+  .post('/reset-password', jsonBody(resetPasswordSchema), async (c) => {
+    const { token, password } = c.req.valid('json');
+    const key = `reset:ip:${clientIp(c)}`;
+
+    enforceRateLimit(c, key, ruleFor('forgot'));
+
+    const result = await resetPassword(token, password);
+    hitRateLimit(key, ruleFor('forgot'));
+
+    return c.json(resetPasswordResponseSchema.parse(result), 200);
   })
 
   /** Exchange email + password for a session cookie. */
@@ -181,6 +227,64 @@ export const authRoutes = new Hono<AppEnv>()
   .post('/logout', (c) => {
     clearSessionCookie(c);
     return c.json<LogoutResponse>({ success: true }, 200);
+  })
+
+  /**
+   * Change the password of the signed-in account.
+   *
+   * Three things happen, in this order, and the order matters:
+   *
+   * 1. The current password is verified. A session alone is not enough — the
+   *    whole point is to stop someone at an unlocked laptop from taking the
+   *    account away from its owner.
+   * 2. Outstanding reset links are invalidated *before* the new hash is written,
+   *    so a link minted while the owner was locked out cannot be replayed
+   *    afterwards. (Sweep first: revoking after a write is how the reset flow
+   *    once killed its own new token.)
+   * 3. The new hash is written.
+   *
+   * The session itself is deliberately left alone: this is the same person, on
+   * the same device, proving they are still themselves. The cookie is httpOnly
+   * and signed, and the JWT carries no password material.
+   */
+  .post('/change-password', requireAuth, jsonBody(changePasswordSchema), async (c) => {
+    const user = c.get('user');
+    const { currentPassword, newPassword } = c.req.valid('json');
+
+    const [row] = await db
+      .select({ passwordHash: schema.users.passwordHash })
+      .from(schema.users)
+      .where(eq(schema.users.id, user.id))
+      .limit(1);
+
+    if (!row) {
+      throw new ApiError(404, 'USER_NOT_FOUND', 'This account no longer exists.');
+    }
+
+    if (!(await verifyPassword(currentPassword, row.passwordHash))) {
+      throw new ApiError(401, 'INVALID_PASSWORD', 'Your current password is incorrect.');
+    }
+
+    const revoked = await db
+      .update(schema.passwordResetTokens)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(schema.passwordResetTokens.userId, user.id),
+          isNull(schema.passwordResetTokens.usedAt),
+        ),
+      )
+      .returning({ id: schema.passwordResetTokens.id });
+
+    await db
+      .update(schema.users)
+      .set({ passwordHash: await hashPassword(newPassword), updatedAt: new Date() })
+      .where(eq(schema.users.id, user.id));
+
+    return c.json<import('@quiz/shared/password').ChangePasswordResponse>(
+      changePasswordResponseSchema.parse({ changed: true, revokedLinks: revoked.length }),
+      200,
+    );
   })
 
   /** Who am I? Used by the web app to render session-aware UI. */

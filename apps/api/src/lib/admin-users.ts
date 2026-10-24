@@ -194,3 +194,52 @@ export async function updateUser(
 
   return updated;
 }
+
+/**
+ * Delete an account.
+ *
+ * Attempts, answers and certificates go with it — the schema cascades, which is
+ * the right default: a deleted student's results are not something to keep in a
+ * half-state. The one refusal is the caller's own account, for the same reason
+ * the last bullet in `updateUser` exists: the console must not be able to
+ * delete the only door into itself.
+ *
+ * The count is returned so the confirmation can say what went with it.
+ */
+export async function deleteUser(
+  id: string,
+  actorId: string,
+): Promise<{ deleted: true; id: string; removedAttempts: number }> {
+  if (id === actorId) {
+    throw new ApiError(409, 'SELF_DELETE', 'You cannot delete the account you are signed in with.');
+  }
+
+  const [target] = await db.select({ id: users.id }).from(users).where(eq(users.id, id)).limit(1);
+
+  if (!target) {
+    throw new ApiError(404, 'USER_NOT_FOUND', 'No user with that id exists.');
+  }
+
+  const [counted] = await db
+    .select({ value: count() })
+    .from(attempts)
+    .where(eq(attempts.userId, id));
+
+  await db.delete(users).where(eq(users.id, id));
+
+  return { deleted: true, id, removedAttempts: Number(counted?.value ?? 0) };
+}
+
+/**
+ * Activate / deactivate, as its own call.
+ *
+ * Delegates to `updateUser` so the self-lockout rule cannot be bypassed by using
+ * the narrower endpoint.
+ */
+export async function setUserStatus(
+  id: string,
+  status: 'ACTIVE' | 'INACTIVE',
+  actorId: string,
+): Promise<AdminUser> {
+  return updateUser(id, { status }, actorId);
+}

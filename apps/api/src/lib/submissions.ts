@@ -10,9 +10,13 @@ import {
 } from '@quiz/shared/submission';
 import { db, schema } from '@quiz/db';
 
+import { certificateEmail, resultEmail } from '@quiz/shared/email';
+
+import { issueCertificate } from './certificates';
+import { publicBaseUrl, queueEmail } from './emails';
 import { ApiError } from './errors';
 
-const { answers, attempts, options, questions, quizzes } = schema;
+const { answers, attempts, certificates, options, questions, quizzes, users } = schema;
 
 /** How many stale attempts one request will settle before giving up. */
 const STALE_LIMIT = 50;
@@ -28,6 +32,8 @@ interface AttemptRow {
   incorrectAnswers: number;
   unanswered: number;
   timeTakenSeconds: number;
+  penalty: number;
+  negativeMarks: number;
   startedAt: Date;
   expiresAt: Date;
   completedAt: Date | null;
@@ -52,10 +58,17 @@ async function loadAttempt(attemptId: string, userId: string) {
       incorrectAnswers: attempts.incorrectAnswers,
       unanswered: attempts.unanswered,
       timeTakenSeconds: attempts.timeTakenSeconds,
+      penalty: attempts.penalty,
+      negativeMarks: attempts.negativeMarks,
       startedAt: attempts.startedAt,
       expiresAt: attempts.expiresAt,
       completedAt: attempts.completedAt,
       passingScore: quizzes.passingScore,
+      // The penalty in force is the one frozen onto the attempt at start time;
+      // the quiz's current value is the fallback for rows written before this
+      // column existed.
+      quizNegativeMarks: quizzes.negativeMarks,
+      certificateEnabled: quizzes.certificateEnabled,
     })
     .from(attempts)
     .innerJoin(quizzes, eq(quizzes.id, attempts.quizId))
@@ -75,8 +88,23 @@ async function loadAttempt(attemptId: string, userId: string) {
  * Used for every retry: once an attempt is finished its result is read from the
  * columns, never recomputed from answers that could have changed since.
  */
+async function certificateCodeFor(attemptId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ code: certificates.code })
+    .from(certificates)
+    .where(eq(certificates.attemptId, attemptId))
+    .limit(1);
+
+  return row?.code ?? null;
+}
+
 function toResult(
-  row: AttemptRow & { passingScore: number; completedAt: Date | null },
+  row: AttemptRow & {
+    passingScore: number;
+    completedAt: Date | null;
+    quizNegativeMarks: number;
+  },
+  certificateCode: string | null = null,
 ): AttemptResult {
   const completedAt = row.completedAt ?? row.expiresAt;
   const passed =
@@ -98,6 +126,9 @@ function toResult(
     startedAt: row.startedAt.toISOString(),
     completedAt: completedAt.toISOString(),
     autoSubmitted: wasAutoSubmitted(completedAt, row.expiresAt),
+    penalty: Number(row.penalty ?? 0),
+    negativeMarks: Number(row.negativeMarks ?? row.quizNegativeMarks ?? 0),
+    certificateCode,
   };
 }
 
@@ -113,7 +144,11 @@ function toResult(
  * time ran out, never after it.
  */
 async function gradeAndStore(
-  row: AttemptRow & { passingScore: number },
+  row: AttemptRow & {
+    passingScore: number;
+    quizNegativeMarks: number;
+    certificateEnabled: boolean;
+  },
 ): Promise<SubmitAttemptResponse> {
   const questionRows = await db
     .select({ id: questions.id, marks: questions.marks })
@@ -158,10 +193,16 @@ async function gradeAndStore(
     selectedOptionId: answer.selectedOptionId,
   }));
 
+  // Wrong answers cost marks on a quiz that says so. The value is the attempt's
+  // own (frozen at start), so an admin editing the quiz mid-week cannot change
+  // the terms of a paper somebody already sat.
+  const negativeMarks = Number(row.negativeMarks ?? row.quizNegativeMarks ?? 0);
+
   const breakdown = gradeAttempt({
     questions: gradable,
     answers: savedAnswers,
     passingScore: row.passingScore,
+    negativeMarks,
   });
 
   const now = new Date();
@@ -178,6 +219,8 @@ async function gradeAndStore(
       incorrectAnswers: breakdown.incorrectAnswers,
       unanswered: breakdown.unanswered,
       timeTakenSeconds: timeTaken,
+      penalty: breakdown.penalty,
+      negativeMarks,
       status: breakdown.status,
       completedAt,
     })
@@ -200,6 +243,12 @@ async function gradeAndStore(
       .where(and(eq(answers.attemptId, row.id), eq(answers.questionId, answer.questionId)));
   }
 
+  const { certificateCode } = await notifyStudent(row, {
+    ...breakdown,
+    timeTakenSeconds: timeTaken,
+    completedAt: completedAt.toISOString(),
+  });
+
   return {
     attemptId: row.id,
     quizId: row.quizId,
@@ -210,8 +259,92 @@ async function gradeAndStore(
       startedAt: row.startedAt.toISOString(),
       completedAt: completedAt.toISOString(),
       autoSubmitted: wasAutoSubmitted(completedAt, row.expiresAt),
+      negativeMarks,
+      certificateCode,
     },
   };
+}
+
+/**
+ * After grading: a certificate if they earned one, a result mail either way.
+ *
+ * Both are best-effort by construction — `queueEmail` records a failure instead
+ * of raising, so a broken mail path cannot turn a successful submission into an
+ * error the student sees.
+ */
+async function notifyStudent(
+  row: AttemptRow & { quizId: string; certificateEnabled: boolean },
+  result: Pick<
+    AttemptResult,
+    'score' | 'totalMarks' | 'percentage' | 'passed' | 'timeTakenSeconds' | 'completedAt'
+  >,
+): Promise<{ certificateCode: string | null }> {
+  const [context] = await db
+    .select({
+      name: users.name,
+      email: users.email,
+      quizTitle: quizzes.title,
+      passingScore: quizzes.passingScore,
+    })
+    .from(attempts)
+    .innerJoin(users, eq(users.id, attempts.userId))
+    .innerJoin(quizzes, eq(quizzes.id, attempts.quizId))
+    .where(eq(attempts.id, row.id))
+    .limit(1);
+
+  if (!context) return { certificateCode: null };
+
+  let certificateCode: string | null = null;
+
+  if (result.passed && row.certificateEnabled) {
+    const [owner] = await db
+      .select({ userId: attempts.userId })
+      .from(attempts)
+      .where(eq(attempts.id, row.id))
+      .limit(1);
+
+    if (owner) {
+      const certificate = await issueCertificate({
+        attemptId: row.id,
+        userId: owner.userId,
+        quizId: row.quizId,
+      });
+
+      certificateCode = certificate.code;
+
+      // Only mail a brand-new certificate: a retried submission must not send a
+      // second copy of the same document.
+      if (certificate.created) {
+        await queueEmail(
+          certificateEmail({
+            name: context.name,
+            email: context.email,
+            quizTitle: context.quizTitle,
+            code: certificate.code,
+            attemptId: row.id,
+            percentage: certificate.percentage,
+            baseUrl: publicBaseUrl(),
+          }),
+        );
+      }
+    }
+  }
+
+  await queueEmail(
+    resultEmail({
+      name: context.name,
+      email: context.email,
+      quizTitle: context.quizTitle,
+      attemptId: row.id,
+      percentage: result.percentage,
+      score: result.score,
+      totalMarks: result.totalMarks,
+      passed: result.passed,
+      passingScore: context.passingScore,
+    }),
+  );
+
+  return { certificateCode };
 }
 
 /**
@@ -232,7 +365,7 @@ export async function submitAttempt(
       attemptId: row.id,
       quizId: row.quizId,
       alreadySubmitted: true,
-      result: toResult(row),
+      result: toResult(row, await certificateCodeFor(row.id)),
     };
   }
 
@@ -276,5 +409,5 @@ export async function getAttemptResult(
   userId: string,
 ): Promise<AttemptResult | null> {
   const row = await loadAttempt(attemptId, userId);
-  return row.status === 'IN_PROGRESS' ? null : toResult(row);
+  return row.status === 'IN_PROGRESS' ? null : toResult(row, await certificateCodeFor(row.id));
 }

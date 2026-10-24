@@ -1231,6 +1231,42 @@ Full detail is in [`docs/leaderboard.md`](docs/leaderboard.md).
 
 ---
 
+## Advanced features (§26)
+
+Everything the brief calls advanced is live, in the UI and behind a contract:
+
+| Feature                | Where it lives                                          | What it does                                                                                                                              |
+| ---------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Question randomisation | `quizzes.shuffle_questions`                             | Dealt **once** at start into `attempts.question_order`; every read replays it, so a refresh cannot reshuffle a paper                      |
+| Option randomisation   | `quizzes.shuffle_options`                               | Independent of the question order; stored in `attempts.option_order`                                                                      |
+| Negative marking       | `quizzes.negative_marks`, frozen onto the attempt       | `penalty = round(marks × wrong, 2)`, `score = max(0, earned − penalty)`; **skipped answers are never penalised**                          |
+| Maximum attempts       | `quizzes.max_attempts`                                  | Enforced by `startDecision`, after the window and before a new start — an attempt already open can always be finished                     |
+| Scheduling             | `available_from` / `available_until`                    | Start-inclusive, end-exclusive; `SCHEDULED` and `CLOSED` states in the catalogue with a human "opens in 3 hours"                          |
+| Certificates           | `certificate_enabled` on the quiz, `certificates` table | Issued on a pass, idempotent per attempt, `QP-XXXX-XXXX`, publicly verifiable at `/verify/:code`, printable                               |
+| Email notifications    | `email_outbox`                                          | `WELCOME`, `PASSWORD_RESET`, `RESULT`, `CERTIFICATE` — written to an outbox (never blocking a request) and inspectable at `/admin/emails` |
+| Appearance toggle      | `components/theme-toggle.tsx`                           | A real light theme for both consoles, cookie-backed and rendered server-side so there is no flash                                         |
+| Question import        | `POST /api/admin/quizzes/:quizId/questions/import`      | CSV (and any spreadsheet's "save as CSV"), with a dry-run preview, per-line issues and a 200-row cap                                      |
+
+Two of these deserve a sentence beyond the table.
+
+**Randomisation is stored, not re-rolled.** The order is dealt when the attempt
+starts and written to the attempt row. That is the only way the attempt screen,
+the resume, the review and the admin's view can agree — and the only way a
+refresh is not a way to get an easier paper.
+
+**The appearance toggle is scoped to the consoles.** The landing page is a film
+of a dark room; the working screens are read for an hour at a time and deserve a
+light theme. The attribute goes on the console shell, the choice goes in a
+cookie, and the layout reads it on the server — an inline script that flips a
+class after parse is the usual approach and always shows a frame of the wrong
+colour.
+
+Full detail — including the §25 endpoint map, which routes differ from the
+specification's list and why — is in
+[`docs/advanced-features.md`](docs/advanced-features.md).
+
+---
+
 ## Security (Day 13)
 
 Every request passes the same gauntlet before a handler runs, and each step can stop it:

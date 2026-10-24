@@ -2,6 +2,7 @@ import type { CategoryListResponse } from '@quiz/shared/quiz';
 
 import { PageHeader } from '@/components/cinema/page-header';
 import type { StudentQuizListResponse } from '@quiz/shared/attempt';
+import { DURATION_BUCKETS } from '@quiz/shared/attempt';
 import { ArrowLeft, ArrowRight, Search, SlidersHorizontal } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -117,9 +118,22 @@ export default async function StudentQuizzesPage({ searchParams }: PageProps) {
             </div>
 
             <div className="space-y-1.5">
+              <Label htmlFor="duration">Length</Label>
+              <Select id="duration" name="duration" defaultValue={filters.duration}>
+                <option value="ANY">Any length</option>
+                {Object.entries(DURATION_BUCKETS).map(([key, bucket]) => (
+                  <option key={key} value={key}>
+                    {bucket.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
               <Label htmlFor="sort">Sort</Label>
               <Select id="sort" name="sort" defaultValue={filters.sort}>
-                <option value="newest">Newest</option>
+                <option value="newest">Recently added</option>
+                <option value="popular">Most attempted</option>
                 <option value="title">Title</option>
                 <option value="duration">Shortest first</option>
               </Select>

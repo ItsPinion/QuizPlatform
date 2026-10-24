@@ -162,7 +162,8 @@ describe('studentQuizListQuerySchema', () => {
 
   it('clamps the page size and rejects unknown sorts', () => {
     expect(studentQuizListQuerySchema.safeParse({ pageSize: 25 }).success).toBe(false);
-    expect(studentQuizListQuerySchema.safeParse({ sort: 'popular' }).success).toBe(false);
+    expect(studentQuizListQuerySchema.safeParse({ sort: 'trending' }).success).toBe(false);
+    expect(studentQuizListQuerySchema.safeParse({ sort: 'popular' }).success).toBe(true);
   });
 });
 

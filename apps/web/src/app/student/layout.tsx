@@ -5,6 +5,7 @@ import { SectionNav } from '@/components/cinema/section-nav';
 import { SiteHeader } from '@/components/site-header';
 import { SkipLink } from '@/components/skip-link';
 import { getSession } from '@/lib/session';
+import { themeAttribute } from '@/lib/theme-server';
 
 export const metadata: Metadata = {
   title: 'Student area — QuizPlatform',
@@ -27,7 +28,14 @@ const SECTIONS = [
     also: '/student/attempt',
   },
   { href: '/student/results', label: 'Results', icon: 'results', prefix: true },
+  {
+    href: '/student/certificates',
+    label: 'Certificates',
+    icon: 'certificates',
+    prefix: true,
+  },
   { href: '/student/leaderboard', label: 'Leaderboard', icon: 'leaderboard' },
+  { href: '/student/profile', label: 'Profile', icon: 'profile' },
 ] as const;
 
 /**
@@ -43,15 +51,18 @@ const SECTIONS = [
  */
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
+  /* Read from the cookie on the server, so the first painted frame is
+     already in the chosen appearance — there is no flash to correct. */
+  const theme = await themeAttribute();
 
   return (
-    <div className="relative isolate flex min-h-dvh flex-col overflow-x-clip">
+    <div {...theme} className="relative isolate flex min-h-dvh flex-col overflow-x-clip">
       <Ambience />
       <SkipLink href="#main" label="Skip to the content" />
       <SiteHeader user={session?.user ?? null} />
 
       <div className="mx-auto grid w-full max-w-6xl flex-1 gap-8 px-6 pt-28 pb-16 sm:px-8 lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-12 lg:pt-32">
-        <SectionNav label="Student sections" items={SECTIONS} />
+        <SectionNav label="Student sections" items={SECTIONS} theme={theme['data-theme']} />
         <main id="main" tabIndex={-1} className="min-w-0 outline-none">
           {children}
         </main>
