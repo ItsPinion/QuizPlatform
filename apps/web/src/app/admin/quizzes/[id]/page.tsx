@@ -1,4 +1,6 @@
 import type { QuestionListResponse } from '@quiz/shared/question';
+
+import { PageHeader } from '@/components/cinema/page-header';
 import type { CategoryListResponse, QuizDetailResponse } from '@quiz/shared/quiz';
 import { ArrowLeft, CalendarClock, ListChecks, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
@@ -66,26 +68,31 @@ export default async function AdminQuizPage({ params }: PageProps) {
 
   return (
     <div className="space-y-8">
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="warning" className="gap-1.5">
-            <ShieldCheck />
-            ADMIN
-          </Badge>
-          <Badge variant={statusTone(quiz.status)}>{quiz.status}</Badge>
-          <Badge variant="outline">Day 6 · question authoring</Badge>
-        </div>
-
+      <div className="space-y-5">
         <Link
           href="/admin/quizzes"
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-[12.5px]"
+          className="cine-label inline-flex items-center gap-1.5 text-[9px] text-gray-400 transition-colors hover:text-white"
         >
-          <ArrowLeft className="size-3.5" />
+          <ArrowLeft aria-hidden className="size-3" />
           Quizzes
         </Link>
 
-        <h1 className="text-2xl font-semibold tracking-tight">{quiz.title}</h1>
-        <p className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px]">
+        <PageHeader
+          label="Admin console · authoring"
+          title={quiz.title}
+          aside={
+            <>
+              <Badge variant="warning" className="gap-1.5">
+                <ShieldCheck />
+                ADMIN
+              </Badge>
+              <Badge variant={statusTone(quiz.status)}>{quiz.status}</Badge>
+              <Badge variant="outline">Day 6 · question authoring</Badge>
+            </>
+          }
+        />
+
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] tracking-[0.1em] text-gray-400 uppercase">
           <span className="font-mono">{quiz.slug}</span>
           <span aria-hidden="true">·</span>
           <span>{quiz.categoryName}</span>
@@ -102,7 +109,7 @@ export default async function AdminQuizPage({ params }: PageProps) {
             {quiz.attemptCount} attempt{quiz.attemptCount === 1 ? '' : 's'}
           </span>
         </p>
-      </header>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <Card>

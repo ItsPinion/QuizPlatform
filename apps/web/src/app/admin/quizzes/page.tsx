@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, ListChecks, Plus, Search, ShieldCheck } from 'lu
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { PageHeader } from '@/components/cinema/page-header';
 import { StatCard } from '@/components/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
@@ -58,27 +59,29 @@ export default async function AdminQuizzesPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <Badge variant="warning" className="gap-1.5">
+      <PageHeader
+        label="Admin console · the shelf"
+        title="Quizzes"
+        description="Create, edit and remove quizzes, and control what students can see. Publishing is a separate, guarded action — a draft with no questions cannot go live."
+        aside={
+          <>
+            <Badge variant="warning" className="hidden gap-1.5 sm:inline-flex">
               <ShieldCheck />
               ADMIN
             </Badge>
-            <Badge variant="outline">Day 5 · quiz management</Badge>
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight">Quizzes</h1>
-          <p className="text-muted-foreground max-w-2xl text-sm">
-            Create, edit and remove quizzes, and control what students can see. Publishing is a
-            separate, guarded action — a draft with no questions cannot go live.
-          </p>
-        </div>
-
-        <Link href="/admin/quizzes/new" className={cn(buttonVariants({ size: 'sm' }))}>
-          <Plus />
-          New quiz
-        </Link>
-      </header>
+            <Badge variant="outline" className="hidden sm:inline-flex">
+              Day 5 · quiz management
+            </Badge>
+            <Link
+              href="/admin/quizzes/new"
+              className={cn(buttonVariants({ size: 'sm' }), 'h-10 rounded-full px-5')}
+            >
+              <Plus />
+              New quiz
+            </Link>
+          </>
+        }
+      />
 
       <Card className="py-5">
         <CardContent>
@@ -111,7 +114,7 @@ export default async function AdminQuizzesPage({ searchParams }: PageProps) {
                 id="status"
                 name="status"
                 defaultValue={filters.status}
-                className="border-input bg-background h-9 w-full rounded-md border px-2 text-[13px]"
+                className="h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15"
               >
                 <option value="">Any</option>
                 <option value="DRAFT">Draft</option>
@@ -128,7 +131,7 @@ export default async function AdminQuizzesPage({ searchParams }: PageProps) {
                 id="difficulty"
                 name="difficulty"
                 defaultValue={filters.difficulty}
-                className="border-input bg-background h-9 w-full rounded-md border px-2 text-[13px]"
+                className="h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15"
               >
                 <option value="">Any</option>
                 <option value="EASY">Easy</option>
@@ -145,7 +148,7 @@ export default async function AdminQuizzesPage({ searchParams }: PageProps) {
                 id="categoryId"
                 name="categoryId"
                 defaultValue={filters.categoryId}
-                className="border-input bg-background h-9 w-full rounded-md border px-2 text-[13px]"
+                className="h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15"
               >
                 <option value="">Any</option>
                 {categories.map((category) => (
@@ -222,7 +225,7 @@ export default async function AdminQuizzesPage({ searchParams }: PageProps) {
             <div className="border-border/70 overflow-x-auto rounded-xl border">
               <table className="w-full min-w-[780px] text-[13px]">
                 <thead>
-                  <tr className="bg-muted/40 text-muted-foreground border-border/70 border-b text-left text-[11px] tracking-wider uppercase">
+                  <tr className="cine-label border-b border-white/10 bg-white/[0.02] text-left text-[9px] text-gray-400">
                     <th className="px-4 py-2.5 font-medium">Quiz</th>
                     <th className="px-3 py-2.5 font-medium">Status</th>
                     <th className="px-3 py-2.5 font-medium">Questions</th>

@@ -1,4 +1,6 @@
 import type { CategoryListResponse } from '@quiz/shared/quiz';
+
+import { PageHeader } from '@/components/cinema/page-header';
 import { FolderTree, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -40,40 +42,37 @@ export default async function AdminCategoriesPage() {
 
   return (
     <div className="space-y-8">
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="warning" className="gap-1.5">
-            <ShieldCheck />
-            ADMIN
-          </Badge>
-          <Badge variant="outline">Day 6 · categories &amp; questions</Badge>
-        </div>
-
-        <h1 className="text-2xl font-semibold tracking-tight">Categories</h1>
-        <p className="text-muted-foreground max-w-2xl text-sm">
-          Categories are data, not an enum: create, rename and remove them here, and every quiz form
-          picks them up. A category that still has quizzes cannot be deleted.
-        </p>
-      </header>
+      <PageHeader
+        label="Admin console · taxonomy"
+        title="Categories"
+        description="Categories are data, not an enum: create, rename and remove them here, and every quiz form picks them up. A category that still has quizzes cannot be deleted."
+        aside={
+          <>
+            <Badge variant="warning" className="gap-1.5">
+              <ShieldCheck />
+              ADMIN
+            </Badge>
+            <Badge variant="outline">Day 6 · categories &amp; questions</Badge>
+          </>
+        }
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card className="py-4">
           <CardContent className="space-y-1">
-            <p className="text-muted-foreground text-[11px] tracking-wider uppercase">Categories</p>
+            <p className="cine-label text-[9px] text-gray-400">Categories</p>
             <p className="text-2xl font-semibold tabular-nums">{categories.length}</p>
           </CardContent>
         </Card>
         <Card className="py-4">
           <CardContent className="space-y-1">
-            <p className="text-muted-foreground text-[11px] tracking-wider uppercase">In use</p>
+            <p className="cine-label text-[9px] text-gray-400">In use</p>
             <p className="text-2xl font-semibold tabular-nums">{inUse}</p>
           </CardContent>
         </Card>
         <Card className="py-4">
           <CardContent className="space-y-1">
-            <p className="text-muted-foreground text-[11px] tracking-wider uppercase">
-              Quizzes filed
-            </p>
+            <p className="cine-label text-[9px] text-gray-400">Quizzes filed</p>
             <p className="text-2xl font-semibold tabular-nums">{filed}</p>
           </CardContent>
         </Card>

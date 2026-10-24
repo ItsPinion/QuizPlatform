@@ -7,6 +7,7 @@ import {
   Clock,
   Flame,
   ListChecks,
+  type LucideIcon,
   Target,
   Timer,
   Trophy,
@@ -18,7 +19,9 @@ import { redirect } from 'next/navigation';
 
 import { ActivityChart } from '@/components/activity-chart';
 import { CategoryBreakdown } from '@/components/category-breakdown';
+import { PageHeader, SectionBar } from '@/components/cinema/page-header';
 import { ScoreTrendChart } from '@/components/score-trend-chart';
+import { StatCard, type StatTone } from '@/components/stat-card';
 import { StudentQuizCard } from '@/components/student-quiz-card';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
@@ -51,6 +54,18 @@ export const metadata: Metadata = {
  * its own beyond formatting. The catalogue call rides along for the "resume"
  * banner and the suggestions at the bottom.
  */
+/**
+ * `toneFor` speaks in classes because the results table uses it directly on a
+ * `<span>`; a stat card wants one of its named tones. This is the one-line
+ * translation, kept next to its only caller.
+ */
+function statTone(className: string): StatTone {
+  if (className === 'text-success') return 'success';
+  if (className === 'text-destructive') return 'destructive';
+  if (className === 'text-warning') return 'warning';
+  return 'default';
+}
+
 export default async function StudentPage() {
   const decision = decideAccess(await getSession(), 'STUDENT', '/student');
   if (!decision.allowed) redirect(decision.redirectTo);
@@ -82,34 +97,40 @@ export default async function StudentPage() {
   const totals = dashboard?.totals;
   const passMark = 60;
 
-  const stats = [
+  const stats: {
+    label: string;
+    value: string;
+    caption: string;
+    icon: LucideIcon;
+    tone: StatTone;
+  }[] = [
     {
       label: 'Quizzes attempted',
       value: totals ? String(totals.quizzesAttempted) : '—',
       caption: totals ? coverageLabel(totals.quizzesAttempted, totals.quizzesAvailable) : '—',
       icon: ListChecks,
-      tone: 'text-foreground',
+      tone: 'default',
     },
     {
       label: 'Passed',
       value: totals ? String(totals.passed) : '—',
       caption: totals ? `of ${totals.passed + totals.failed} graded` : '—',
       icon: Trophy,
-      tone: totals ? 'text-success' : 'text-foreground',
+      tone: totals ? 'success' : 'default',
     },
     {
       label: 'Failed',
       value: totals ? String(totals.failed) : '—',
       caption: totals ? passRateLabel(totals.passRate) + ' pass rate' : '—',
       icon: Target,
-      tone: totals?.failed ? 'text-destructive' : 'text-foreground',
+      tone: totals?.failed ? 'destructive' : 'default',
     },
     {
       label: 'Average score',
       value: totals ? percentLabel(totals.averagePercentage) : '—',
       caption: totals?.accuracy != null ? `${percentLabel(totals.accuracy)} answer accuracy` : '—',
       icon: ChartNoAxesCombined,
-      tone: toneFor(totals?.averagePercentage ?? null, passMark),
+      tone: statTone(toneFor(totals?.averagePercentage ?? null, passMark)),
     },
     {
       label: 'Highest score',
@@ -117,14 +138,14 @@ export default async function StudentPage() {
       caption:
         totals?.worstPercentage != null ? `low ${percentLabel(totals.worstPercentage)}` : '—',
       icon: Trophy,
-      tone: toneFor(totals?.bestPercentage ?? null, passMark),
+      tone: statTone(toneFor(totals?.bestPercentage ?? null, passMark)),
     },
     {
       label: 'Questions answered',
       value: totals ? String(totals.questionsAnswered) : '—',
       caption: totals ? `${totals.questionsCorrect} correct` : '—',
       icon: ListChecks,
-      tone: 'text-foreground',
+      tone: 'default',
     },
     {
       label: 'Time on quizzes',
@@ -134,36 +155,38 @@ export default async function StudentPage() {
           ? `${durationLabel(totals.averageTimeSeconds)} avg`
           : '—',
       icon: Timer,
-      tone: 'text-foreground',
+      tone: 'default',
     },
     {
       label: 'Best streak',
       value: dashboard ? String(dashboard.streak.best) : '—',
       caption: dashboard ? `${dashboard.streak.current} current` : '—',
       icon: Flame,
-      tone: dashboard?.streak.current ? 'text-warning' : 'text-foreground',
+      tone: dashboard?.streak.current ? 'warning' : 'default',
     },
   ];
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="secondary" className="gap-1.5">
-            <UserRound className="size-3" />
-            STUDENT
-          </Badge>
-          <Badge variant="outline">Day 10 · dashboard</Badge>
-        </div>
-
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Hello, {session.user.name.split(' ')[0]}
-        </h1>
-        <p className="text-muted-foreground max-w-2xl text-sm">
-          Your scores, your habits, your weak spots — all read from the attempts the server graded.
-          Nothing here is computed in the browser.
-        </p>
-      </header>
+      <PageHeader
+        label="Student · overview"
+        title={
+          <>
+            Hello,{' '}
+            <span className="cine-gradient-text italic">{session.user.name.split(' ')[0]}</span>
+          </>
+        }
+        description="Your scores, your habits, your weak spots — all read from the attempts the server graded. Nothing here is computed in the browser."
+        aside={
+          <>
+            <Badge variant="secondary" className="gap-1.5">
+              <UserRound className="size-3" />
+              STUDENT
+            </Badge>
+            <Badge variant="outline">Day 10 · dashboard</Badge>
+          </>
+        }
+      />
 
       {live.length > 0 ? (
         <Card className="border-warning/40 bg-warning/5">
@@ -190,25 +213,27 @@ export default async function StudentPage() {
       ) : null}
 
       <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[15px] font-medium">Statistics</h2>
-          {totals ? (
-            <span className="text-muted-foreground text-[11.5px]">{attemptsCaption(totals)}</span>
-          ) : null}
-        </div>
+        <SectionBar
+          label="Statistics"
+          action={
+            totals ? (
+              <span className="text-[11px] font-light text-gray-400">
+                {attemptsCaption(totals)}
+              </span>
+            ) : null
+          }
+        />
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {stats.map((stat) => (
-            <Card key={stat.label} className="py-4">
-              <CardContent className="space-y-1">
-                <p className="text-muted-foreground flex items-center gap-1.5 text-[11px] tracking-wider uppercase">
-                  <stat.icon className="size-3.5" />
-                  {stat.label}
-                </p>
-                <p className={cn('text-2xl font-semibold tabular-nums', stat.tone)}>{stat.value}</p>
-                <p className="text-muted-foreground text-[11px]">{stat.caption}</p>
-              </CardContent>
-            </Card>
+            <StatCard
+              key={stat.label}
+              label={stat.label}
+              value={stat.value}
+              hint={stat.caption}
+              icon={stat.icon}
+              tone={stat.tone}
+            />
           ))}
         </div>
       </section>
@@ -317,15 +342,17 @@ export default async function StudentPage() {
       </div>
 
       <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[15px] font-medium">Ready when you are</h2>
-          <Link
-            href="/student/quizzes"
-            className="text-primary inline-flex items-center gap-1 text-[12.5px] hover:underline"
-          >
-            Browse all quizzes <ArrowRight className="size-3.5" />
-          </Link>
-        </div>
+        <SectionBar
+          label="Ready when you are"
+          action={
+            <Link
+              href="/student/quizzes"
+              className="cine-label inline-flex items-center gap-1.5 text-[9px] text-gray-400 transition-colors hover:text-white"
+            >
+              Browse all quizzes <ArrowRight aria-hidden className="size-3" />
+            </Link>
+          }
+        />
 
         {toTry.length === 0 ? (
           <Card>

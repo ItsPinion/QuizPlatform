@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Search, ShieldCheck, SlidersHorizontal, Users } 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { PageHeader } from '@/components/cinema/page-header';
 import { StatCard } from '@/components/stat-card';
 import { UsersTable } from '@/components/users-table';
 import { Badge } from '@/components/ui/badge';
@@ -48,23 +49,28 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-8">
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="warning" className="gap-1.5">
-            <ShieldCheck />
-            ADMIN
-          </Badge>
-          <Badge variant="outline">Day 4 · user management</Badge>
-        </div>
-        <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
-        <p className="text-muted-foreground max-w-2xl text-sm">
-          Search, filter, promote and deactivate accounts. Every action is one{' '}
-          <code className="bg-muted rounded px-1 py-0.5 text-[12px]">
-            PATCH /api/admin/users/:id
-          </code>{' '}
-          call — the API re-checks the ADMIN role and refuses to let you lock yourself out.
-        </p>
-      </header>
+      <PageHeader
+        label="Admin console · people"
+        title="Users"
+        description={
+          <>
+            Search, filter, promote and deactivate accounts. Every action is one{' '}
+            <code className="rounded bg-white/8 px-1 py-0.5 font-mono text-[12px]">
+              PATCH /api/admin/users/:id
+            </code>{' '}
+            call — the API re-checks the ADMIN role and refuses to let you lock yourself out.
+          </>
+        }
+        aside={
+          <>
+            <Badge variant="warning" className="gap-1.5">
+              <ShieldCheck />
+              ADMIN
+            </Badge>
+            <Badge variant="outline">Day 4 · user management</Badge>
+          </>
+        }
+      />
 
       {/* Filters are a plain GET form: shareable URLs, working back button, no JS required. */}
       <Card className="py-5">
@@ -95,7 +101,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                   id="role"
                   name="role"
                   defaultValue={filters.role}
-                  className="border-input bg-background h-9 w-full rounded-md border px-2 text-[13px]"
+                  className="h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15"
                 >
                   <option value="">Any</option>
                   <option value="ADMIN">Admin</option>
@@ -111,7 +117,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                   id="status"
                   name="status"
                   defaultValue={filters.status}
-                  className="border-input bg-background h-9 w-full rounded-md border px-2 text-[13px]"
+                  className="h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15"
                 >
                   <option value="">Any</option>
                   <option value="ACTIVE">Active</option>
@@ -127,7 +133,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                   id="sort"
                   name="sort"
                   defaultValue={filters.sort}
-                  className="border-input bg-background h-9 w-full rounded-md border px-2 text-[13px]"
+                  className="h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15"
                 >
                   <option value="newest">Newest</option>
                   <option value="oldest">Oldest</option>

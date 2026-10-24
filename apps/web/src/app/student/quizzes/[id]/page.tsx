@@ -1,4 +1,6 @@
 import type { StudentQuizDetailResponse } from '@quiz/shared/attempt';
+
+import { PageHeader } from '@/components/cinema/page-header';
 import {
   ArrowLeft,
   CircleAlert,
@@ -75,34 +77,36 @@ export default async function StudentQuizDetailPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
+      <div className="space-y-5">
         <Link
           href="/student/quizzes"
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-[12.5px]"
+          className="cine-label inline-flex items-center gap-1.5 text-[9px] text-gray-400 transition-colors hover:text-white"
         >
-          <ArrowLeft className="size-3.5" />
+          <ArrowLeft aria-hidden className="size-3" />
           Quizzes
         </Link>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={difficultyTone(quiz.difficulty)} className="text-[9.5px]">
-            {quiz.difficulty}
-          </Badge>
-          <Badge variant="outline" className="text-[9.5px]">
-            {quiz.categoryName}
-          </Badge>
-          {resuming ? (
-            <Badge variant="warning" className="text-[9.5px]">
-              in progress
-            </Badge>
-          ) : null}
-        </div>
-
-        <h1 className="text-2xl font-semibold tracking-tight">{quiz.title}</h1>
-        {quiz.description ? (
-          <p className="text-muted-foreground max-w-2xl text-sm">{quiz.description}</p>
-        ) : null}
-      </header>
+        <PageHeader
+          label="Student · the paper"
+          title={quiz.title}
+          description={quiz.description ?? undefined}
+          aside={
+            <>
+              <Badge variant={difficultyTone(quiz.difficulty)} className="text-[9.5px]">
+                {quiz.difficulty}
+              </Badge>
+              <Badge variant="outline" className="text-[9.5px]">
+                {quiz.categoryName}
+              </Badge>
+              {resuming ? (
+                <Badge variant="warning" className="text-[9.5px]">
+                  in progress
+                </Badge>
+              ) : null}
+            </>
+          }
+        />
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <Card>

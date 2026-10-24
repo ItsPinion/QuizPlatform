@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AttemptResultCard } from '@/components/attempt-result';
+import { PageHeader } from '@/components/cinema/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -231,37 +232,36 @@ export function QuizRunner({ initial }: Props) {
   const unanswered = questions.length - answered;
 
   return (
-    <div className="space-y-4">
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">Attempt</Badge>
-          <Badge variant={difficultyTone(question.difficulty)} className="text-[9.5px]">
-            {question.difficulty}
-          </Badge>
-          {expired ? (
-            <Badge variant="destructive" className="gap-1.5">
-              <Lock className="size-3" />
-              time is up
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="gap-1.5 font-mono">
-              <Clock className="size-3" />
-              <span role="timer" aria-label="Time remaining">
-                {formatClock(seconds)}
-              </span>
-            </Badge>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h1 className="text-xl font-semibold tracking-tight">{initial.quiz.title}</h1>
-          <span className="text-muted-foreground text-[12px]">
-            Question {current + 1} of {questions.length}
-          </span>
-        </div>
+    <div className="space-y-6">
+      <header className="space-y-5">
+        <PageHeader
+          label={`Attempt · question ${current + 1} of ${questions.length}`}
+          title={initial.quiz.title}
+          aside={
+            <>
+              <Badge variant="outline">Attempt</Badge>
+              <Badge variant={difficultyTone(question.difficulty)} className="text-[9.5px]">
+                {question.difficulty}
+              </Badge>
+              {expired ? (
+                <Badge variant="destructive" className="gap-1.5">
+                  <Lock className="size-3" />
+                  time is up
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="gap-1.5 font-mono">
+                  <Clock className="size-3" />
+                  <span role="timer" aria-label="Time remaining">
+                    {formatClock(seconds)}
+                  </span>
+                </Badge>
+              )}
+            </>
+          }
+        />
 
         <div
-          className="bg-muted h-1.5 w-full overflow-hidden rounded-full"
+          className="h-px w-full overflow-hidden rounded-full bg-white/10"
           role="progressbar"
           aria-valuenow={percent}
           aria-valuemin={0}
@@ -270,8 +270,8 @@ export function QuizRunner({ initial }: Props) {
         >
           <div
             className={cn(
-              'h-full rounded-full transition-all',
-              expired ? 'bg-warning' : 'bg-primary',
+              'h-full rounded-full transition-all duration-500',
+              expired ? 'bg-warning' : 'bg-white',
             )}
             style={{ width: `${percent}%` }}
           />

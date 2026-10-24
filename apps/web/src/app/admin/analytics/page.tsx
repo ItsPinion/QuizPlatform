@@ -1,4 +1,6 @@
 import type { AdminAnalytics } from '@quiz/shared/analytics';
+
+import { PageHeader } from '@/components/cinema/page-header';
 import { percentChange } from '@quiz/shared/analytics';
 import {
   ArrowRight,
@@ -64,16 +66,19 @@ export default async function AdminAnalyticsPage({ searchParams }: PageProps) {
   if (analytics === null) {
     return (
       <div className="space-y-6">
-        <header className="space-y-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <Badge variant="warning" className="gap-1.5">
-              <ShieldCheck />
-              ADMIN
-            </Badge>
-            <Badge variant="outline">Day 11 · analytics</Badge>
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
-        </header>
+        <PageHeader
+          label="Admin console · analytics"
+          title="Analytics"
+          aside={
+            <>
+              <Badge variant="warning" className="gap-1.5">
+                <ShieldCheck />
+                ADMIN
+              </Badge>
+              <Badge variant="outline">Day 11 · analytics</Badge>
+            </>
+          }
+        />
 
         <Card>
           <CardHeader>
@@ -118,50 +123,51 @@ export default async function AdminAnalyticsPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-8">
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="warning" className="gap-1.5">
-            <ShieldCheck />
-            ADMIN
-          </Badge>
-          <Badge variant="outline">Day 11 · analytics</Badge>
-        </div>
+      <PageHeader
+        label="Admin console · analytics"
+        title="Analytics"
+        description={
+          <>
+            Every figure comes from{' '}
+            <code className="rounded bg-white/8 px-1 py-0.5 font-mono text-[12px]">
+              GET /api/admin/analytics
+            </code>{' '}
+            in one round trip — aggregates over the whole platform, never a number added up in the
+            browser.
+          </>
+        }
+        aside={
+          <>
+            <Badge variant="warning" className="hidden gap-1.5 sm:inline-flex">
+              <ShieldCheck />
+              ADMIN
+            </Badge>
+            <nav aria-label="Analytics window" className="flex flex-wrap gap-1.5">
+              {WINDOW_OPTIONS.map((option) => (
+                <Link
+                  key={option}
+                  href={windowHref(option)}
+                  aria-current={option === days ? 'true' : undefined}
+                  className={cn(
+                    buttonVariants({
+                      variant: option === days ? 'default' : 'outline',
+                      size: 'sm',
+                    }),
+                    'h-9 rounded-full px-4 font-mono text-[11px]',
+                  )}
+                >
+                  {option}d
+                </Link>
+              ))}
+            </nav>
+          </>
+        }
+      />
 
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
-            <p className="text-muted-foreground max-w-2xl text-sm">
-              Every figure comes from{' '}
-              <code className="bg-muted rounded px-1 py-0.5 text-[12px]">
-                GET /api/admin/analytics
-              </code>{' '}
-              in one round trip — aggregates over the whole platform, never a number added up in the
-              browser.
-            </p>
-          </div>
-
-          <nav aria-label="Analytics window" className="flex flex-wrap gap-1.5">
-            {WINDOW_OPTIONS.map((option) => (
-              <Link
-                key={option}
-                href={windowHref(option)}
-                aria-current={option === days ? 'true' : undefined}
-                className={cn(
-                  buttonVariants({ variant: option === days ? 'default' : 'outline', size: 'sm' }),
-                  'text-[12px]',
-                )}
-              >
-                {option}d
-              </Link>
-            ))}
-          </nav>
-        </div>
-
-        <p className="text-muted-foreground text-[12px]">
-          {windowLabel(days)} · {timelineAttempts} attempt{timelineAttempts === 1 ? '' : 's'} ·{' '}
-          <span className={changeTone(attemptChange)}>{changeLabel(attemptChange, days)}</span>
-        </p>
-      </header>
+      <p className="text-[11px] tracking-[0.14em] text-gray-400 uppercase">
+        {windowLabel(days)} · {timelineAttempts} attempt{timelineAttempts === 1 ? '' : 's'} ·{' '}
+        <span className={changeTone(attemptChange)}>{changeLabel(attemptChange, days)}</span>
+      </p>
 
       <section
         aria-label="Platform statistics"

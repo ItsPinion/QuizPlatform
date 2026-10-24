@@ -1,4 +1,6 @@
 import type { CategoryListResponse } from '@quiz/shared/quiz';
+
+import { PageHeader } from '@/components/cinema/page-header';
 import type { StudentQuizListResponse } from '@quiz/shared/attempt';
 import { ArrowLeft, ArrowRight, Search, SlidersHorizontal } from 'lucide-react';
 import Link from 'next/link';
@@ -29,7 +31,7 @@ interface PageProps {
 }
 
 const SELECT_CLASS =
-  'border-input bg-background h-9 w-full rounded-md border px-2 text-[13px] focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none';
+  'h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15';
 
 /**
  * The catalogue.
@@ -66,18 +68,17 @@ export default async function StudentQuizzesPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">Student catalogue</Badge>
-          <Badge variant="outline">{data?.pagination.total ?? 0} published</Badge>
-        </div>
-
-        <h1 className="text-2xl font-semibold tracking-tight">Quizzes</h1>
-        <p className="text-muted-foreground max-w-2xl text-sm">
-          Drafts and unpublished quizzes are invisible here — the API filters them before a page is
-          rendered, so there is nothing to find by guessing an id.
-        </p>
-      </header>
+      <PageHeader
+        label="Student · the catalogue"
+        title="Quizzes"
+        description="Drafts and unpublished quizzes are invisible here — the API filters them before a page is rendered, so there is nothing to find by guessing an id."
+        aside={
+          <>
+            <Badge variant="outline">Student catalogue</Badge>
+            <Badge variant="outline">{data?.pagination.total ?? 0} published</Badge>
+          </>
+        }
+      />
 
       <Card>
         <CardContent className="py-4">

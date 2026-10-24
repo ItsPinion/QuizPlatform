@@ -1,4 +1,6 @@
 import type { LeaderboardResponse } from '@quiz/shared/leaderboard';
+
+import { PageHeader } from '@/components/cinema/page-header';
 import { Award, Medal, ShieldCheck, Sparkles, Trophy } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -60,23 +62,29 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-7">
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="outline" className="gap-1.5">
-            <ShieldCheck />
-            STUDENT
-          </Badge>
-          <Badge variant="outline">Day 12 · leaderboard</Badge>
-        </div>
-
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Leaderboard</h1>
-          <p className="text-muted-foreground max-w-2xl text-sm">
+      <PageHeader
+        label="Student · standings"
+        title="Leaderboard"
+        description={
+          <>
             Ranked by {metricLabel(filters.metric).toLowerCase()} over {scopeName.toLowerCase()}.
             Only finished attempts count — a paper still in progress has no score to rank.
-          </p>
-        </div>
+          </>
+        }
+        aside={
+          <>
+            <Badge variant="outline" className="hidden gap-1.5 sm:inline-flex">
+              <ShieldCheck />
+              STUDENT
+            </Badge>
+            <Badge variant="outline" className="hidden sm:inline-flex">
+              Day 12 · leaderboard
+            </Badge>
+          </>
+        }
+      />
 
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <nav aria-label="Ranking metric" className="flex flex-wrap gap-1.5">
           {METRICS.map((metric) => (
             <Link
@@ -159,7 +167,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
           {periodLabel(filters.period).toLowerCase()} · {scopeName}
           {board ? ` · ${board.totals.quizzes} quizzes represented` : ''}
         </p>
-      </header>
+      </div>
 
       {board === null ? (
         <Card>
@@ -203,13 +211,11 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                 {me ? (
                   <div className="grid gap-3 sm:grid-cols-4">
                     <div>
-                      <div className="text-muted-foreground text-[10.5px] tracking-wider uppercase">
-                        Rank
-                      </div>
+                      <div className="cine-label text-[9px] text-gray-400">Rank</div>
                       <div className="text-xl font-semibold tabular-nums">#{me.rank}</div>
                     </div>
                     <div>
-                      <div className="text-muted-foreground text-[10.5px] tracking-wider uppercase">
+                      <div className="cine-label text-[9px] text-gray-400">
                         {metricLabel(filters.metric)}
                       </div>
                       <div className="text-xl font-semibold tabular-nums">
@@ -217,18 +223,14 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                       </div>
                     </div>
                     <div>
-                      <div className="text-muted-foreground text-[10.5px] tracking-wider uppercase">
-                        Attempts
-                      </div>
+                      <div className="cine-label text-[9px] text-gray-400">Attempts</div>
                       <div className="font-mono text-[13px] tabular-nums">
                         {me.attempts} finished · {me.quizzesCompleted} quiz
                         {me.quizzesCompleted === 1 ? '' : 'zes'}
                       </div>
                     </div>
                     <div>
-                      <div className="text-muted-foreground text-[10.5px] tracking-wider uppercase">
-                        Pass rate
-                      </div>
+                      <div className="cine-label text-[9px] text-gray-400">Pass rate</div>
                       <div className="font-mono text-[13px] tabular-nums">
                         {me.passRate == null ? '—' : `${Number(me.passRate.toFixed(1))}%`}
                       </div>

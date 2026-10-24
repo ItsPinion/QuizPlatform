@@ -587,13 +587,160 @@ the `<link rel="icon">` itself.
 
 ---
 
-## 11. Next
+## 11. The console
 
-- The admin shell (`/admin`) and the student dashboard are still on the flat card.
-  Same primitives, different grid: stat cards become bento cells with a
-  spotlight, charts stay static.
-- The sign-in form is the app's first `<form>` with this much behaviour; the quiz
-  runner and the authoring forms still use the 40px shadcn defaults. Promoting
-  the 56px field into `components/ui` would make the whole app match.
+The eight admin screens and the five student screens are the same product as the
+landing page, at a smaller size and a quieter voice. Signing in used to feel like
+walking out of a cinema into a stationery cupboard: the page that sold the thing
+was black, filmed and set in Clash, and the page you worked on was a flat grid of
+cards in the system sans. Not any more.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ SiteHeader — same bar, same links, session already seeded     │
+├──────────┬───────────────────────────────────────────────────┤
+│ Overview │  ── ADMIN CONSOLE · ANALYTICS          [7d 30d]   │
+│ Users    │  Analytics                                        │
+│ Quizzes  │  Every figure comes from GET /api/admin/…          │
+│ Categori…│                                                   │
+│ Analytic…│  ┌ stats ─────┐ ┌ stats ─────┐ ┌ stats ─────┐      │
+│ System   │  │ glass card │ │ glass card │ │ glass card │      │
+└──────────┴───────────────────────────────────────────────────┘
+   hairline rail          content, max-w-6xl, pt-28
+```
+
+### The shell
+
+Both consoles are one layout each (`app/admin/layout.tsx`,
+`app/student/layout.tsx`) and they are nearly the same file, which is the point:
+
+```tsx
+<div className="relative isolate flex min-h-dvh flex-col">
+  <Ambience />
+  <SkipLink href="#main" label="Skip to the content" />
+  <SiteHeader user={session?.user ?? null} />
+
+  <div className="mx-auto grid w-full max-w-6xl flex-1 gap-8 px-6 pt-28 pb-16 sm:px-8 lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-12 lg:pt-32">
+    <SectionNav label="Admin sections" items={SECTIONS} />
+    <main id="main" tabIndex={-1} className="min-w-0 outline-none">
+      {children}
+    </main>
+  </div>
+</div>
+```
+
+`isolate` is not decorative. `Ambience` is a `fixed inset-0 -z-10` layer, and a
+negative z-index only paints _above_ the page background if some ancestor opens a
+stacking context for it. Without `isolate` it disappears behind `<body>`; with it,
+the light sits behind the cards and under the header — once, for every page,
+without a single page knowing it exists.
+
+The layout renders chrome and nothing else. Each page still does its own role
+check, because a layout never sees the pathname and the sign-in redirect has to
+carry the exact `?next=` of the page that was asked for. The one thing the layout
+reads is the session — to hand it to the header so the bar paints the right
+controls on the first frame instead of correcting itself after hydration.
+`getSession` is cached per request, so the page's own check costs nothing extra.
+
+### The rail
+
+`components/cinema/section-nav.tsx` replaces `admin-nav.tsx` and `student-nav.tsx`,
+which were identical apart from their lists — the kind of duplication where one
+copy gains a hover state and the other gains a fix. One component, and the list is
+the only thing a role supplies:
+
+```ts
+const SECTIONS = [
+  { href: '/admin/quizzes', label: 'Quizzes', icon: 'quizzes', prefix: true },
+  // …
+];
+```
+
+On a wide screen the rail is a hairline down the left of the content, each item a
+row; the current one turns the line white (`lg:border-l-white`) and fills its row
+with `bg-white/6`. On a phone it becomes a horizontal scroller of pills above the
+content, because a vertical menu would push the actual page below the fold. The
+current item is `aria-current="page"` — the same fact, said to a screen reader.
+
+`prefix: true` keeps a nested route lit (`/admin/quizzes/:id` still says Quizzes);
+`also` lights an item from a second path (`/student/attempt/…` still says
+Quizzes while you are sitting a paper).
+
+One detail worth keeping: the icons are named in the item (`icon: 'quizzes'`) and
+mapped to lucide inside `section-nav.tsx`, rather than passed as components. The
+rail is a client component (`usePathname`) and a layout is a server one — a
+component is a function, and a function cannot cross that boundary. Passing
+`<ListChecks />` instead fails at render time with _"Functions cannot be passed
+directly to Client Components"_. A string crosses cleanly.
+
+### The page header
+
+`components/cinema/page-header.tsx` gives every screen the landing page's two
+voices: a hairline rule, a 10px tracked-out uppercase label, then the headline in
+Clash at `2.35rem` → `3.1rem`. That is deliberately one third of the hero's
+scale — the console still has to fit a table under it.
+
+```
+── ADMIN CONSOLE · ANALYTICS                    ADMIN   [7d 30d]
+Analytics
+Every figure comes from GET /api/admin/analytics in one round trip…
+```
+
+`aside` is the slot for the page's own controls — a New quiz button, a window
+switcher, a role badge — baseline-aligned on the right, wrapping under the title
+on a phone. `SectionBar` is the same voice for sections inside a page: label,
+count, action. Counts are passed as strings, so the component never decides
+anything about the data.
+
+### The material
+
+The console inherits the landing page's primitives rather than a second set:
+
+| Primitive         | Before                      | Now                                                                                               |
+| ----------------- | --------------------------- | ------------------------------------------------------------------------------------------------- |
+| `Card`            | flat `bg-card`, 1px border  | `bg-white/[0.03]`, `backdrop-blur-xl`, inset top highlight, `0 24px 60px -40px` shadow            |
+| `CardTitle`       | 16px semibold               | Clash, `1.15rem`, light                                                                           |
+| `StatCard`        | 24px bold number            | a 9px tracked label, the icon in a bordered chip, the value in Clash at `2.1rem`, a lift on hover |
+| `Button`          | tinted primary              | white fill, black label; secondary/outline are glass                                              |
+| `Badge`           | tinted primary at 15%       | glass by default; colour only where it means something (pass, warning, failure)                   |
+| `Input`, `select` | `bg-background`, 6px radius | `bg-white/[0.04]`, 8px radius, `focus-visible:ring-white/15`                                      |
+
+Because these live in `components/ui`, the change reached every form and table in
+both consoles at once — including the authoring forms, which nobody had asked to
+redesign and which now sit correctly inside their cards.
+
+Semantic colour survived the sweep. A pass is still green and a failure still red
+(`--success`, `--destructive`), because a monochrome dashboard that renders a
+failed attempt in white has traded meaning for taste. Everything that is not a
+verdict is white on black.
+
+### The runner
+
+`/student/attempt/:id` was the one screen where a big headline fights the clock,
+so it keeps the smallest version of the header: the attempt's label counts the
+questions (`Attempt · question 3 of 12`), the title is the paper's, and the timer
+sits in the `aside` where a control would be. The answered-progress line is a 1px
+white rule under it. The answer key, the locks and the auto-submit are untouched.
+
+### What did not change
+
+Every link, filter, table, empty state, `aria-current`, role check and API call is
+the one that was there before — this was a change of material, not of behaviour.
+`/tmp/dashboards.py` asserts that across all fourteen console URLs: the ambience
+layer and its stacking context, the rail and its single current item, the header's
+three parts, the glass card, and the absence of the two deleted nav components.
+`/tmp/a11y.py` still walks the same pages with the same twelve rules.
+
+Motion is inherited too: the rail and the cards transition colour and a half-pixel
+lift, and the reduced-motion block in `globals.css` already switches that off.
+
+---
+
+## 12. Next
+
+- The sign-in form is the app's first `<form>` with this much behaviour, and its
+  56px fields are still hand-built while `components/ui/input` is 40px. The two
+  forms in the console now share the glass field; the auth pair should adopt it
+  too, at its larger height.
 - Once a second screen uses it, `BentoCard` should grow an `asChild` escape hatch
   instead of the `href` shortcut, so it can wrap a `next/link` or a button.

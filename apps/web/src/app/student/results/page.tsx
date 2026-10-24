@@ -1,10 +1,13 @@
 import type { AttemptHistoryResponse } from '@quiz/shared/review';
+
 import { historyStatusLabel } from '@quiz/shared/review';
 import { ArrowLeft, ArrowRight, Clock, Gauge, ListChecks, PlayCircle, Trophy } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { PageHeader } from '@/components/cinema/page-header';
+import { StatCard } from '@/components/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -71,16 +74,12 @@ export default async function ResultsPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="outline">Day 9 · results &amp; review</Badge>
-        </div>
-        <h1 className="text-2xl font-semibold tracking-tight">Your results</h1>
-        <p className="text-muted-foreground max-w-2xl text-sm">
-          Every attempt, newest first. Open a finished one to walk the paper question by question —
-          what you picked, what was right, and why.
-        </p>
-      </header>
+      <PageHeader
+        label="Student · the record"
+        title="Your results"
+        description="Every attempt, newest first. Open a finished one to walk the paper question by question — what you picked, what was right, and why."
+        aside={<Badge variant="outline">Day 9 · results &amp; review</Badge>}
+      />
 
       <div className="grid gap-3 sm:grid-cols-4">
         {[
@@ -93,15 +92,7 @@ export default async function ResultsPage({ searchParams }: PageProps) {
             icon: Gauge,
           },
         ].map((stat) => (
-          <Card key={stat.label} className="py-4">
-            <CardContent className="space-y-1">
-              <p className="text-muted-foreground flex items-center gap-1.5 text-[11px] tracking-wider uppercase">
-                <stat.icon className="size-3.5" />
-                {stat.label}
-              </p>
-              <p className="text-2xl font-semibold tabular-nums">{stat.value}</p>
-            </CardContent>
-          </Card>
+          <StatCard key={stat.label} label={stat.label} value={stat.value} icon={stat.icon} />
         ))}
       </div>
 

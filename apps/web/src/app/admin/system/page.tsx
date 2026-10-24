@@ -1,4 +1,6 @@
 import type { SystemStatus } from '@quiz/shared/deployment';
+
+import { PageHeader } from '@/components/cinema/page-header';
 import { summaryLabel } from '@quiz/shared/deployment';
 import {
   Activity,
@@ -63,13 +65,16 @@ export default async function AdminSystemPage() {
   if (status === null) {
     return (
       <div className="space-y-6">
-        <header className="space-y-3">
-          <Badge variant="warning" className="gap-1.5">
-            <ShieldCheck />
-            ADMIN
-          </Badge>
-          <h1 className="text-2xl font-semibold tracking-tight">System</h1>
-        </header>
+        <PageHeader
+          label="Admin console · operations"
+          title="System"
+          aside={
+            <Badge variant="warning" className="gap-1.5">
+              <ShieldCheck />
+              ADMIN
+            </Badge>
+          }
+        />
 
         <Card>
           <CardHeader>
@@ -103,25 +108,31 @@ export default async function AdminSystemPage() {
 
   return (
     <div className="space-y-7">
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="outline" className="gap-1.5">
-            <ShieldCheck />
-            ADMIN
-          </Badge>
-          <Badge variant="outline">Day 14 · deployment</Badge>
-        </div>
-
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">System</h1>
-          <p className="text-muted-foreground max-w-2xl text-sm">
+      <PageHeader
+        label="Admin console · operations"
+        title="System"
+        description={
+          <>
             What this process is, what it is connected to, and whether its configuration is fit to
             serve traffic — the same rules{' '}
-            <code className="bg-muted rounded px-1">bun run deploy:check</code> applies from a
-            shell.
-          </p>
-        </div>
+            <code className="rounded bg-white/8 px-1 py-0.5 font-mono text-[12px]">
+              bun run deploy:check
+            </code>{' '}
+            applies from a shell.
+          </>
+        }
+        aside={
+          <>
+            <Badge variant="outline" className="gap-1.5">
+              <ShieldCheck />
+              ADMIN
+            </Badge>
+            <Badge variant="outline">Day 14 · deployment</Badge>
+          </>
+        }
+      />
 
+      <div className="space-y-8">
         <div
           className={cn(
             'flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3',
@@ -134,12 +145,12 @@ export default async function AdminSystemPage() {
           </div>
           <span className="font-mono text-[11px]">{summaryLabel(summary)}</span>
         </div>
-      </header>
+      </div>
 
       <section aria-label="Service" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="gap-1 py-4">
           <CardHeader className="pb-0">
-            <CardTitle className="text-muted-foreground flex items-center gap-1.5 text-[10.5px] tracking-wider uppercase">
+            <CardTitle className="cine-label flex items-center gap-1.5 text-[9px] text-gray-400">
               <Server className="size-3.5" />
               Build
             </CardTitle>
@@ -152,7 +163,7 @@ export default async function AdminSystemPage() {
 
         <Card className="gap-1 py-4">
           <CardHeader className="pb-0">
-            <CardTitle className="text-muted-foreground flex items-center gap-1.5 text-[10.5px] tracking-wider uppercase">
+            <CardTitle className="cine-label flex items-center gap-1.5 text-[9px] text-gray-400">
               <Activity className="size-3.5" />
               Process
             </CardTitle>
@@ -167,7 +178,7 @@ export default async function AdminSystemPage() {
 
         <Card className="gap-1 py-4">
           <CardHeader className="pb-0">
-            <CardTitle className="text-muted-foreground flex items-center gap-1.5 text-[10.5px] tracking-wider uppercase">
+            <CardTitle className="cine-label flex items-center gap-1.5 text-[9px] text-gray-400">
               <Database className="size-3.5" />
               Database
             </CardTitle>
@@ -182,7 +193,7 @@ export default async function AdminSystemPage() {
 
         <Card className="gap-1 py-4">
           <CardHeader className="pb-0">
-            <CardTitle className="text-muted-foreground flex items-center gap-1.5 text-[10.5px] tracking-wider uppercase">
+            <CardTitle className="cine-label flex items-center gap-1.5 text-[9px] text-gray-400">
               <ShieldCheck className="size-3.5" />
               Guardrails
             </CardTitle>

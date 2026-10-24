@@ -1,4 +1,6 @@
 import type { CategoryListResponse } from '@quiz/shared/quiz';
+
+import { PageHeader } from '@/components/cinema/page-header';
 import { ArrowLeft, Plus, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -31,29 +33,36 @@ export default async function NewQuizPage() {
 
   return (
     <div className="space-y-8">
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="warning" className="gap-1.5">
-            <ShieldCheck />
-            ADMIN
-          </Badge>
-          <Badge variant="outline">Day 5 · quiz management</Badge>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/admin/quizzes"
-            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-[12.5px]"
-          >
-            <ArrowLeft className="size-3.5" />
-            Quizzes
-          </Link>
-        </div>
-        <h1 className="text-2xl font-semibold tracking-tight">New quiz</h1>
-        <p className="text-muted-foreground max-w-2xl text-sm">
-          Every quiz starts as a <strong>draft</strong>. The status is not chosen here: publishing
-          is a separate action, so nothing goes live by accident.
-        </p>
-      </header>
+      <div className="space-y-5">
+        <Link
+          href="/admin/quizzes"
+          className="cine-label inline-flex items-center gap-1.5 text-[9px] text-gray-400 transition-colors hover:text-white"
+        >
+          <ArrowLeft aria-hidden className="size-3" />
+          Quizzes
+        </Link>
+
+        <PageHeader
+          label="Admin console · authoring"
+          title="New quiz"
+          description={
+            <>
+              Every quiz starts as a <strong className="font-medium text-white">draft</strong>. The
+              status is not chosen here: publishing is a separate action, so nothing goes live by
+              accident.
+            </>
+          }
+          aside={
+            <>
+              <Badge variant="warning" className="gap-1.5">
+                <ShieldCheck />
+                ADMIN
+              </Badge>
+              <Badge variant="outline">Day 5 · quiz management</Badge>
+            </>
+          }
+        />
+      </div>
 
       <Card>
         <CardContent>

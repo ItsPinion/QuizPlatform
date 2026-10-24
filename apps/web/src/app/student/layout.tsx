@@ -1,14 +1,34 @@
 import type { Metadata } from 'next';
 
+import { Ambience } from '@/components/cinema/ambience';
+import { SectionNav } from '@/components/cinema/section-nav';
 import { SiteHeader } from '@/components/site-header';
 import { SkipLink } from '@/components/skip-link';
-import { StudentNav } from '@/components/student-nav';
 import { getSession } from '@/lib/session';
 
 export const metadata: Metadata = {
   title: 'Student area — QuizPlatform',
   description: 'Browse published quizzes, take an attempt and pick it up again where you left off.',
 };
+
+/**
+ * The student's pages.
+ *
+ * `/student/attempt` is marked `also` on Quizzes: while you are sitting a paper
+ * the rail still says where you are, rather than going dark.
+ */
+const SECTIONS = [
+  { href: '/student', label: 'Overview', icon: 'overview' },
+  {
+    href: '/student/quizzes',
+    label: 'Quizzes',
+    icon: 'quizzes',
+    prefix: true,
+    also: '/student/attempt',
+  },
+  { href: '/student/results', label: 'Results', icon: 'results', prefix: true },
+  { href: '/student/leaderboard', label: 'Leaderboard', icon: 'leaderboard' },
+] as const;
 
 /**
  * Shell for the student area.
@@ -25,12 +45,13 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const session = await getSession();
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="relative isolate flex min-h-dvh flex-col">
+      <Ambience />
       <SkipLink href="#main" label="Skip to the content" />
       <SiteHeader user={session?.user ?? null} />
 
-      <div className="mx-auto grid w-full max-w-6xl flex-1 gap-8 px-5 pt-28 pb-10 sm:px-8 lg:grid-cols-[190px_minmax(0,1fr)]">
-        <StudentNav />
+      <div className="mx-auto grid w-full max-w-6xl flex-1 gap-8 px-6 pt-28 pb-16 sm:px-8 lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-12 lg:pt-32">
+        <SectionNav label="Student sections" items={SECTIONS} />
         <main id="main" tabIndex={-1} className="min-w-0 outline-none">
           {children}
         </main>

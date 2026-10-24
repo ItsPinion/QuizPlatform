@@ -4,16 +4,19 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex w-fit shrink-0 items-center justify-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap transition-colors [&>svg]:size-3',
+  'inline-flex w-fit shrink-0 items-center justify-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[10.5px] font-medium tracking-[0.06em] whitespace-nowrap backdrop-blur-sm transition-colors [&>svg]:size-3',
   {
     variants: {
       variant: {
-        default: 'border-transparent bg-primary/15 text-primary',
-        secondary: 'border-border bg-secondary/60 text-secondary-foreground',
-        outline: 'border-border text-muted-foreground',
-        success: 'border-success/25 bg-success/10 text-success',
-        warning: 'border-warning/25 bg-warning/10 text-warning',
-        destructive: 'border-destructive/30 bg-destructive/10 text-destructive',
+        // The console's own badges are glass: a faint pane, a hairline, white
+        // type. Colour is kept for meaning only — a status, a pass, a failure —
+        // never as decoration.
+        default: 'border-white/15 bg-white/8 text-white',
+        secondary: 'border-white/10 bg-white/6 text-gray-100',
+        outline: 'border-white/12 text-gray-400',
+        success: 'border-success/30 bg-success/10 text-success',
+        warning: 'border-warning/30 bg-warning/10 text-warning',
+        destructive: 'border-destructive/35 bg-destructive/10 text-destructive',
       },
     },
     defaultVariants: {

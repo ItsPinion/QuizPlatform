@@ -160,10 +160,12 @@ export function AnswerReview({ review, filter }: Props) {
         <CardContent className="space-y-3 py-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="text-muted-foreground text-[11px] tracking-wider uppercase">
+              <p className="cine-label text-[9px] text-gray-500">
                 {review.quiz.categoryName} · {review.quiz.difficulty.toLowerCase()}
               </p>
-              <h1 className="mt-0.5 text-xl font-semibold tracking-tight">{review.quiz.title}</h1>
+              <h1 className="font-display mt-1.5 text-[1.6rem] leading-tight font-light tracking-tight text-white">
+                {review.quiz.title}
+              </h1>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">

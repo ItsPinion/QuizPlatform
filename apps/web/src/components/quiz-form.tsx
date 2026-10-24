@@ -21,7 +21,7 @@ interface Props {
 }
 
 const SELECT_CLASS =
-  'border-input bg-background h-9 w-full rounded-md border px-2 text-[13px] focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none';
+  'h-9 w-full rounded-lg border border-white/12 bg-white/[0.04] px-2.5 text-[13px] text-white transition-colors outline-none focus-visible:border-white/30 focus-visible:ring-2 focus-visible:ring-white/15';
 
 /**
  * Create / edit form.

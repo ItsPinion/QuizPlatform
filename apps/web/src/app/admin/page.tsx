@@ -12,6 +12,7 @@ import {
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { PageHeader } from '@/components/cinema/page-header';
 import { StatCard } from '@/components/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
@@ -66,23 +67,33 @@ export default async function AdminOverviewPage() {
 
   return (
     <div className="space-y-8">
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="warning" className="gap-1.5">
-            <ShieldCheck />
-            ADMIN
-          </Badge>
-          <Badge variant="outline">Day 4 · dashboard</Badge>
-        </div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Welcome back, {session.user.name.split(' ')[0]}
-        </h1>
-        <p className="text-muted-foreground max-w-2xl text-sm">
-          Every number below comes from{' '}
-          <code className="bg-muted rounded px-1 py-0.5 text-[12px]">GET /api/admin/stats</code>,
-          which the ADMIN guard protects before the handler runs.
-        </p>
-      </header>
+      <PageHeader
+        label="Admin console · overview"
+        title={
+          <>
+            Welcome back,{' '}
+            <span className="cine-gradient-text italic">{session.user.name.split(' ')[0]}</span>
+          </>
+        }
+        description={
+          <>
+            Every number below comes from{' '}
+            <code className="rounded bg-white/8 px-1 py-0.5 font-mono text-[12px]">
+              GET /api/admin/stats
+            </code>
+            , which the ADMIN guard protects before the handler runs.
+          </>
+        }
+        aside={
+          <>
+            <Badge variant="warning" className="gap-1.5">
+              <ShieldCheck />
+              ADMIN
+            </Badge>
+            <Badge variant="outline">Day 4 · dashboard</Badge>
+          </>
+        }
+      />
 
       {stats === null ? (
         <Card>
@@ -243,7 +254,7 @@ export default async function AdminOverviewPage() {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[520px] text-[13px]">
                   <thead>
-                    <tr className="text-muted-foreground border-border/60 border-b text-left text-[11px] tracking-wider uppercase">
+                    <tr className="cine-label border-b border-white/8 text-left text-[9px] text-gray-400">
                       <th className="py-2 pr-3 font-medium">Student</th>
                       <th className="py-2 pr-3 font-medium">Quiz</th>
                       <th className="py-2 pr-3 font-medium">Status</th>
