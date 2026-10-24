@@ -737,6 +737,222 @@
 }
 
 /* ==========================================================================
+   The bar — a drop of water resting on a table
+   --------------------------------------------------------------------------
+   Not a strip welded to the top of the screen. The bar is inset from every
+   edge and stands on a contact shadow, so it is an object *on* the page rather
+   than the page's edge. It is lit the way water is lit:
+
+     - a bright meniscus along the waterline that fades toward the bottom,
+     - a specular bloom on the shoulder, where the surface bends,
+     - a slow sheen drifting across the surface,
+     - a caustic pooled on the table underneath — light that went *through*
+       the drop and came out focused,
+     - refraction: the page behind is genuinely blurred and oversaturated.
+
+   Every pixel of it is decoration. With both animations stopped, both
+   pseudo-elements off and `backdrop-filter` unsupported, the bar is still a
+   legible opaque pill with all of its controls.
+   ========================================================================== */
+
+.water-drop {
+  --drop-blur: 20px;
+  /* Not a capsule. A puddle on a table is a soft slab whose corners are nearly
+     — but not exactly — the same, which is what stops it reading as a pill
+     component. Four pixels of difference is enough. */
+  --drop-radius: 30px 26px 28px 32px / 27px 30px 26px 29px;
+  position: relative;
+  border-radius: var(--drop-radius);
+  background: color-mix(in oklab, var(--background) 62%, transparent);
+  -webkit-backdrop-filter: blur(var(--drop-blur)) saturate(1.8);
+  backdrop-filter: blur(var(--drop-blur)) saturate(1.8);
+  box-shadow:
+    /* the contact shadow — darkest where the drop meets the table */
+    0 6px 14px -8px rgb(0 0 0 / 65%),
+    0 18px 36px -20px rgb(0 0 0 / 80%),
+    /* light that passed through and pooled below */ 0 28px 60px -34px
+      color-mix(in oklab, var(--primary) 70%, transparent);
+  transition:
+    background-color 500ms ease,
+    box-shadow 500ms ease,
+    border-radius 700ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* Once the page moves, the drop settles: denser, flatter, tighter to the
+   surface, the way a wet shape spreads under its own weight. */
+.water-drop[data-settled='true'] {
+  --drop-blur: 26px;
+  --drop-radius: 26px 23px 25px 28px / 23px 26px 22px 25px;
+  background: color-mix(in oklab, var(--background) 80%, transparent);
+  box-shadow:
+    0 4px 10px -6px rgb(0 0 0 / 70%),
+    0 14px 30px -16px rgb(0 0 0 / 88%),
+    0 26px 54px -30px color-mix(in oklab, var(--primary) 60%, transparent);
+}
+
+/* The meniscus: a 1px rim, bright at the waterline, coloured at the base. */
+.water-drop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, white 52%, transparent) 0%,
+    color-mix(in oklab, white 16%, transparent) 26%,
+    color-mix(in oklab, white 7%, transparent) 58%,
+    color-mix(in oklab, var(--primary) 34%, transparent) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* The shoulder: where the surface bends away, it catches the light. */
+.water-drop::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  z-index: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    42% 88% at 14% -26%,
+    color-mix(in oklab, white 20%, transparent),
+    transparent 72%
+  );
+  pointer-events: none;
+}
+
+/* The sheen: a slow drift of light across the wet surface. */
+.water-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 10%;
+  width: 26%;
+  border-radius: inherit;
+  background: radial-gradient(
+    60% 100% at 50% 50%,
+    color-mix(in oklab, white 10%, transparent),
+    transparent 76%
+  );
+  filter: blur(7px);
+  animation: water-sheen 17s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes water-sheen {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    opacity: 0.8;
+    transform: translate3d(230%, 0, 0);
+  }
+}
+
+/* The waterline. It only exists once the page has moved — at rest there is
+   nothing to measure, and a faint rule across the bottom of the drop would
+   read as a border. */
+.water-line {
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+
+.water-drop[data-settled='true'] .water-line {
+  opacity: 1;
+}
+
+/* The caustic: the focused pool of light on the table under the drop. */
+.water-caustic {
+  position: absolute;
+  right: 7%;
+  bottom: -13px;
+  left: 7%;
+  height: 26px;
+  border-radius: 999px;
+  background:
+    /* the main pool, directly under the drop */
+    radial-gradient(
+      52% 100% at 50% 0%,
+      color-mix(in oklab, var(--primary) 60%, transparent),
+      transparent 74%
+    ),
+    /* two beads the splash threw off, further out and fainter */
+    radial-gradient(
+        7% 40% at 9% 92%,
+        color-mix(in oklab, var(--primary) 60%, transparent),
+        transparent 72%
+      ),
+    radial-gradient(
+      5% 32% at 93% 88%,
+      color-mix(in oklab, var(--primary) 52%, transparent),
+      transparent 72%
+    );
+  filter: blur(11px);
+  animation: water-caustic 11s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes water-caustic {
+  0%,
+  100% {
+    opacity: 0.34;
+    transform: scaleX(1) translateY(0);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scaleX(1.05) translateY(1px);
+  }
+}
+
+/* The drawer, in the same material: a second drop that fell off the first. */
+.water-panel {
+  border-radius: 26px;
+  border: 1px solid color-mix(in oklab, white 11%, transparent);
+  background: color-mix(in oklab, var(--background) 88%, transparent);
+  -webkit-backdrop-filter: blur(28px) saturate(1.7);
+  backdrop-filter: blur(28px) saturate(1.7);
+  box-shadow:
+    0 1px 0 0 color-mix(in oklab, white 14%, transparent) inset,
+    0 30px 70px -32px rgb(0 0 0 / 92%);
+  animation: water-panel-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes water-panel-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -7px, 0) scale(0.986);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* No backdrop-filter (older Safari, some embedded webviews): the drop becomes
+   dense enough to read on its own rather than a see-through smear. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .water-drop {
+    background: color-mix(in oklab, var(--background) 94%, transparent);
+  }
+
+  .water-panel {
+    background: color-mix(in oklab, var(--background) 97%, transparent);
+  }
+}
+
+/* ==========================================================================
    Reduced motion: nothing floats, nothing drifts, nothing is left invisible.
    The reveals resolve to their final state instead of never running.
    ========================================================================== */
@@ -753,11 +969,19 @@
   .float-slower,
   .glow-pulse,
   .shine::after,
+  .water-sheen,
+  .water-caustic,
+  .water-panel,
   .pixel-art [class*='animate'] {
     animation: none !important;
   }
 
   .atmos-mote {
+    display: none;
+  }
+
+  /* The drop keeps its rim and its contact shadow — it just stops shimmering. */
+  .water-sheen {
     display: none;
   }
 

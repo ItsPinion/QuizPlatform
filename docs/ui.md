@@ -287,13 +287,36 @@ and a row of small buttons. It is the same chrome on every page — the landing
 page, both auth screens, the student area and the admin console — so it had to
 earn its height.
 
+### The material: a drop of water on a table
+
+The bar is **not attached to anything**. It is inset from all four edges
+(`px-4 pt-4` on a `sticky` wrapper, `max-w-5xl` so it is narrower than the
+content column), and it stands on its own contact shadow, so it reads as an
+object placed _on_ the page rather than the page's top edge. Everything below
+is `.water-drop` in `globals.css`:
+
+| Cue                   | How                                                                                                                                                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Refraction**        | `backdrop-filter: blur(20px) saturate(1.8)` — the page behind is genuinely blurred and oversaturated, not painted over with a solid colour.                                                                                   |
+| **Meniscus**          | A 1px rim drawn by a `::before` with `padding: 1px` and `mask-composite: exclude`, gradient from bright white at the waterline to the primary colour at the base.                                                             |
+| **Specular shoulder** | A `::after` radial bloom in the top-left, where the surface bends away and catches the light.                                                                                                                                 |
+| **Sheen**             | A blurred 26%-wide highlight drifting across the surface every 17s.                                                                                                                                                           |
+| **Caustic**           | A pool of primary-tinted light under the drop (`bottom: -13px`, `blur(11px)`) plus two faint satellite beads — the splash that came off. Its opacity breathes over 11s.                                                       |
+| **Shape**             | Not a capsule: `--drop-radius: 30px 26px 28px 32px / 27px 30px 26px 29px` — four corners that are nearly but not exactly the same.                                                                                            |
+| **Settling**          | Scrolling does not just shrink the bar: `data-settled` makes the material denser, the radius smaller and the shadow tighter, the way a wet shape flattens under its own weight.                                               |
+| **No material?**      | `@supports not (backdrop-filter …)` raises the background to 94% opacity; `prefers-reduced-motion` removes the sheen, the caustic and the panel animation. The rim and the contact shadow stay — those are shape, not motion. |
+
+The wrapper is `pointer-events-none` with `pointer-events-auto` on the drop, so
+the transparent strip above and beside it never swallows a click meant for the
+page underneath.
+
 ### What it does
 
 | Behaviour                    | Detail                                                                                                                                                                                                                                           |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Says where you are**       | The current page is a filled pill with `aria-current="page"`. On the landing page the pill follows the section you have scrolled to, via an `IntersectionObserver` watching `#platform` and `#tour` in a band across the middle of the viewport. |
-| **Shrinks**                  | 64px at the top of the page, 56px once you scroll, with the background, border and shadow strengthening at the same time.                                                                                                                        |
-| **Shows your progress**      | A 1px gradient line along the bottom edge, driven by a `requestAnimationFrame`-throttled scroll listener.                                                                                                                                        |
+| **Shrinks and settles**      | 64px at the top of the page, 56px once you scroll; the material gets denser and the radius smaller at the same time.                                                                                                                             |
+| **Shows your progress**      | A 2px gradient **waterline inside** the drop, driven by a `requestAnimationFrame`-throttled scroll listener. It fades in only once the page has moved — at rest there is nothing to measure.                                                     |
 | **Keeps the session honest** | One `/api/auth/me` shared by the bar, the account menu and the drawer (`lib/use-session.ts`), with a module-level snapshot and a subscriber list. Signing out publishes `guest` to all of them at once.                                          |
 | **Knows your area**          | A signed-in visitor gets the only filled button in the bar — "My dashboard" or "Admin console" — and an account menu holding the name, the email, the role, the way into the area and the way out.                                               |
 | **Works on a phone**         | Below `lg` the links live in a drawer instead of disappearing.                                                                                                                                                                                   |
@@ -301,7 +324,9 @@ earn its height.
 ### The drawer
 
 The old bar hid its links under `md`, which left a phone visitor able to reach
-the logo and nothing else. The drawer is a small modal and behaves like one:
+the logo and nothing else. The drawer is a second drop — `.water-panel`, the same
+material, floating 0.6rem below the first and inset from the edges with it —
+and it is a small modal that behaves like one:
 
 - `aria-expanded` and `aria-controls` on the trigger, which swaps to a close icon;
 - `role="dialog"` / `aria-modal="true"`, focus moved to the first link on open;

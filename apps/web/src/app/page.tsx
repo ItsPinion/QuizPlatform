@@ -61,9 +61,9 @@ export default async function HomePage() {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <SiteHeader version={payload?.service.version} />
-
       <SkipLink />
+
+      <SiteHeader version={payload?.service.version} />
 
       <main id="main" className="relative flex-1 overflow-hidden">
         <Atmosphere />
@@ -111,7 +111,7 @@ export default async function HomePage() {
         {/* ------------------------------ platform ----------------------------- */}
         <section
           id="platform"
-          className="mx-auto w-full max-w-6xl scroll-mt-24 px-5 py-16 sm:px-8 lg:py-20"
+          className="mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-16 sm:px-8 lg:py-20"
         >
           <div className="flex flex-wrap items-end justify-between gap-6">
             <SectionHeading
@@ -131,7 +131,7 @@ export default async function HomePage() {
         </section>
 
         {/* -------------------------------- tour ------------------------------- */}
-        <section id="tour" className="border-border/60 bg-card/20 scroll-mt-16 border-y">
+        <section id="tour" className="border-border/60 bg-card/20 scroll-mt-28 border-y">
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 lg:py-20">
             <SectionHeading
               eyebrow="The tour"

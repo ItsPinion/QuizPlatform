@@ -221,7 +221,15 @@ async function liveChecks(webUrl: string, apiUrl: string, admin?: string): Promi
 
     if (missing.length > 0) throw new Error(`missing ${missing.join(', ')}`);
 
-    return '200 · nav landmark · mobile trigger · skip link · main';
+    // A skip link that comes after the bar it skips is decoration: it has to be
+    // the first thing a keyboard user reaches.
+    const skipAt = html.indexOf('Skip to');
+    const barAt = html.indexOf('<header');
+    if (skipAt === -1 || barAt === -1 || skipAt > barAt) {
+      throw new Error('the skip link does not come before the navigation');
+    }
+
+    return '200 · nav landmark · mobile trigger · skip link first · main';
   });
 
   await add('Sign-in screen', async () => {

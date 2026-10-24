@@ -32,13 +32,21 @@ import { cn } from '@/lib/utils';
 /**
  * The navigation bar.
  *
+ * A drop of water resting on a table, not a strip welded to the top of the
+ * screen: inset from every edge, standing on its own contact shadow, refracting
+ * the page behind it, with a caustic pooled underneath. It is never in contact
+ * with a viewport edge, so it reads as an object placed *on* the page rather
+ * than the page's own edge. See `.water-drop` in `globals.css` for the material.
+ *
  * What makes it a bar rather than a row of links:
  *
  *   - **It answers "where am I?"** — the current page is a filled pill with
  *     `aria-current="page"`, and on the landing page the pill follows the
  *     section you have scrolled to.
- *   - **It shrinks.** 64px at the top of the page, 56px once you scroll, with a
- *     2px progress line showing how far through the page you are.
+ *   - **It shrinks and settles.** 64px at the top of the page, 56px once you
+ *     scroll — and as it settles the material gets denser and flatter, the way
+ *     a wet shape spreads under its own weight. The waterline inside it shows
+ *     how far through the page you are.
  *   - **It has a mobile menu that behaves.** The old bar simply hid its links
  *     below `md` and left a phone visitor with no way to reach anything. The
  *     drawer traps nothing it cannot escape: Escape closes it, the backdrop
@@ -204,291 +212,316 @@ export function NavBar({ version }: { version?: string }) {
   }
 
   return (
-    <header
-      className={cn(
-        'sticky top-0 z-50 border-b transition-[background-color,border-color,box-shadow,height] duration-300',
-        scrolled
-          ? 'border-border/80 bg-background/85 shadow-[0_18px_50px_-30px_rgba(0,0,0,0.9)] backdrop-blur-2xl'
-          : 'border-border/40 bg-background/55 backdrop-blur-xl',
-      )}
-    >
-      <div
-        className={cn(
-          'mx-auto flex w-full max-w-6xl items-center gap-3 px-5 transition-[height] duration-300 sm:px-8',
-          scrolled ? 'h-14' : 'h-16',
-        )}
-      >
-        <Link
-          href="/"
-          aria-label="QuizPlatform — home"
-          className="group focus-visible:ring-ring/60 flex shrink-0 items-center rounded-lg outline-none focus-visible:ring-[3px]"
-        >
-          <Logo
-            version={version}
-            markClassName="size-9 transition-transform duration-500 group-hover:rotate-[-4deg] group-hover:scale-105"
-          />
-        </Link>
+    /**
+     * The table.
+     *
+     * `sticky top-0` with padding on every side: the drop never touches an edge
+     * of the screen, and once the page moves it hovers over the content instead
+     * of dragging a full-width band with it. The padding is transparent, and
+     * pointer-events are off on this box so the strip above and beside the drop
+     * never swallows a click meant for the page.
+     */
+    <div className="pointer-events-none sticky top-0 z-50 px-4 pt-4 pb-1 sm:px-6 sm:pt-5">
+      <div className="pointer-events-auto relative mx-auto w-full max-w-5xl">
+        {/* The caustic on the table: light that went through the drop. */}
+        <span aria-hidden className="water-caustic" />
 
-        {/* ---------------------------- centre nav ---------------------------- */}
-        <nav aria-label="Primary" className="ml-4 hidden lg:block">
-          <ul className="flex items-center gap-1">
-            {SITE_LINKS.map((link) => {
-              const id = link.hash ? (link.href.split('#')[1] ?? '') : '';
-              const current = link.hash
-                ? pathname === '/' && section === id
-                : isActivePath(pathname, link.href);
-
-              return (
-                <li key={link.href}>
-                  {link.external ? (
-                    <a
-                      href={link.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-muted-foreground hover:text-foreground hover:bg-accent/60 focus-visible:ring-ring/60 inline-flex h-9 items-center gap-1 rounded-full px-3.5 text-[13px] transition-colors outline-none focus-visible:ring-[3px]"
-                    >
-                      {link.label}
-                      <ArrowUpRight aria-hidden className="size-3" />
-                    </a>
-                  ) : (
-                    <a
-                      href={link.href}
-                      aria-current={current ? 'true' : undefined}
-                      className={cn(
-                        'focus-visible:ring-ring/60 relative inline-flex h-9 items-center rounded-full px-3.5 text-[13px] transition-colors outline-none focus-visible:ring-[3px]',
-                        current
-                          ? 'bg-primary/15 text-foreground ring-primary/25 ring-1'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-accent/60',
-                      )}
-                    >
-                      {current ? (
-                        <span
-                          aria-hidden
-                          className="bg-primary shadow-primary/80 absolute left-2 size-1 rounded-full shadow-[0_0_10px]"
-                        />
-                      ) : null}
-                      <span className={cn(current && 'pl-2.5')}>{link.label}</span>
-                    </a>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-
-        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-          <MusicToggle />
-
-          <a
-            href="/api/health"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="API health (opens in a new tab)"
-            title="API health"
-            className="text-muted-foreground hover:text-foreground hover:border-border focus-visible:ring-ring/60 border-border/60 hidden size-9 place-items-center rounded-full border transition-colors outline-none focus-visible:ring-[3px] md:grid"
+        <header className="water-drop" data-settled={scrolled ? 'true' : 'false'}>
+          {/* The drifting sheen, clipped to the drop's shape. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
           >
-            <span aria-hidden className="relative grid place-items-center">
-              <span className="bg-success absolute inset-0 animate-ping rounded-full opacity-40 motion-reduce:hidden" />
-              <span className="bg-success size-1.5 rounded-full" />
-            </span>
-          </a>
+            <span className="water-sheen" />
+          </span>
 
-          <span aria-hidden className="bg-border/70 hidden h-6 w-px md:block" />
-
-          {/* --------------------------- the session -------------------------- */}
-          {session.status === 'loading' ? (
-            <div aria-hidden className="bg-muted/50 h-9 w-32 animate-pulse rounded-lg" />
-          ) : session.status === 'guest' ? (
-            <>
-              <Link
-                href="/login"
-                className={cn(
-                  buttonVariants({ variant: 'ghost', size: 'sm' }),
-                  'hidden text-[13px] sm:inline-flex',
-                )}
-              >
-                Sign in
-              </Link>
-              <Link
-                href="/register"
-                className={cn(
-                  buttonVariants({ size: 'sm' }),
-                  'shine text-[13px] font-semibold',
-                  'h-9 rounded-lg px-3.5',
-                )}
-              >
-                Get started
-              </Link>
-            </>
-          ) : (
-            <>
-              {area ? (
-                <Link
-                  href={area.href}
-                  className={cn(
-                    buttonVariants({ size: 'sm' }),
-                    'shine shadow-primary/40 h-9 gap-2 rounded-lg px-3 text-[13px] font-semibold shadow-[0_10px_30px_-14px] sm:px-3.5',
-                  )}
-                >
-                  {role === 'ADMIN' ? (
-                    <ShieldCheck aria-hidden className="size-4" />
-                  ) : (
-                    <LayoutDashboard aria-hidden className="size-4" />
-                  )}
-                  <span className="hidden sm:inline">
-                    {area.short === 'Dashboard' ? 'My dashboard' : 'Admin console'}
-                  </span>
-                  <span className="sm:hidden">{area.short}</span>
-                </Link>
-              ) : null}
-
-              <AccountMenu />
-            </>
-          )}
-
-          {/* ------------------------- mobile trigger ------------------------- */}
-          <button
-            ref={triggerRef}
-            type="button"
-            onClick={() => setOpen((value) => !value)}
-            aria-expanded={open}
-            aria-controls={MOBILE_ID}
-            aria-label={open ? 'Close menu' : 'Open menu'}
+          <div
             className={cn(
-              'border-border/70 text-muted-foreground hover:text-foreground focus-visible:ring-ring/60 grid size-9 place-items-center rounded-full border transition-colors outline-none focus-visible:ring-[3px] lg:hidden',
-              open && 'border-primary/40 text-foreground bg-primary/10',
+              'relative z-10 flex w-full items-center gap-3 px-3.5 transition-[height] duration-300 sm:px-5',
+              scrolled ? 'h-14' : 'h-16',
             )}
           >
-            {open ? <X aria-hidden className="size-4" /> : <Menu aria-hidden className="size-4" />}
-          </button>
-        </div>
-      </div>
+            <Link
+              href="/"
+              aria-label="QuizPlatform — home"
+              className="group focus-visible:ring-ring/60 flex shrink-0 items-center rounded-lg outline-none focus-visible:ring-[3px]"
+            >
+              <Logo
+                version={version}
+                markClassName="size-9 transition-transform duration-500 group-hover:rotate-[-4deg] group-hover:scale-105"
+              />
+            </Link>
 
-      {/* -------------------------- scroll progress -------------------------- */}
-      <div aria-hidden className="bg-border/40 absolute inset-x-0 bottom-0 h-px">
-        <div
-          className="from-primary h-full origin-left bg-gradient-to-r via-violet-400 to-sky-400 transition-[width] duration-150"
-          style={{ width: `${Math.round(progress * 100)}%` }}
-        />
-      </div>
+            {/* ---------------------------- centre nav ---------------------------- */}
+            <nav aria-label="Primary" className="ml-4 hidden lg:block">
+              <ul className="flex items-center gap-1">
+                {SITE_LINKS.map((link) => {
+                  const id = link.hash ? (link.href.split('#')[1] ?? '') : '';
+                  const current = link.hash
+                    ? pathname === '/' && section === id
+                    : isActivePath(pathname, link.href);
 
-      {/* ------------------------------ the drawer --------------------------- */}
-      {open ? (
-        <div
-          id={MOBILE_ID}
-          ref={panelRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Site menu"
-          className="bg-background/97 absolute inset-x-0 top-full z-40 max-h-[calc(100dvh-4rem)] overflow-y-auto border-b shadow-[0_40px_80px_-40px_rgba(0,0,0,0.9)] backdrop-blur-2xl lg:hidden"
-        >
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-5 py-6 sm:px-8">
-            <nav aria-label="Sections">
-              <p className="text-muted-foreground/80 font-mono text-[10px] tracking-[0.2em] uppercase">
-                The site
-              </p>
-              <ul className="mt-2 flex flex-col">
-                {SITE_LINKS.map((link) => (
-                  <li key={link.href}>
-                    <a
-                      href={link.href}
-                      onClick={close}
-                      className="hover:bg-accent/60 focus-visible:ring-ring/60 flex min-h-14 items-center justify-between gap-3 rounded-xl px-3 text-[17px] font-medium transition-colors outline-none focus-visible:ring-[3px]"
-                    >
-                      {link.label}
+                  return (
+                    <li key={link.href}>
                       {link.external ? (
-                        <ArrowUpRight aria-hidden className="text-muted-foreground size-4" />
-                      ) : null}
-                    </a>
-                  </li>
-                ))}
-                <li>
-                  <a
-                    href="/api/health"
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={close}
-                    className="hover:bg-accent/60 focus-visible:ring-ring/60 flex min-h-14 items-center justify-between gap-3 rounded-xl px-3 text-[17px] font-medium transition-colors outline-none focus-visible:ring-[3px]"
-                  >
-                    API health
-                    <ArrowUpRight aria-hidden className="text-muted-foreground size-4" />
-                  </a>
-                </li>
+                        <a
+                          href={link.href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-muted-foreground hover:text-foreground hover:bg-accent/60 focus-visible:ring-ring/60 inline-flex h-9 items-center gap-1 rounded-full px-3.5 text-[13px] transition-colors outline-none focus-visible:ring-[3px]"
+                        >
+                          {link.label}
+                          <ArrowUpRight aria-hidden className="size-3" />
+                        </a>
+                      ) : (
+                        <a
+                          href={link.href}
+                          aria-current={current ? 'true' : undefined}
+                          className={cn(
+                            'focus-visible:ring-ring/60 relative inline-flex h-9 items-center rounded-full px-3.5 text-[13px] transition-colors outline-none focus-visible:ring-[3px]',
+                            current
+                              ? 'bg-primary/15 text-foreground ring-primary/25 ring-1'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-accent/60',
+                          )}
+                        >
+                          {current ? (
+                            <span
+                              aria-hidden
+                              className="bg-primary shadow-primary/80 absolute left-2 size-1 rounded-full shadow-[0_0_10px]"
+                            />
+                          ) : null}
+                          <span className={cn(current && 'pl-2.5')}>{link.label}</span>
+                        </a>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </nav>
 
-            {session.status === 'authenticated' ? (
-              <div className="border-border/60 border-t pt-5">
-                <p className="text-muted-foreground/80 font-mono text-[10px] tracking-[0.2em] uppercase">
-                  {area ? area.label : 'Your account'}
-                </p>
+            <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+              <MusicToggle />
 
-                <div className="mt-3 flex items-center gap-3">
-                  <span className="bg-primary/15 text-primary grid size-10 place-items-center rounded-full">
-                    {role === 'ADMIN' ? (
-                      <ShieldCheck aria-hidden className="size-4" />
-                    ) : (
-                      <UserRound aria-hidden className="size-4" />
+              <a
+                href="/api/health"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="API health (opens in a new tab)"
+                title="API health"
+                className="text-muted-foreground hover:text-foreground hover:border-border focus-visible:ring-ring/60 border-border/60 hidden size-9 place-items-center rounded-full border transition-colors outline-none focus-visible:ring-[3px] md:grid"
+              >
+                <span aria-hidden className="relative grid place-items-center">
+                  <span className="bg-success absolute inset-0 animate-ping rounded-full opacity-40 motion-reduce:hidden" />
+                  <span className="bg-success size-1.5 rounded-full" />
+                </span>
+              </a>
+
+              <span aria-hidden className="bg-border/70 hidden h-6 w-px md:block" />
+
+              {/* --------------------------- the session -------------------------- */}
+              {session.status === 'loading' ? (
+                <div aria-hidden className="bg-muted/50 h-9 w-32 animate-pulse rounded-lg" />
+              ) : session.status === 'guest' ? (
+                <>
+                  <Link
+                    href="/login"
+                    className={cn(
+                      buttonVariants({ variant: 'ghost', size: 'sm' }),
+                      'hidden text-[13px] sm:inline-flex',
                     )}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-[15px] font-medium">
-                      {session.user.name}
-                    </span>
-                    <span className="text-muted-foreground block truncate text-[12px]">
-                      {session.user.email}
-                    </span>
-                  </span>
-                </div>
-
-                <div className="mt-4 flex flex-col gap-2">
+                  >
+                    Sign in
+                  </Link>
+                  <Link
+                    href="/register"
+                    className={cn(
+                      buttonVariants({ size: 'sm' }),
+                      'shine text-[13px] font-semibold',
+                      'h-9 rounded-lg px-3.5',
+                    )}
+                  >
+                    Get started
+                  </Link>
+                </>
+              ) : (
+                <>
                   {area ? (
                     <Link
                       href={area.href}
-                      onClick={close}
-                      className={cn(buttonVariants({ size: 'lg' }), 'h-12 w-full text-[15px]')}
+                      className={cn(
+                        buttonVariants({ size: 'sm' }),
+                        'shine shadow-primary/40 h-9 gap-2 rounded-lg px-3 text-[13px] font-semibold shadow-[0_10px_30px_-14px] sm:px-3.5',
+                      )}
                     >
-                      {area.label}
+                      {role === 'ADMIN' ? (
+                        <ShieldCheck aria-hidden className="size-4" />
+                      ) : (
+                        <LayoutDashboard aria-hidden className="size-4" />
+                      )}
+                      <span className="hidden sm:inline">
+                        {area.short === 'Dashboard' ? 'My dashboard' : 'Admin console'}
+                      </span>
+                      <span className="sm:hidden">{area.short}</span>
                     </Link>
                   ) : null}
-                  <button
-                    type="button"
-                    onClick={handleSignOut}
+
+                  <AccountMenu />
+                </>
+              )}
+
+              {/* ------------------------- mobile trigger ------------------------- */}
+              <button
+                ref={triggerRef}
+                type="button"
+                onClick={() => setOpen((value) => !value)}
+                aria-expanded={open}
+                aria-controls={MOBILE_ID}
+                aria-label={open ? 'Close menu' : 'Open menu'}
+                className={cn(
+                  'border-border/70 text-muted-foreground hover:text-foreground focus-visible:ring-ring/60 grid size-9 place-items-center rounded-full border transition-colors outline-none focus-visible:ring-[3px] lg:hidden',
+                  open && 'border-primary/40 text-foreground bg-primary/10',
+                )}
+              >
+                {open ? (
+                  <X aria-hidden className="size-4" />
+                ) : (
+                  <Menu aria-hidden className="size-4" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* The waterline: how far through the page you are, as a liquid level
+          inside the drop rather than a rule under it. */}
+          <div
+            aria-hidden
+            className="water-line absolute inset-x-8 bottom-[3px] z-10 h-[2px] overflow-hidden rounded-full bg-white/8"
+          >
+            <div
+              className="from-primary h-full origin-left rounded-full bg-gradient-to-r via-violet-400 to-sky-400 transition-[width] duration-150"
+              style={{ width: `${Math.round(progress * 100)}%` }}
+            />
+          </div>
+        </header>
+
+        {/* ------------------------------ the drawer --------------------------- */}
+        {open ? (
+          <div
+            id={MOBILE_ID}
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Site menu"
+            className="water-panel absolute inset-x-0 top-[calc(100%+0.6rem)] z-40 max-h-[calc(100dvh-7rem)] overflow-y-auto lg:hidden"
+          >
+            <div className="flex w-full flex-col gap-6 px-4 py-5">
+              <nav aria-label="Sections">
+                <p className="text-muted-foreground/80 font-mono text-[10px] tracking-[0.2em] uppercase">
+                  The site
+                </p>
+                <ul className="mt-2 flex flex-col">
+                  {SITE_LINKS.map((link) => (
+                    <li key={link.href}>
+                      <a
+                        href={link.href}
+                        onClick={close}
+                        className="hover:bg-accent/60 focus-visible:ring-ring/60 flex min-h-14 items-center justify-between gap-3 rounded-xl px-3 text-[17px] font-medium transition-colors outline-none focus-visible:ring-[3px]"
+                      >
+                        {link.label}
+                        {link.external ? (
+                          <ArrowUpRight aria-hidden className="text-muted-foreground size-4" />
+                        ) : null}
+                      </a>
+                    </li>
+                  ))}
+                  <li>
+                    <a
+                      href="/api/health"
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={close}
+                      className="hover:bg-accent/60 focus-visible:ring-ring/60 flex min-h-14 items-center justify-between gap-3 rounded-xl px-3 text-[17px] font-medium transition-colors outline-none focus-visible:ring-[3px]"
+                    >
+                      API health
+                      <ArrowUpRight aria-hidden className="text-muted-foreground size-4" />
+                    </a>
+                  </li>
+                </ul>
+              </nav>
+
+              {session.status === 'authenticated' ? (
+                <div className="border-border/60 border-t pt-5">
+                  <p className="text-muted-foreground/80 font-mono text-[10px] tracking-[0.2em] uppercase">
+                    {area ? area.label : 'Your account'}
+                  </p>
+
+                  <div className="mt-3 flex items-center gap-3">
+                    <span className="bg-primary/15 text-primary grid size-10 place-items-center rounded-full">
+                      {role === 'ADMIN' ? (
+                        <ShieldCheck aria-hidden className="size-4" />
+                      ) : (
+                        <UserRound aria-hidden className="size-4" />
+                      )}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-[15px] font-medium">
+                        {session.user.name}
+                      </span>
+                      <span className="text-muted-foreground block truncate text-[12px]">
+                        {session.user.email}
+                      </span>
+                    </span>
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-2">
+                    {area ? (
+                      <Link
+                        href={area.href}
+                        onClick={close}
+                        className={cn(buttonVariants({ size: 'lg' }), 'h-12 w-full text-[15px]')}
+                      >
+                        {area.label}
+                      </Link>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={handleSignOut}
+                      className={cn(
+                        buttonVariants({ variant: 'outline', size: 'lg' }),
+                        'h-12 w-full text-[15px]',
+                      )}
+                    >
+                      <LogOut aria-hidden className="size-4" />
+                      Sign out
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="border-border/60 flex flex-col gap-2 border-t pt-5">
+                  <Link
+                    href="/register"
+                    onClick={close}
+                    className={cn(buttonVariants({ size: 'lg' }), 'h-12 w-full text-[15px]')}
+                  >
+                    Get started
+                  </Link>
+                  <Link
+                    href="/login"
+                    onClick={close}
                     className={cn(
                       buttonVariants({ variant: 'outline', size: 'lg' }),
                       'h-12 w-full text-[15px]',
                     )}
                   >
-                    <LogOut aria-hidden className="size-4" />
-                    Sign out
-                  </button>
+                    Sign in
+                  </Link>
                 </div>
-              </div>
-            ) : (
-              <div className="border-border/60 flex flex-col gap-2 border-t pt-5">
-                <Link
-                  href="/register"
-                  onClick={close}
-                  className={cn(buttonVariants({ size: 'lg' }), 'h-12 w-full text-[15px]')}
-                >
-                  Get started
-                </Link>
-                <Link
-                  href="/login"
-                  onClick={close}
-                  className={cn(
-                    buttonVariants({ variant: 'outline', size: 'lg' }),
-                    'h-12 w-full text-[15px]',
-                  )}
-                >
-                  Sign in
-                </Link>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      ) : null}
-    </header>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
