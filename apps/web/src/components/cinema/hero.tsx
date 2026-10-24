@@ -48,7 +48,7 @@ export function CinemaHero({
         : { href: '/register', label: 'Get started' };
 
   return (
-    <section className="relative flex min-h-[100dvh] flex-col overflow-hidden">
+    <section className="relative z-20 flex min-h-[100dvh] flex-col overflow-hidden">
       <div className="flex flex-1 items-center px-6 pt-28 pb-24 sm:px-8 lg:pb-28">
         <div className="mx-auto w-full max-w-6xl">
           {/* The badge: glass, and the only place the version is stated. */}

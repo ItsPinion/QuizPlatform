@@ -64,6 +64,38 @@ cycles in the loop, so the last frame flows into the first with no seam.
 | `reading-room.jpg`  | 15 kB  | The poster — the exact first frame                  |
 | `reading-room.gif`  | 217 kB | The dust: 26 motes drifting on black, 6-second loop |
 
+### The canvas, and the one thing you can touch
+
+Above the film sits a `<canvas>` (`components/cinema/canvas-field.tsx`), and it
+is the only interactive part of the background:
+
+- **The pointer is a lamp.** Motes within 170px brighten, lean away, and link to
+  their neighbours with faint threads — the only lines on the page, and they
+  only exist where the cursor is.
+- **A press sends a ring out.** Three rings 14px apart expand through the field
+  at 420px/s, pushing motes aside as they pass and fading over 1.5s.
+- **It breathes on its own**, so the background is never a still image waiting
+  for input.
+
+The simulation lives in `lib/canvas-field.ts` rather than in the component,
+because it is the part that goes wrong in ways nobody notices for weeks — motes
+escaping the frame, a cursor held still winding the field up, a tab left open
+overnight — and it is easier to prove with a table of cases (16 tests) than by
+watching it.
+
+What keeps a background from being a nuisance:
+
+| Concern            | Answer                                                                                                                                                           |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Battery**        | The loop stops on `visibilitychange`, and again whenever the frame leaves the viewport (`IntersectionObserver`). Nothing animates in a tab nobody is looking at. |
+| **Long stalls**    | `dt` is clamped to 50ms, so a tab backgrounded for a minute does not replay a minute of physics in one step.                                                     |
+| **Retina**         | The backing store is scaled by `devicePixelRatio`, capped at 2×; past that the pixels cost real time for detail no one can see.                                  |
+| **Density**        | One mote per 11,000 CSS px², clamped to 28–150, so a phone and a 27-inch display both look deliberate.                                                           |
+| **Reduced motion** | One static frame, no loop, pointer ignored. A preference is not a suggestion.                                                                                    |
+| **Clicks**         | `pointer-events: none`; the listeners are on the window, so the canvas can never swallow a click meant for the page.                                             |
+| **Screen readers** | `aria-hidden`. Nothing in it carries information.                                                                                                                |
+| **Stacking**       | `z-10`, under the veils and under the hero (`z-20`) — the dust is never drawn over a headline.                                                                   |
+
 **The GIF is a layer, not a fallback.** It sits above the video with
 `mix-blend-mode: screen`, so its black reads as transparent and the motes float
 in front of the lights. That is not a trick for its own sake — it solves three

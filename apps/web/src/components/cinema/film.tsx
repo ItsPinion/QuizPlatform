@@ -1,3 +1,5 @@
+import { CanvasField } from '@/components/cinema/canvas-field';
+
 /**
  * The film.
  *
@@ -11,6 +13,9 @@
  *     always, which means the background is alive even when autoplay is
  *     refused, the codec is missing, or the visitor asked for reduced motion.
  *     One 217 kB image, and nothing needs re-encoding to add to it.
+ *   - **The canvas** — a field of dust you can touch (`CanvasField`): the
+ *     pointer is a lamp, a press sends a ring through it. It is the one part of
+ *     the background that answers back.
  *   - **The overlays** — a vignette and a top/bottom gradient, so type can sit
  *     on the middle of the frame and stay legible.
  *
@@ -52,6 +57,10 @@ export function Film() {
       {/* The dust. `screen` against the video's own black keeps the motes and
           drops the plate they were rendered on. */}
       <div className="pointer-events-none absolute inset-0 bg-[url('/film/reading-room.gif')] bg-cover bg-center opacity-70 mix-blend-screen motion-reduce:hidden" />
+
+      {/* The interactive layer. Sits above the veils so the dust is never
+          dimmed by the gradient that exists for the video's sake. */}
+      <CanvasField />
 
       {/* The vignette: focus at the centre of the frame. */}
       <div className="cine-veil cine-veil-radial" />
