@@ -349,12 +349,35 @@ file and none of it blocks anything.
 
 ### The mark
 
-`components/brand/logo.tsx` — an open book with a check etched into the right
-page, on a soft square plate, drawn on a 32-unit grid. It replaced a letter `Q`
-in a rounded box, which is what a logo looks like before anyone designs one.
-`LogoMark` takes a `glow` prop (the header pulses, the footer does not) and a
-`title` (only when it needs an accessible name — in the header the link already
-carries "QuizPlatform — home", so the mark itself is `aria-hidden`).
+`components/brand/logo.tsx` — **a Q**: one heavy ring, one dot on the 45° axis,
+nothing else. Two circles on a 32-unit grid, in `currentColor`.
+
+It replaced an open book with a check etched into the right page, on a soft
+square plate under a rim light. That was a drawing rather than a mark — eleven
+paths to say "a library that grades things" — and it dissolved below 28px, which
+is every size a logo is actually seen at. The two-circle version holds at 16px in
+a tab, 32px in the bar and 256px on a poster, because there is nothing in it left
+to lose.
+
+Why a Q: it is the one letter of the name nobody has to be taught. The detached
+tail does the rest — read one way it is the letter's tail, read another it is a
+full stop after a finished paper — and it is what keeps the ring from looking
+like a spinner. The numbers, and the rules they satisfy, live in
+`lib/logo-geometry.ts` and are asserted in `logo-geometry.test.ts`: the ink fits
+the grid with a margin, the ink's centre is the grid's centre (the ring sits at
+13.55, not 16, because the tail adds weight), and the tail floats clear of the
+ring by roughly two units — a gap, not a joint.
+
+`LogoMark` takes a `title` only when it needs an accessible name; in the header
+and footer the link around it already says "QuizPlatform — home", so the mark is
+`aria-hidden` and the word does the talking. There is no pulse, no gradient and
+no glow: the only movement is the tail easing 1px outward on hover, and that is a
+`transition` under `motion-reduce:transition-none`.
+
+The wordmark changed with it. It was `QUIZPLATFORM` at 10px links' volume —
+all caps, 0.18em tracking, the brand shouting as loudly as the navigation. It is
+now `QuizPlatform`, 15px, one weight, `-0.01em` tracking: the mark carries the
+identity and the word only has to be readable beside it.
 
 ### The ambient layer
 
@@ -563,9 +586,10 @@ for anything checking a shared link.
 `/login`, `/register` and `/api/` — every one of those redirects to the sign-in
 screen without a cookie, so a crawler only wastes a round trip.
 
-`app/icon.svg` is the book mark from `components/brand/logo.tsx`, flattened for a
-favicon (no CSS variables, no gradients that need a document context). Next emits
-the `<link rel="icon">` itself.
+`app/icon.svg` is the same ring and dot, flattened for a favicon: no CSS
+variables, no `currentColor`, no gradients (a tab icon is parsed outside any
+document context), on a dark rounded tile so it stays legible in a light browser
+chrome as well as a dark one. Next emits the `<link rel="icon">` itself.
 
 ---
 

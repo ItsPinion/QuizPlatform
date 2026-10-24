@@ -65,8 +65,8 @@ export function SiteFooter({ payload }: { payload?: LandingPayload | null } = {}
       <div className="mx-auto w-full max-w-6xl px-5 py-12 sm:px-8">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_repeat(3,0.9fr)]">
           <div>
-            <div className="flex items-center gap-2.5">
-              <Logo glow={false} markClassName="size-7" />
+            <div className="text-foreground flex items-center gap-2.5">
+              <Logo markClassName="size-7" />
             </div>
             <p className="text-muted-foreground mt-3 max-w-xs text-[11.5px] leading-relaxed">
               Quiz management and online assessment: a Next.js front end, a Hono API and Drizzle

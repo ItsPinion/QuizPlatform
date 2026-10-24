@@ -22,7 +22,7 @@ a **Hono RPC** API and a **Drizzle ORM + Turso** database.
 > a redacted system screen an operator can read, a `bun run deploy:check` gate that runs the same
 > rules locally and eight live probes against a real URL, one Dockerfile with two targets, and the
 > runbook for migrate, verify and roll back.
-> **1,076 automated tests, a 77-check end-to-end smoke run and a 216-probe spec audit.** Feature complete: all fourteen days shipped.
+> **1,086 automated tests, a 77-check end-to-end smoke run and a 216-probe spec audit.** Feature complete: all fourteen days shipped.
 
 ---
 
@@ -280,7 +280,7 @@ quizplatform/
 │     ├─ src/components/leaderboard-podium.tsx      the top three
 │     ├─ src/lib/quiz-params.ts   quiz filters, badge tones, lifecycle hints
 │     ├─ src/lib/redirect.ts   validated ?next= (no open redirects)
-│     ├─ src/components/brand/      the mark — an open book with a check in it
+│     ├─ src/components/brand/      the mark — a Q: a ring and a detached dot
 │     ├─ src/components/music-toggle.tsx  Web Audio reading-room ambience
 │     ├─ src/components/auth/     shell, 56px fields, password reveal, caps-lock notice
 │     ├─ src/lib/auth-params.ts  password rules, strength, role labels, demo copy
@@ -392,14 +392,14 @@ Scripts run through Turbo; `bun <script>` and `bun run <script>` are equivalent.
 ## Testing
 
 ```bash
-bun run test                    # 1,076 tests, all workspaces through Turbo
+bun run test                    # 1,086 tests, all workspaces through Turbo
 bun run test --filter=@quiz/api # one package
 bun run test:e2e                # 77 checks against a live server + throwaway DB
 bun run test:spec               # 216 probes, one per spec promise (needs both servers up)
 bun run deploy:check            # the deployment gate (see docs/deployment.md)
 ```
 
-**1,076 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
+**1,086 tests** cover the scaffolding, authentication, authorization, the admin console, content authoring, quiz taking, grading, review, dashboards and analytics:
 
 **`@quiz/shared`** (386) — scrypt record format, unique salts, correct/wrong passwords, unicode
 normalisation, fail-closed behaviour on corrupt hashes, the seed credential contract, and the Zod
@@ -552,7 +552,7 @@ email search, empty values, unknown roles), pagination, both sorts, 422s for bad
 lookups, 404/422 handling, promotion/demotion, deactivation lockout and restoration, `SELF_LOCKOUT`
 for self-demotion and self-deactivation, and 401/403 on every admin route.
 
-**`@quiz/web`** (272) — the error-envelope narrowing every auth form relies on (API error codes,
+**`@quiz/web`** (282) — the error-envelope narrowing every auth form relies on (API error codes,
 Zod issue extraction, fallbacks for malformed bodies, network-error mapping), the Day 3 page guard
 rules, the Day 4 directory parameters, the Day 5 quiz helpers, the Day 6 question-form helpers, and
 the Day 7–9 student helpers: catalogue filter parsing with `toStudentQuery`/`quizzesHref` round-trips
@@ -567,7 +567,10 @@ screen-reader summary), plus the Day 14 deployment helpers: verdict and status l
 runtime and latency formatting, the counts line with its no-counts fallback, the actionable-check
 filter and host shortening, and the auth-screen helpers: the three password rules and their progress
 states, role labels, the per-screen live stats, the role home and the demo fill announcement.
-`hero-params.test.ts` covers the landing page's two calls to action: a visitor is asked to sign up, a
+`logo-geometry.test.ts` covers the mark as numbers: the ink fits the 32-unit grid with a margin, its
+centre is the grid's centre, the tail floats clear of the ring rather than joining it, and the stroke
+stays heavy enough for a 16px favicon and light enough for a poster. `hero-params.test.ts` covers the
+landing page's two calls to action: a visitor is asked to sign up, a
 student is sent to the catalogue, an administrator to the console, and neither signed-in role is ever
 pointed at `/login`. `nav-sections.test.ts` covers the bar: segment-aware active matching
 (`/student` covers `/student/results` but not `/stud`), longest-match wins, the landing-page scroll
@@ -1487,7 +1490,7 @@ Day 14 (done): deployment & docs. Eight environment rules in one pure function, 
 places — `bun run deploy:check` before a build, `GET /api/admin/system` from inside the process, and
 `deploy:check --url` over the wire after the deploy — with a verdict of `ready`, `attention` or
 `blocked`; a redacted system screen at `/admin/system`; one `Dockerfile` with `api` and `web` targets;
-and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 1,076 Vitest tests
+and `docs/deployment.md`, the runbook for migrate, verify, roll back and diagnose. 1,086 Vitest tests
 and a 75-check end-to-end smoke run.
 
 Day 13 (done): testing & security. Rate limiting on the auth routes (a hard per-address block and a

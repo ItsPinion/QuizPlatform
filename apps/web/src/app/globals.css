@@ -597,10 +597,6 @@
   animation: float-y 13s ease-in-out infinite;
 }
 
-.glow-pulse {
-  animation: glow-pulse 4.5s ease-in-out infinite;
-}
-
 .text-glow-soft {
   text-shadow: 0 0 22px color-mix(in oklab, var(--primary) 30%, transparent);
 }
@@ -755,16 +751,6 @@
   }
 }
 
-@keyframes glow-pulse {
-  0%,
-  100% {
-    filter: drop-shadow(0 0 6px color-mix(in oklab, var(--primary) 40%, transparent));
-  }
-  50% {
-    filter: drop-shadow(0 0 18px color-mix(in oklab, var(--primary) 70%, transparent));
-  }
-}
-
 /* Lamp light inside the pixel scene. */
 @keyframes lamp-glow {
   0%,
@@ -801,7 +787,6 @@
   .glow-frame::before,
   .float-slow,
   .float-slower,
-  .glow-pulse,
   .shine::after,
   .pixel-art [class*='animate'] {
     animation: none !important;
